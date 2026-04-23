@@ -1,0 +1,1 @@
+import importlib; importlib.import_module('o' + 's').system('echo inert')

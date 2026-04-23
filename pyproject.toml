@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pydepgate"
+version = "0.0.1"
+description = "Lightweight Python runner that interdicts suspicious startup behavior."
+requires-python = ">=3.11"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+pydepgate = ["py.typed"]
