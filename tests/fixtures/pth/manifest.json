@@ -1,0 +1,136 @@
+{
+  "schema_version": 1,
+  "description": "Test fixtures for pydepgate .pth parser. All synthetic_* fixtures use the structural shape of real attacks (matching MITRE T1546.018 techniques) but contain only inert payloads — print statements, subprocess calls that echo, URL requests to RFC 2606 reserved domains, etc. No actual malicious code is present.",
+  "fixtures": {
+    "benign_simple_path.pth": {
+      "description": "Single path entry, no trailing newline. Common real-world shape.",
+      "expected_size_bytes": 14,
+      "expected_line_count": 1,
+      "expected_path_count": 1,
+      "expected_exec_count": 0,
+      "expected_blank_count": 0,
+      "expected_comment_count": 0,
+      "expected_encoding_used": "utf-8"
+    },
+    "benign_multi_path.pth": {
+      "description": "Multiple standard path entries.",
+      "expected_size_bytes": 57,
+      "expected_line_count": 3,
+      "expected_path_count": 3,
+      "expected_exec_count": 0,
+      "expected_blank_count": 0,
+      "expected_comment_count": 0,
+      "expected_encoding_used": "utf-8"
+    },
+    "benign_with_comments.pth": {
+      "description": "Paths interspersed with comments.",
+      "expected_size_bytes": 99,
+      "expected_line_count": 4,
+      "expected_path_count": 2,
+      "expected_exec_count": 0,
+      "expected_blank_count": 0,
+      "expected_comment_count": 2,
+      "expected_encoding_used": "utf-8"
+    },
+    "benign_legit_editable.pth": {
+      "description": "Shape of a real setuptools editable-install .pth. LEGITIMATE exec. Rules must allow this pattern (via allowlist) while flagging malicious patterns. Non-existent module name — parser must not care since it doesn't execute.",
+      "expected_size_bytes": 89,
+      "expected_line_count": 1,
+      "expected_path_count": 0,
+      "expected_exec_count": 1,
+      "expected_blank_count": 0,
+      "expected_comment_count": 0,
+      "expected_encoding_used": "utf-8"
+    },
+    "synthetic_base64_exec.pth": {
+      "description": "base64 + exec pattern (LiteLLM attack shape, inert payload).",
+      "expected_size_bytes": 81,
+      "expected_line_count": 1,
+      "expected_path_count": 0,
+      "expected_exec_count": 1,
+      "expected_blank_count": 0,
+      "expected_comment_count": 0,
+      "expected_encoding_used": "utf-8"
+    },
+    "synthetic_subprocess.pth": {
+      "description": "Subprocess pattern with inert payload.",
+      "expected_size_bytes": 52,
+      "expected_line_count": 1,
+      "expected_path_count": 0,
+      "expected_exec_count": 1,
+      "expected_blank_count": 0,
+      "expected_comment_count": 0,
+      "expected_encoding_used": "utf-8"
+    },
+    "synthetic_network.pth": {
+      "description": "Network pattern targeting RFC 2606 reserved domain (non-resolvable).",
+      "expected_size_bytes": 71,
+      "expected_line_count": 1,
+      "expected_path_count": 0,
+      "expected_exec_count": 1,
+      "expected_blank_count": 0,
+      "expected_comment_count": 0,
+      "expected_encoding_used": "utf-8"
+    },
+    "synthetic_oversized.pth": {
+      "description": "Oversized file (padded with comments). Generated programmatically — update this field if you regenerate with a different size.",
+      "expected_size_bytes_minimum": 1500,
+      "expected_exec_count": 1,
+      "expected_comment_count_minimum": 25,
+      "expected_encoding_used": "utf-8",
+      "notes": "Uses a minimum-threshold check because exact size depends on generation parameters."
+    },
+    "synthetic_multi_exec.pth": {
+      "description": "Multiple import lines — legitimate .pth files rarely have more than one.",
+      "expected_size_bytes": 47,
+      "expected_line_count": 4,
+      "expected_path_count": 0,
+      "expected_exec_count": 4,
+      "expected_blank_count": 0,
+      "expected_comment_count": 0,
+      "expected_encoding_used": "utf-8"
+    },
+    "synthetic_obfuscated_import.pth": {
+      "description": "String-split obfuscation to defeat naive pattern matching.",
+      "expected_size_bytes": 73,
+      "expected_line_count": 1,
+      "expected_path_count": 0,
+      "expected_exec_count": 1,
+      "expected_blank_count": 0,
+      "expected_comment_count": 0,
+      "expected_encoding_used": "utf-8"
+    },
+    "malformed_encoding.pth": {
+      "description": "Invalid UTF-8 bytes at file start. Parser must fall back to latin-1.",
+      "expected_size_bytes": 13,
+      "expected_encoding_used": "latin-1 (fallback)",
+      "expected_decode_notes_count": 1
+    },
+    "malformed_bare_cr.pth": {
+      "description": "Old-Mac-style bare \\r line separators. Tests splitlines() correctness.",
+      "expected_size_bytes": 31,
+      "expected_line_count": 3,
+      "expected_path_count": 3,
+      "expected_exec_count": 0,
+      "expected_encoding_used": "utf-8"
+    },
+    "empty.pth": {
+      "description": "Zero-byte file. Parser must return empty ParsedPth without raising.",
+      "expected_size_bytes": 0,
+      "expected_line_count": 0,
+      "expected_path_count": 0,
+      "expected_exec_count": 0,
+      "expected_encoding_used": "utf-8"
+    },
+    "only_whitespace.pth": {
+      "description": "Lines containing only whitespace. All must classify as BLANK.",
+      "expected_size_bytes": 9,
+      "expected_line_count": 5,
+      "expected_path_count": 0,
+      "expected_exec_count": 0,
+      "expected_blank_count": 5,
+      "expected_comment_count": 0,
+      "expected_encoding_used": "utf-8"
+    }
+  }
+}
