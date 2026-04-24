@@ -7,6 +7,12 @@ silently at interpreter startup. This was the attack class used by the March 202
 LiteLLM supply-chain compromise and catalogued as
 [MITRE ATT&CK T1546.018](https://attack.mitre.org/techniques/T1546/018/).
 
+## Update
+
+We are now on PyPI. See it here now! [PyDepGate](https://pypi.org/project/pydepgate/).
+
+v0.0.2 coming very soon. :)
+
 ## Status
 
 **Early development (v0.0.1).** The `.pth` parser and its test harness are
