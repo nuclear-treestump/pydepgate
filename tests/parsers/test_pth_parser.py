@@ -7,7 +7,7 @@ import unittest
 from pydepgate.parsers.pth import LineKind, parse_pth
 
 
-FIXTURES_DIR = pathlib.Path(__file__).parent / "fixtures" / "pth"
+FIXTURES_DIR = pathlib.Path(__file__).parent.parent / "fixtures" / "pth"
 MANIFEST_PATH = FIXTURES_DIR / "manifest.json"
 
 
