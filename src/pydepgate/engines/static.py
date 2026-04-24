@@ -260,6 +260,162 @@ class StaticEngine:
                         f"{line.line_number} of {context.internal_path}: {exc}"
                     )
         return signals
+    
+    def scan_wheel(self, path: Path) -> ScanResult:
+        """Scan a wheel file by enumerating its entries and analyzing each."""
+        from pydepgate.parsers.wheel import (
+            iter_wheel_files_with_diagnostics,
+            SkippedEntry as WheelSkippedEntry,
+            WheelEntry,
+        )
+        return self._scan_artifact_with_enumerator(
+            identity=str(path),
+            artifact_kind=ArtifactKind.WHEEL,
+            enumerate_fn=lambda: iter_wheel_files_with_diagnostics(path),
+            extract_entry=lambda item: (
+                (item[0].internal_path, item[0].content)
+                if isinstance(item[0], WheelEntry)
+                else None
+            ),
+            extract_skipped=lambda item: (
+                SkippedFile(
+                    internal_path=item[0].raw_name,
+                    reason=item[0].reason,
+                )
+                if isinstance(item[0], WheelSkippedEntry)
+                else None
+            ),
+        )
+
+    def scan_sdist(self, path: Path) -> ScanResult:
+        """Scan an sdist file by enumerating its entries."""
+        from pydepgate.parsers.sdist import (
+            iter_sdist_files_with_diagnostics,
+            SkippedEntry as SdistSkippedEntry,
+            SdistEntry,
+        )
+        return self._scan_artifact_with_enumerator(
+            identity=str(path),
+            artifact_kind=ArtifactKind.SDIST,
+            enumerate_fn=lambda: iter_sdist_files_with_diagnostics(path),
+            extract_entry=lambda item: (
+                (item.internal_path, item.content)
+                if isinstance(item, SdistEntry)
+                else None
+            ),
+            extract_skipped=lambda item: (
+                SkippedFile(internal_path=item.raw_name, reason=item.reason)
+                if isinstance(item, SdistSkippedEntry)
+                else None
+            ),
+        )
+
+    def scan_installed(self, package_name: str) -> ScanResult:
+        """Scan the files of an installed package by name."""
+        from pydepgate.introspection.installed import (
+            iter_installed_package_files,
+            InstalledPackageNotFound,
+        )
+        try:
+            files_iter = iter_installed_package_files(package_name)
+        except InstalledPackageNotFound:
+            return ScanResult(
+                artifact_identity=package_name,
+                artifact_kind=ArtifactKind.INSTALLED_ENV,
+                findings=(),
+                skipped=(),
+                statistics=ScanStatistics(),
+                diagnostics=(f"package not installed: {package_name}",),
+            )
+        return self._scan_artifact_with_enumerator(
+            identity=package_name,
+            artifact_kind=ArtifactKind.INSTALLED_ENV,
+            enumerate_fn=lambda: ((f, None) for f in files_iter),
+            extract_entry=lambda item: (item[0].internal_path, item[0].content),
+            extract_skipped=lambda item: None,
+        )
+
+    def _scan_artifact_with_enumerator(
+        self,
+        identity: str,
+        artifact_kind: ArtifactKind,
+        enumerate_fn,
+        extract_entry,
+        extract_skipped,
+    ) -> ScanResult:
+        """Run the full pipeline over the output of an entry enumerator.
+
+        This is the shared spine for scan_wheel, scan_sdist, and
+        scan_installed. Each caller provides:
+          - enumerate_fn: returns an iterable of items
+          - extract_entry: given an item, return (path, bytes) or None
+          - extract_skipped: given an item, return a SkippedFile or None
+
+        The engine aggregates per-file scan results into a single
+        ScanResult covering the whole artifact.
+        """
+        import time
+
+        all_findings: list[Finding] = []
+        all_skipped: list[SkippedFile] = []
+        all_diagnostics: list[str] = []
+        combined_stats = ScanStatistics()
+
+        started_at = time.perf_counter()
+
+        try:
+            items = list(enumerate_fn())
+        except Exception as exc:
+            combined_stats.duration_seconds = time.perf_counter() - started_at
+            return ScanResult(
+                artifact_identity=identity,
+                artifact_kind=artifact_kind,
+                findings=(),
+                skipped=(),
+                statistics=combined_stats,
+                diagnostics=(f"failed to enumerate {identity}: {exc}",),
+            )
+
+        for item in items:
+            skipped = extract_skipped(item)
+            if skipped is not None:
+                all_skipped.append(skipped)
+                combined_stats.files_total += 1
+                combined_stats.files_skipped += 1
+                continue
+
+            entry = extract_entry(item)
+            if entry is None:
+                continue
+
+            internal_path, content = entry
+            combined_stats.files_total += 1
+
+            file_result = self.scan_bytes(
+                content=content,
+                internal_path=internal_path,
+                artifact_kind=artifact_kind,
+                artifact_identity=identity,
+            )
+
+            all_findings.extend(file_result.findings)
+            all_skipped.extend(file_result.skipped)
+            all_diagnostics.extend(file_result.diagnostics)
+            combined_stats.files_scanned += file_result.statistics.files_scanned
+            combined_stats.files_skipped += file_result.statistics.files_skipped
+            combined_stats.signals_emitted += file_result.statistics.signals_emitted
+
+        combined_stats.analyzers_run = len(self._analyzers)
+        combined_stats.duration_seconds = time.perf_counter() - started_at
+
+        return ScanResult(
+            artifact_identity=identity,
+            artifact_kind=artifact_kind,
+            findings=tuple(all_findings),
+            skipped=tuple(all_skipped),
+            statistics=combined_stats,
+            diagnostics=tuple(all_diagnostics),
+        )
 
 
 def _remap_signal_location(signal: Signal, base_line: int):
