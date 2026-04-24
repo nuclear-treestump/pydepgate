@@ -33,6 +33,7 @@ from typing import Iterable
 from pydepgate.analyzers.base import (
     Analyzer, Confidence, Scope, Signal,
 )
+from pydepgate.analyzers._visitor import _ScopeTracker, get_qualified_name
 from pydepgate.parsers.pysource import ParsedPySource, SourceLocation
 
 
@@ -63,52 +64,6 @@ _EXEC_FUNCTIONS = {
 }
 
 
-class _ScopeTracker(ast.NodeVisitor):
-    """Tracks the current scope as we descend the AST.
-
-    Subclasses override visit_* methods and read self.current_scope
-    to know where they are.
-    """
-
-    def __init__(self):
-        self._scope_stack: list[Scope] = [Scope.MODULE]
-
-    @property
-    def current_scope(self) -> Scope:
-        return self._scope_stack[-1]
-
-    def visit_FunctionDef(self, node):
-        entering = Scope.FUNCTION if self.current_scope == Scope.MODULE else Scope.NESTED_FUNCTION
-        self._scope_stack.append(entering)
-        self.generic_visit(node)
-        self._scope_stack.pop()
-
-    def visit_AsyncFunctionDef(self, node):
-        self.visit_FunctionDef(node)
-
-    def visit_ClassDef(self, node):
-        self._scope_stack.append(Scope.CLASS_BODY)
-        self.generic_visit(node)
-        self._scope_stack.pop()
-
-
-def _get_qualified_name(node: ast.AST) -> str | None:
-    """Extract a dotted name from an AST node like base64.b64decode.
-
-    Returns 'base64.b64decode' for an Attribute node, 'b64decode' for
-    a Name node, etc. Returns None if the node isn't a simple name
-    reference (e.g., a subscript or call expression).
-    """
-    if isinstance(node, ast.Name):
-        return node.id
-    if isinstance(node, ast.Attribute):
-        parent = _get_qualified_name(node.value)
-        if parent is None:
-            return None
-        return f"{parent}.{node.attr}"
-    return None
-
-
 def _is_decode_call(node: ast.AST) -> tuple[str, str] | None:
     """If node is a call to a known decode function, return (module, attr).
 
@@ -116,7 +71,7 @@ def _is_decode_call(node: ast.AST) -> tuple[str, str] | None:
     """
     if not isinstance(node, ast.Call):
         return None
-    name = _get_qualified_name(node.func)
+    name = get_qualified_name(node.func)
     if name is None:
         return None
     # Match exact module.attr pairs.
@@ -134,7 +89,7 @@ def _is_exec_call(node: ast.AST) -> str | None:
     """If node is a call to exec/eval/compile/__import__, return the name."""
     if not isinstance(node, ast.Call):
         return None
-    name = _get_qualified_name(node.func)
+    name = get_qualified_name(node.func)
     if name in _EXEC_FUNCTIONS:
         return name
     return None
