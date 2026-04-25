@@ -1,0 +1,1 @@
+"""pydepgate command-line interface."""
