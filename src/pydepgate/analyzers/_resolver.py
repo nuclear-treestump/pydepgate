@@ -68,12 +68,18 @@ class ResolutionResult:
         failure_category: Categorized reason, useful for analyzers
             that want to match on specific failure types.
         operations_used: Names of the operations the resolver applied
-            during evaluation. Used for confidence calibration: an
-            expression that needed many operations to resolve to a
-            short string is more suspicious than one that needed few.
+            during evaluation.
         unresolved_fragments: Textual renderings of each AST node
-            the resolver gave up on, via ast.unparse. Empty if the
-            expression was fully resolved.
+            the resolver gave up on, via ast.unparse.
+        resolved_fragments: Ordered list of string-shaped pieces that
+            successfully resolved. For a fully-resolved string-typed
+            result, this is a single-element tuple containing the
+            resolved value. For a partial resolution, this is the
+            ordered list of pieces that did resolve (with the
+            unresolved pieces simply absent). Used by analyzers that
+            want to substring-match against the concatenation of
+            resolved pieces. Non-string resolutions (ints, bytes,
+            lists) populate this with their str() coercion.
     """
     resolved: bool
     value: Any = None
@@ -82,18 +88,29 @@ class ResolutionResult:
     failure_category: FailureReason | None = None
     operations_used: tuple[str, ...] = field(default_factory=tuple)
     unresolved_fragments: tuple[str, ...] = field(default_factory=tuple)
+    resolved_fragments: tuple[str, ...] = field(default_factory=tuple)
 
     @classmethod
     def success(
         cls,
         value: Any,
         operations: tuple[str, ...] = (),
+        fragments: tuple[str, ...] | None = None,
     ) -> "ResolutionResult":
-        """Construct a successful resolution result."""
+        """Construct a successful resolution result.
+
+        If fragments is None, the resolved value is automatically
+        wrapped in a single-element tuple (after str-coercion).
+        Callers can pass fragments explicitly when the value's
+        fragment representation differs from str(value).
+        """
+        if fragments is None:
+            fragments = (str(value),) if value is not None else ()
         return cls(
             resolved=True,
             value=value,
             operations_used=operations,
+            resolved_fragments=fragments,
         )
 
     @classmethod
@@ -104,6 +121,7 @@ class ResolutionResult:
         partial_value: str | None = None,
         operations: tuple[str, ...] = (),
         unresolved: tuple[str, ...] = (),
+        fragments: tuple[str, ...] = (),
     ) -> "ResolutionResult":
         """Construct a failed resolution result."""
         return cls(
@@ -113,6 +131,7 @@ class ResolutionResult:
             partial_value=partial_value,
             operations_used=operations,
             unresolved_fragments=unresolved,
+            resolved_fragments=fragments,
         )
 
 
@@ -530,10 +549,8 @@ def _resolve_joinedstr(
     parts: list[str] = []
     operations: tuple[str, ...] = ("fstring",)
     unresolved: list[str] = []
+    fragments: list[str] = []
     fully_resolved = True
-    # Track the most specific failure category we encountered. If only
-    # one part failed, we preserve its category. If multiple parts failed
-    # with different categories, we fall back to UNRESOLVED_VARIABLE.
     failure_categories: list[FailureReason] = []
 
     for part in node.values:
@@ -541,6 +558,7 @@ def _resolve_joinedstr(
         if result.resolved:
             parts.append(str(result.value))
             operations = operations + result.operations_used
+            fragments.extend(result.resolved_fragments)
         else:
             fully_resolved = False
             if result.partial_value is not None:
@@ -548,20 +566,20 @@ def _resolve_joinedstr(
             else:
                 parts.append("???")
             unresolved.extend(result.unresolved_fragments)
+            # Even from a partial sub-result, carry forward whatever
+            # fragments did resolve.
+            fragments.extend(result.resolved_fragments)
             if result.failure_category is not None:
                 failure_categories.append(result.failure_category)
 
     if fully_resolved:
         return ResolutionResult.success(
-            "".join(parts), operations=operations
+            "".join(parts),
+            operations=operations,
         )
 
-    # Pick the most informative failure category. If there's exactly
-    # one, use it. If multiple parts failed with the same category,
-    # use that. Otherwise default to UNRESOLVED_VARIABLE.
     if len(set(failure_categories)) == 1 and failure_categories:
         category = failure_categories[0]
-        # Build a reason that reflects the actual failure.
         reason = (
             f"f-string contains unresolved component "
             f"({category.value})"
@@ -576,6 +594,7 @@ def _resolve_joinedstr(
         partial_value="".join(parts),
         operations=operations,
         unresolved=tuple(unresolved),
+        fragments=tuple(fragments),
     )
 
 
@@ -913,7 +932,8 @@ def _propagate_partial_binop(
 ) -> ResolutionResult:
     """Build a partial-resolution result for a BinOp where one side is
     unresolved. Preserves the most specific failure category from the
-    failing operand(s).
+    failing operand(s) and concatenates resolved fragments in source
+    order so analyzers can substring-match the resolved content.
     """
     op = node.op
     op_text = _binop_symbol(op)
@@ -923,8 +943,11 @@ def _propagate_partial_binop(
     operations = _merge_operations(left, right, "binop_partial")
     unresolved = left.unresolved_fragments + right.unresolved_fragments
 
-    # Preserve a specific failure category if exactly one side failed,
-    # or if both failed with the same category.
+    # Carry resolved fragments forward in source order. The order
+    # matters: 'ev' + secret + 'al' produces fragments ('ev', 'al')
+    # which concatenate to 'eval'.
+    fragments = left.resolved_fragments + right.resolved_fragments
+
     failure_categories = []
     if not left.resolved and left.failure_category is not None:
         failure_categories.append(left.failure_category)
@@ -933,7 +956,6 @@ def _propagate_partial_binop(
 
     if len(set(failure_categories)) == 1 and failure_categories:
         category = failure_categories[0]
-        # Use the more specific reason.
         reason = (
             left.reason if not left.resolved
             else right.reason
@@ -948,8 +970,8 @@ def _propagate_partial_binop(
         partial_value=partial,
         operations=operations,
         unresolved=unresolved,
+        fragments=fragments,
     )
-
 
 def _binop_symbol(op: ast.AST) -> str:
     """Return the Python operator text for an AST binop node."""

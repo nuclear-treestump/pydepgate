@@ -427,6 +427,74 @@ class RealWorldPatternTests(unittest.TestCase):
         self.assertTrue(result.resolved)
         self.assertEqual(result.value, "eval")
 
+# =============================================================================
+# Tier 9: Fragmentation and partial value generation
+# =============================================================================
+
+class FragmentTrackingTests(unittest.TestCase):
+    """Tests that resolved_fragments is populated correctly across
+    successful and partial resolutions."""
+
+    def test_constant_has_single_fragment(self):
+        result = _resolve_expr("'eval'")
+        self.assertEqual(result.resolved_fragments, ("eval",))
+
+    def test_concat_has_single_fragment_of_concatenated_value(self):
+        # When BinOp fully resolves, fragments should be the final
+        # value as one piece, not the source pieces.
+        result = _resolve_expr("'ev' + 'al'")
+        self.assertTrue(result.resolved)
+        self.assertEqual(result.resolved_fragments, ("eval",))
+
+    def test_partial_concat_carries_resolved_pieces(self):
+        # 'ev' + secret + 'al': only the literals resolve.
+        result = _resolve_expr("'ev' + secret + 'al'")
+        self.assertFalse(result.resolved)
+        self.assertEqual(result.resolved_fragments, ("ev", "al"))
+
+    def test_partial_chr_concat_carries_chr_results(self):
+        # chr(101) + secret + chr(108): the chr values resolve.
+        result = _resolve_expr("chr(101) + secret + chr(108)")
+        self.assertFalse(result.resolved)
+        self.assertEqual(result.resolved_fragments, ("e", "l"))
+
+    def test_partial_concat_preserves_order(self):
+        result = _resolve_expr("'first' + middle + 'last'")
+        self.assertFalse(result.resolved)
+        self.assertEqual(result.resolved_fragments, ("first", "last"))
+
+    def test_partial_fstring_carries_resolved_pieces(self):
+        result = _resolve_expr("f'pre_{x}_suf'")
+        self.assertFalse(result.resolved)
+        # Pre/suf are literal pieces; '_' separators are also literal.
+        # The resolved fragments should include all the literal pieces
+        # in source order.
+        joined = "".join(result.resolved_fragments)
+        self.assertIn("pre_", joined)
+        self.assertIn("_suf", joined)
+
+    def test_int_resolution_has_str_coerced_fragment(self):
+        # Non-string resolutions still populate fragments via str().
+        result = _resolve_expr("42")
+        self.assertEqual(result.resolved_fragments, ("42",))
+
+    def test_unresolved_root_has_empty_fragments(self):
+        result = _resolve_expr("undefined_variable")
+        self.assertEqual(result.resolved_fragments, ())
+
+    def test_concatenation_with_chr_in_one_position(self):
+        # 'pre' + chr(120): both resolve.
+        result = _resolve_expr("'pre' + chr(120)")
+        self.assertTrue(result.resolved)
+        self.assertEqual(result.resolved_fragments, ("prex",))
+
+    def test_three_way_partial_with_two_resolved(self):
+        # 'a' + x + 'b' + y + 'c': three literal pieces resolve.
+        result = _resolve_expr("'a' + x + 'b' + y + 'c'")
+        self.assertFalse(result.resolved)
+        # Order: a, b, c (skipping unresolved x and y).
+        self.assertEqual(result.resolved_fragments, ("a", "b", "c"))
+
 
 if __name__ == "__main__":
     unittest.main()
