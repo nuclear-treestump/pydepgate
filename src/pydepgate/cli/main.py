@@ -18,6 +18,7 @@ from pydepgate.cli.subcommands import (
     preflight,
     scan,
     version,
+    explain
 )
 from pydepgate.cli.subcommands.version import get_version
 
@@ -109,6 +110,18 @@ def _add_global_flags(
         ),
     )
 
+    parser.add_argument(
+            "--rules-file",
+            default=(
+                argparse.SUPPRESS if is_subparser
+                else _env_str("PYDEPGATE_RULES_FILE")
+            ),
+            help=(
+                "Path to a .gate rules file. Default: discover "
+                "pydepgate.gate in cwd or venv. Env: PYDEPGATE_RULES_FILE"
+            ),
+        )
+
 
 def build_parser() -> argparse.ArgumentParser:
     """Construct the argparse parser tree."""
@@ -147,7 +160,7 @@ def build_parser() -> argparse.ArgumentParser:
     preflight.register(subparsers)
     exec_stub.register(subparsers)
     version.register(subparsers)
-
+    explain.register(subparsers)
     # Help subcommand.
     help_parser = subparsers.add_parser(
         "help",

@@ -50,13 +50,45 @@ def register(subparsers) -> None:
 
 def run(args: argparse.Namespace) -> int:
     """Execute the scan subcommand. Returns an exit code."""
+    from pydepgate.rules.defaults import DEFAULT_RULES
+    from pydepgate.rules.loader import GateFileError, load_user_rules
+
     target = args.target
 
-    engine = StaticEngine(analyzers=[
-        EncodingAbuseAnalyzer(),
-        DynamicExecutionAnalyzer(),
-        StringOpsAnalyzer(),
-    ])
+    # Load user rules.
+    rules_file = getattr(args, "rules_file", None)
+    try:
+        loaded = load_user_rules(explicit_path=rules_file)
+    except GateFileError as exc:
+        sys.stderr.write(f"error loading rules: {exc}\n")
+        return exit_codes.TOOL_ERROR
+
+    # Combine defaults and user rules. Default order: defaults first,
+    # then user rules. Source precedence handles conflicts.
+    all_rules = list(DEFAULT_RULES) + list(loaded.rules)
+
+    # Surface discovery information.
+    if loaded.source_path:
+        sys.stderr.write(
+            f"note: using rules file {loaded.source_path}\n"
+        )
+    if loaded.also_found:
+        for other in loaded.also_found:
+            sys.stderr.write(
+                f"note: also found {other} (not loaded; "
+                f"{loaded.source_path} takes precedence)\n"
+            )
+    for warning in loaded.warnings:
+        sys.stderr.write(f"warning: {warning}\n")
+
+    engine = StaticEngine(
+        analyzers=[
+            EncodingAbuseAnalyzer(),
+            DynamicExecutionAnalyzer(),
+            StringOpsAnalyzer(),
+        ],
+        rules=all_rules,
+    )
 
     result = _dispatch_scan(engine, target)
     return _render_and_exit_code(result, args)

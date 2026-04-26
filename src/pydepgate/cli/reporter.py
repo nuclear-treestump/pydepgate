@@ -80,15 +80,12 @@ def render_human(
     no_color: bool = False,
     ci_mode: bool = False,
 ) -> None:
-    """Render a ScanResult as colored, human-readable terminal output.
-
-    In CI mode, the output is more compact: no separators, no decorative
-    headers, and no trailing summary if the scan was clean.
-    """
+    """Render a ScanResult as colored, human-readable terminal output."""
     color = _color_enabled(no_color)
     findings = result.findings
+    suppressed = result.suppressed_findings
 
-    if not findings:
+    if not findings and not suppressed:
         if ci_mode:
             stream.write(f"pydepgate: clean ({result.artifact_identity})\n")
         else:
@@ -102,22 +99,80 @@ def render_human(
             _render_statistics(result, stream, color)
         return
 
-    if not ci_mode:
-        bold_pre, bold_post = (
-            (_Color.BOLD, _Color.RESET) if color else ("", "")
-        )
-        stream.write(
-            f"\n{bold_pre}{len(findings)} finding"
-            f"{'s' if len(findings) != 1 else ''} in "
-            f"{result.artifact_identity}{bold_post}\n"
-        )
-        stream.write("=" * 60 + "\n\n")
+    if findings:
+        if not ci_mode:
+            bold_pre, bold_post = (
+                (_Color.BOLD, _Color.RESET) if color else ("", "")
+            )
+            stream.write(
+                f"\n{bold_pre}{len(findings)} finding"
+                f"{'s' if len(findings) != 1 else ''} in "
+                f"{result.artifact_identity}{bold_post}\n"
+            )
+            stream.write("=" * 60 + "\n\n")
 
-    for finding in findings:
-        _render_finding(finding, stream, color, ci_mode)
+        for finding in findings:
+            _render_finding(finding, stream, color, ci_mode)
+
+    # Suppressed findings section.
+    if suppressed:
+        if not ci_mode:
+            dim_pre, dim_post = (_Color.DIM, _Color.RESET) if color else ("", "")
+            yellow_pre, yellow_post = (
+                (_Color.YELLOW, _Color.RESET) if color else ("", "")
+            )
+            stream.write(
+                f"\n{yellow_pre}{len(suppressed)} suppressed finding"
+                f"{'s' if len(suppressed) != 1 else ''}{yellow_post}\n"
+            )
+            stream.write("-" * 60 + "\n")
+            stream.write(
+                f"{dim_pre}The following findings were silenced by rules. "
+                f"Review to confirm suppressions are intentional.{dim_post}\n\n"
+            )
+
+        for sup in suppressed:
+            _render_suppressed_finding(sup, stream, color, ci_mode)
 
     if not ci_mode:
         _render_statistics(result, stream, color)
+
+
+def _render_suppressed_finding(
+    sup, stream: TextIO, color: bool, ci_mode: bool
+) -> None:
+    """Render a single suppressed finding."""
+    dim_pre, dim_post = (_Color.DIM, _Color.RESET) if color else ("", "")
+    sig = sup.original_finding.signal
+    would_have = sup.would_have_been
+
+    if ci_mode:
+        # Compact format for CI.
+        stream.write(
+            f"SUPPRESSED {sig.signal_id} "
+            f"{sup.original_finding.context.internal_path}: "
+            f"by {sup.suppressing_rule_id} "
+            f"(would have been {would_have.severity.value.upper()})\n"
+        )
+        return
+
+    # Full format.
+    stream.write(
+        f"  {dim_pre}[SUPPRESSED]{dim_post} {sig.signal_id} "
+        f"in {sup.original_finding.context.internal_path}"
+    )
+    if sig.location.line:
+        stream.write(f":{sig.location.line}")
+    stream.write("\n")
+    stream.write(f"    {dim_pre}{sig.description}{dim_post}\n")
+    stream.write(
+        f"    {dim_pre}suppressed by: {sup.suppressing_rule_id} "
+        f"(source: {sup.suppressing_rule_source}){dim_post}\n"
+    )
+    stream.write(
+        f"    {dim_pre}would have been: "
+        f"{would_have.severity.value.upper()}{dim_post}\n\n"
+    )
 
 
 def _render_finding(
@@ -191,11 +246,7 @@ def _render_statistics(result: ScanResult, stream: TextIO, color: bool) -> None:
 
 
 def render_json(result: ScanResult, stream: TextIO) -> None:
-    """Render a ScanResult as a single JSON object on stdout.
-
-    Schema is stable for v0.1. Future schema versions will add a
-    schema_version field; for now we keep it simple.
-    """
+    """Render a ScanResult as a single JSON object on stdout."""
     payload = {
         "schema_version": 1,
         "artifact": {
@@ -203,6 +254,9 @@ def render_json(result: ScanResult, stream: TextIO) -> None:
             "kind": result.artifact_kind.value,
         },
         "findings": [_finding_to_dict(f) for f in result.findings],
+        "suppressed_findings": [
+            _suppressed_to_dict(s) for s in result.suppressed_findings
+        ],
         "skipped": [
             {"path": s.internal_path, "reason": s.reason}
             for s in result.skipped
@@ -220,6 +274,18 @@ def render_json(result: ScanResult, stream: TextIO) -> None:
     }
     json.dump(payload, stream, indent=2)
     stream.write("\n")
+
+
+def _suppressed_to_dict(sup) -> dict:
+    """Convert a SuppressedFinding to a JSON-serializable dict."""
+    return {
+        "signal_id": sup.original_finding.signal.signal_id,
+        "internal_path": sup.original_finding.context.internal_path,
+        "description": sup.original_finding.signal.description,
+        "suppressing_rule_id": sup.suppressing_rule_id,
+        "suppressing_rule_source": sup.suppressing_rule_source,
+        "would_have_been_severity": sup.would_have_been.severity.value,
+    }
 
 
 def _finding_to_dict(finding: Finding) -> dict:
