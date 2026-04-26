@@ -1,0 +1,181 @@
+---
+name: Custom issue template
+about: Describe this issue template's purpose here.
+title: "[FEATURE] "
+labels: needs-triage
+assignees: 0xIkari
+type: Feature
+
+---
+
+name: Feature Request
+description: Suggest a new capability, signal, or improvement for pydepgate
+title: "[Feature] "
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to suggest a feature. The questions below help
+        prioritize work and avoid building the wrong thing. The more specific you
+        can be about your actual use case, the better the result will be.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: |
+        Describe what you're trying to accomplish and what makes it hard or
+        impossible with pydepgate today. Be specific about the situation.
+      placeholder: |
+        Example: I'm reviewing third-party packages before adding them to our
+        internal mirror. Right now I have to scan each .whl manually and
+        eyeball the JSON output. I want to scan a whole directory of wheels
+        and get a single aggregated report.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What feature would solve this?
+      description: |
+        Your proposed solution. Don't worry about whether it's the only way to
+        solve the problem — alternatives go in a later field.
+      placeholder: |
+        Example: A `pydepgate scan-dir <path>` command that recursively finds
+        wheels and sdists in a directory and produces one aggregated report,
+        with per-artifact and total finding counts.
+    validations:
+      required: true
+
+  - type: textarea
+    id: success
+    attributes:
+      label: What does success look like?
+      description: |
+        How will you know this works? Concrete acceptance criteria, ideally
+        as a command and expected behavior. Include anti-goals (things you
+        specifically don't want) if relevant.
+      placeholder: |
+        Example:
+        - `pydepgate scan-dir ./wheels/` walks the directory recursively
+        - Output includes per-file findings and a summary line
+        - Exit code is the max severity across all artifacts
+        - Anti-goal: I don't want it to follow symlinks by default
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What alternatives have you considered?
+      description: |
+        Other approaches you thought about, including workarounds you're
+        currently using and why they're not enough.
+      placeholder: |
+        Example: I tried wrapping `pydepgate scan` in a shell loop, but the
+        per-invocation overhead makes it slow for large directories and I
+        can't get a single aggregate exit code easily.
+    validations:
+      required: false
+
+  - type: textarea
+    id: value
+    attributes:
+      label: Why does this matter?
+      description: |
+        Who benefits and how. This is your chance to make the case for
+        prioritization. Concrete impact beats abstract value.
+      placeholder: |
+        Example: Anyone running an internal package mirror or doing batch
+        review of wheels. We have ~500 packages to review monthly; this
+        would cut review time roughly in half.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: criticality
+    attributes:
+      label: How critical is this to your use of pydepgate?
+      description: Be honest. Most features are "would be nice."
+      options:
+        - "Nice to have — I can work around it"
+        - "Important — limits how I can use pydepgate today"
+        - "Blocking — I can't adopt pydepgate without it"
+        - "Security-critical — pydepgate is missing or doing the wrong thing in a way that affects detection"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: effort
+    attributes:
+      label: Estimated implementation effort (your best guess)
+      description: |
+        Your best guess. Maintainers will re-estimate during triage; this is
+        mostly to prompt you to think about scope.
+        - 1: Trivial. Doc fix, single-line change, new test.
+        - 2: Small. Localized change to one module, no new abstractions.
+        - 3: Medium. New CLI flag, new rule, or moderate refactor across a couple of modules.
+        - 4: Large. New analyzer, new output format, new subcommand.
+        - 5: Major. New mode (preflight, install gate), architectural change, or cross-cutting feature.
+      options:
+        - "1 — Trivial"
+        - "2 — Small"
+        - "3 — Medium"
+        - "4 — Large"
+        - "5 — Major"
+        - "Not sure"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: security
+    attributes:
+      label: Does this have security implications?
+      description: |
+        For example: handling untrusted input, changing pydepgate's threat
+        model, affecting what does or doesn't get flagged, network access,
+        filesystem access beyond the artifact being scanned.
+      options:
+        - "No"
+        - "Possibly — see notes below"
+        - "Yes — this directly affects security behavior"
+        - "Not sure"
+    validations:
+      required: true
+
+  - type: textarea
+    id: security_notes
+    attributes:
+      label: Security notes (if applicable)
+      description: |
+        If you answered "Possibly" or "Yes" above, describe what you have
+        in mind. Don't worry about being comprehensive — flag what you
+        know and maintainers will dig in during triage.
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context (optional)
+      description: |
+        Anything about your environment, role, or use case that would help
+        us understand the request. Not required but often useful.
+      placeholder: |
+        Example: AppSec engineer at a financial firm, evaluating tools for
+        our internal Python mirror. We currently use pip-audit and bandit;
+        pydepgate would replace neither but complement both.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: confirms
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and didn't find a duplicate
+          required: true
+        - label: This is a feature request, not a bug report (use the bug template otherwise)
+          required: true
