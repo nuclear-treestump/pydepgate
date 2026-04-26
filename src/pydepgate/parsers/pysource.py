@@ -219,18 +219,22 @@ def _extract_comments(source_bytes: bytes) -> tuple[tuple[Comment, ...], str]:
     comments: list[Comment] = []
     try:
         for tok in tokenize.tokenize(buf.readline):
-            if tok.type == tokenize.COMMENT:
-                start_line, start_col = tok.start
-                location = SourceLocation(line=start_line, column=start_col)
-                comments.append(_classify_comment(tok.string, location))
-    except tokenize.TokenError:
+            if tok.type == tokenize.ENCODING:
+                encoding_used = tok.string
+            elif tok.type == tokenize.COMMENT:
+                comments.append(Comment(
+                    text=tok.string,
+                    line=tok.start[0],
+                    column=tok.start[1],
+                ))
+    except (tokenize.TokenError, UnicodeDecodeError, SyntaxError, ValueError):
+        # Tokenizer failures: malformed source, encoding mismatch, random
+        # bytes, etc. The rest of the scan proceeds without comment data;
+        # the AST parser has its own error handling for whatever made it
+        # here.
         pass
-    except (SyntaxError, IndentationError):
-        pass
-    except LookupError:
-        comments = list(_fallback_comment_scan(source_bytes))
-
-    return tuple(comments), encoding
+    
+    return comments, encoding_used
 
 
 def parse_python_source(
