@@ -192,4 +192,138 @@ DEFAULT_RULES = [
             "value, this much obfuscation in setup.py is suspicious."
         ),
     ),
+    # -----------------------------------------------------------------------------
+    # suspicious_stdlib rules
+    # -----------------------------------------------------------------------------
+
+    Rule(
+        rule_id="default_stdlib001_in_setup_py",
+        source=RuleSource.DEFAULT,
+        match=RuleMatch(signal_id="STDLIB001", file_kind=FileKind.SETUP_PY),
+        effect=_set_severity(Severity.CRITICAL),
+        explain=(
+            "Spawning a subprocess inside setup.py runs arbitrary "
+            "commands during 'pip install'. There is no legitimate "
+            "use case for setup.py to invoke shell commands or "
+            "subprocesses; build systems use proper hooks instead. "
+            "CRITICAL severity."
+        ),
+    ),
+    Rule(
+        rule_id="default_stdlib001_in_pth",
+        source=RuleSource.DEFAULT,
+        match=RuleMatch(signal_id="STDLIB001", file_kind=FileKind.PTH),
+        effect=_set_severity(Severity.CRITICAL),
+        explain=(
+            "Spawning a subprocess from a .pth file runs at every "
+            "interpreter startup. Combined with .pth's automatic "
+            "execution, this is essentially indistinguishable from "
+            "malware. CRITICAL severity."
+        ),
+    ),
+    Rule(
+        rule_id="default_stdlib001_in_init_py_module_scope",
+        source=RuleSource.DEFAULT,
+        match=RuleMatch(
+            signal_id="STDLIB001",
+            file_kind=FileKind.INIT_PY,
+            scope=Scope.MODULE,
+        ),
+        effect=_set_severity(Severity.HIGH),
+        explain=(
+            "Subprocess spawning at __init__.py module scope runs on "
+            "every import of the package. While some legitimate "
+            "packages do this (build helpers, conditional native "
+            "library loading), it warrants close inspection."
+        ),
+    ),
+    Rule(
+        rule_id="default_stdlib001_in_sitecustomize",
+        source=RuleSource.DEFAULT,
+        match=RuleMatch(
+            signal_id="STDLIB001",
+            file_kind=FileKind.SITECUSTOMIZE,
+        ),
+        effect=_set_severity(Severity.CRITICAL),
+        explain=(
+            "Subprocess spawning from sitecustomize.py runs at every "
+            "interpreter startup with the user's privileges. CRITICAL "
+            "severity."
+        ),
+    ),
+    Rule(
+        rule_id="default_stdlib002_in_setup_py",
+        source=RuleSource.DEFAULT,
+        match=RuleMatch(signal_id="STDLIB002", file_kind=FileKind.SETUP_PY),
+        effect=_set_severity(Severity.HIGH),
+        explain=(
+            "Network access from setup.py during pip install can be "
+            "used to download additional payloads or exfiltrate "
+            "environment data (env vars, credentials, machine details). "
+            "There is rarely a legitimate reason for setup.py to make "
+            "network calls."
+        ),
+    ),
+    Rule(
+        rule_id="default_stdlib002_in_pth",
+        source=RuleSource.DEFAULT,
+        match=RuleMatch(signal_id="STDLIB002", file_kind=FileKind.PTH),
+        effect=_set_severity(Severity.CRITICAL),
+        explain=(
+            "Network access from .pth files runs at every interpreter "
+            "startup. There is no legitimate use case."
+        ),
+    ),
+    Rule(
+        rule_id="default_stdlib002_in_init_py_module_scope",
+        source=RuleSource.DEFAULT,
+        match=RuleMatch(
+            signal_id="STDLIB002",
+            file_kind=FileKind.INIT_PY,
+            scope=Scope.MODULE,
+        ),
+        effect=_set_severity(Severity.HIGH),
+        explain=(
+            "Network access at __init__.py module scope runs on every "
+            "import. Legitimate packages defer network access until a "
+            "function is called; module-scope network access in an "
+            "__init__.py is unusual."
+        ),
+    ),
+    Rule(
+        rule_id="default_stdlib003_in_setup_py",
+        source=RuleSource.DEFAULT,
+        match=RuleMatch(signal_id="STDLIB003", file_kind=FileKind.SETUP_PY),
+        effect=_set_severity(Severity.CRITICAL),
+        explain=(
+            "Loading a native library from setup.py is a strong attack "
+            "indicator. Native code loaded during pip install can do "
+            "anything, including escape any sandbox the installer "
+            "might apply. CRITICAL severity."
+        ),
+    ),
+    Rule(
+        rule_id="default_stdlib003_in_pth",
+        source=RuleSource.DEFAULT,
+        match=RuleMatch(signal_id="STDLIB003", file_kind=FileKind.PTH),
+        effect=_set_severity(Severity.CRITICAL),
+        explain=(
+            "Loading a native library from a .pth file runs at every "
+            "interpreter startup. CRITICAL severity."
+        ),
+    ),
+    Rule(
+        rule_id="default_stdlib003_anywhere",
+        source=RuleSource.DEFAULT,
+        match=RuleMatch(signal_id="STDLIB003"),
+        effect=_set_severity(Severity.HIGH),
+        explain=(
+            "Loading native libraries via ctypes is uncommon in "
+            "pure-Python packages. Packages that legitimately wrap "
+            "native libraries (numpy, scipy, cryptography, etc.) do so "
+            "via compiled extensions, not runtime ctypes loads. HIGH "
+            "severity unless the package is known to use ctypes "
+            "deliberately; users can suppress via a user rule."
+        ),
+    ),
 ]
