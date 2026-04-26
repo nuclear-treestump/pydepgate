@@ -12,7 +12,7 @@ March 2026 LiteLLM supply-chain compromise and catalogued as
 
 ## Status
 
-**v0.1.0 Static analysis is functional end-to-end.**
+**v0.1.1 Static analysis is functional end-to-end.**
 
 pydepgate can statically analyze wheels, sdists, and installed packages
 for the patterns used in real-world Python supply-chain attacks. The
