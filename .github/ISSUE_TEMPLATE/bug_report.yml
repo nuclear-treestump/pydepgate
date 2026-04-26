@@ -1,0 +1,195 @@
+name: Bug Report
+description: Report something that pydepgate does wrong, crashes on, or fails to detect
+title: "[Bug] "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Specifics matter more than anything else
+        here. The more concretely you can describe what you did and what
+        happened, the faster this gets fixed.
+
+        **If this bug involves actual malicious content** (a real malware
+        sample that pydepgate failed to detect, an exploitable vulnerability
+        in pydepgate itself, etc.), do NOT paste the content into this issue.
+        See SECURITY.md for the disclosure process. Use this template only
+        for bugs where the unsafe content can be described or synthetically
+        reproduced.
+
+  - type: input
+    id: version
+    attributes:
+      label: pydepgate version
+      description: Output of `pydepgate --version`
+      placeholder: "0.0.4"
+    validations:
+      required: true
+
+  - type: input
+    id: python_version
+    attributes:
+      label: Python version
+      description: Output of `python --version`
+      placeholder: "3.11.7"
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: "Ubuntu 24.04, macOS 14.5, Windows 11, etc."
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install_method
+    attributes:
+      label: How did you install pydepgate?
+      options:
+        - "pip install pydepgate (from PyPI)"
+        - "pip install -e . (editable, from source)"
+        - "pip install from a local wheel"
+        - "Other (describe in 'additional context')"
+    validations:
+      required: true
+
+  - type: textarea
+    id: what_you_did
+    attributes:
+      label: What did you do?
+      description: |
+        The exact command you ran, copy-pasted. Include relevant flags and
+        any environment variables that might matter. If the bug involves a
+        specific file, describe what kind of file (a wheel of package X
+        version Y, a synthetic .pth with the following structure, etc.).
+      placeholder: |
+        Example:
+        $ pydepgate scan some-package-1.0.0-py3-none-any.whl --format json
+        
+        The wheel is from PyPI, contains a .pth file with a single
+        `import package` line.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: what_happened
+    attributes:
+      label: What happened?
+      description: |
+        The actual output, copy-pasted. Include the full error message and
+        traceback if there was one. Include the exit code if relevant.
+      placeholder: |
+        Example:
+        Traceback (most recent call last):
+          File "...", line 42, in scan
+            ...
+        TypeError: expected bytes, got str
+        
+        Exit code: 3
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: what_expected
+    attributes:
+      label: What did you expect?
+      description: |
+        What you thought would happen and why. For false positives or false
+        negatives, explain why you think pydepgate's behavior is wrong.
+      placeholder: |
+        Example: I expected the scan to complete successfully and return
+        exit code 0, since this wheel only contains a benign .pth file
+        with an import statement.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: bug_kind
+    attributes:
+      label: What kind of bug is this?
+      options:
+        - "Crash or unhandled exception"
+        - "Wrong output (incorrect finding, wrong severity, etc.)"
+        - "False positive (flagged something benign)"
+        - "False negative (missed something malicious)"
+        - "Performance issue (slow, hangs, runs out of memory)"
+        - "Documentation is wrong or misleading"
+        - "Installation or packaging problem"
+        - "Other"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: regression
+    attributes:
+      label: Did this used to work?
+      description: |
+        If you've used pydepgate before, did the same input produce a
+        correct result in an earlier version?
+      options:
+        - "Yes, this worked in a previous version (regression)"
+        - "No, this has always been wrong as far as I know"
+        - "I'm not sure, this is the first version I've used"
+        - "Not applicable"
+    validations:
+      required: true
+
+  - type: input
+    id: last_working
+    attributes:
+      label: Last known working version (if regression)
+      description: Only fill this in if you answered "regression" above.
+      placeholder: "0.0.3"
+    validations:
+      required: false
+
+  - type: textarea
+    id: minimal_repro
+    attributes:
+      label: Minimal reproduction
+      description: |
+        The smallest input or set of steps that triggers the bug. If you
+        can construct a synthetic example that reproduces the bug without
+        using the original problematic file, that's ideal. Describe the
+        structure rather than pasting the content if there's any risk the
+        content is malicious.
+      placeholder: |
+        Example: Create a wheel containing a single .pth file with the
+        contents `import os; os.system('echo test')` and run
+        `pydepgate scan` on it. Crashes with the traceback above.
+    validations:
+      required: false
+
+  - type: textarea
+    id: workaround
+    attributes:
+      label: Workaround (if you found one)
+      description: Anything you tried that got you unblocked, even partially.
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional_context
+    attributes:
+      label: Additional context
+      description: |
+        Anything else relevant. Other tools in the mix, unusual environment
+        details, suspicions about what might be going wrong.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: confirms
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and didn't find a duplicate
+          required: true
+        - label: This is a bug report, not a feature request (use the feature template otherwise)
+          required: true
+        - label: I have not pasted actual malicious content into this issue
+          required: true
