@@ -7,8 +7,8 @@ body:
     attributes:
       value: |
         Thanks for taking the time to suggest a feature. The questions below help
-        prioritize work and avoid building the wrong thing. The more specific you
-        can be about your actual use case, the better the result will be.
+        prioritize work and avoid building the wrong thing. Be specific about your
+        actual use case.
 
   - type: textarea
     id: problem
@@ -31,7 +31,7 @@ body:
       label: What feature would solve this?
       description: |
         Your proposed solution. Don't worry about whether it's the only way to
-        solve the problem — alternatives go in a later field.
+        solve the problem. Alternatives go in a later field.
       placeholder: |
         Example: A `pydepgate scan-dir <path>` command that recursively finds
         wheels and sdists in a directory and produces one aggregated report,
@@ -79,8 +79,8 @@ body:
         prioritization. Concrete impact beats abstract value.
       placeholder: |
         Example: Anyone running an internal package mirror or doing batch
-        review of wheels. We have ~500 packages to review monthly; this
-        would cut review time roughly in half.
+        review of wheels. We have around 500 packages to review monthly;
+        this would cut review time roughly in half.
     validations:
       required: true
 
@@ -90,10 +90,10 @@ body:
       label: How critical is this to your use of pydepgate?
       description: Be honest. Most features are "would be nice."
       options:
-        - "Nice to have — I can work around it"
-        - "Important — limits how I can use pydepgate today"
-        - "Blocking — I can't adopt pydepgate without it"
-        - "Security-critical — pydepgate is missing or doing the wrong thing in a way that affects detection"
+        - "Nice to have. I can work around it."
+        - "Important. Limits how I can use pydepgate today."
+        - "Blocking. I can't adopt pydepgate without it."
+        - "Security-critical. pydepgate is missing or doing the wrong thing in a way that affects detection."
     validations:
       required: true
 
@@ -102,19 +102,19 @@ body:
     attributes:
       label: Estimated implementation effort (your best guess)
       description: |
-        Your best guess. Maintainers will re-estimate during triage; this is
+        Your best guess. Maintainers will re-estimate during triage. This is
         mostly to prompt you to think about scope.
-        - 1: Trivial. Doc fix, single-line change, new test.
-        - 2: Small. Localized change to one module, no new abstractions.
-        - 3: Medium. New CLI flag, new rule, or moderate refactor across a couple of modules.
-        - 4: Large. New analyzer, new output format, new subcommand.
-        - 5: Major. New mode (preflight, install gate), architectural change, or cross-cutting feature.
+        1: Trivial. Doc fix, single-line change, new test.
+        2: Small. Localized change to one module, no new abstractions.
+        3: Medium. New CLI flag, new rule, or moderate refactor across a couple of modules.
+        4: Large. New analyzer, new output format, new subcommand.
+        5: Major. New mode (preflight, install gate), architectural change, or cross-cutting feature.
       options:
-        - "1 — Trivial"
-        - "2 — Small"
-        - "3 — Medium"
-        - "4 — Large"
-        - "5 — Major"
+        - "1. Trivial"
+        - "2. Small"
+        - "3. Medium"
+        - "4. Large"
+        - "5. Major"
         - "Not sure"
     validations:
       required: true
@@ -129,8 +129,8 @@ body:
         filesystem access beyond the artifact being scanned.
       options:
         - "No"
-        - "Possibly — see notes below"
-        - "Yes — this directly affects security behavior"
+        - "Possibly. See notes below."
+        - "Yes. This directly affects security behavior."
         - "Not sure"
     validations:
       required: true
@@ -141,8 +141,8 @@ body:
       label: Security notes (if applicable)
       description: |
         If you answered "Possibly" or "Yes" above, describe what you have
-        in mind. Don't worry about being comprehensive — flag what you
-        know and maintainers will dig in during triage.
+        in mind. Don't worry about being comprehensive. Flag what you know
+        and maintainers will dig in during triage.
     validations:
       required: false
 
