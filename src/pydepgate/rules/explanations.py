@@ -203,6 +203,53 @@ SIGNAL_EXPLANATIONS = {
             "obfuscation effort itself is the signal."
         ),
     },
+"STDLIB001": {
+        "description": (
+            "Call to a stdlib function that spawns a subprocess or "
+            "executes a shell command (subprocess.Popen, os.system, "
+            "os.exec*, fork, etc.)."
+        ),
+        "why_it_matters": (
+            "Process spawning during package installation or import "
+            "is a common malware pattern: the attacker uses pip's "
+            "execution context to run arbitrary commands on the "
+            "victim's machine. Legitimate setup.py and __init__.py "
+            "files almost never need to spawn subprocesses."
+        ),
+        "common_evasions": [
+            "Aliasing the import: 'from subprocess import Popen as P'",
+            "Computing the function name dynamically (caught by "
+            "string_ops if the name is obfuscated)",
+            "Using shell=True to hide the actual command",
+        ],
+    },
+    "STDLIB002": {
+        "description": (
+            "Call to a stdlib function that initiates network "
+            "communication (urllib, socket, http.client, ftplib, etc.)."
+        ),
+        "why_it_matters": (
+            "Network access from setup.py or startup-vector files is "
+            "the primary way malicious packages download additional "
+            "payloads after the initial install. It is also used for "
+            "data exfiltration: stealing environment variables, "
+            "credentials, or machine identification info."
+        ),
+    },
+    "STDLIB003": {
+        "description": (
+            "Call to ctypes to load a native library (CDLL, WinDLL, "
+            "LoadLibrary, etc.)."
+        ),
+        "why_it_matters": (
+            "Native code loaded via ctypes runs outside Python's "
+            "execution model and can do anything. Legitimate packages "
+            "that wrap native libraries do so via compiled extension "
+            "modules, not runtime ctypes loads. ctypes calls in "
+            "pure-Python packages are unusual enough to warrant "
+            "investigation."
+        ),
+    },
 }
 
 
@@ -342,6 +389,104 @@ RULE_EXPLANATIONS = {
             "value, this much obfuscation in setup.py is suspicious."
         ),
         "applies_to": "STR004 signals in setup.py",
+        "effect": "severity = HIGH",
+    },
+"default_stdlib001_in_setup_py": {
+        "description": "Promotes STDLIB001 in setup.py to CRITICAL severity.",
+        "why_it_matters": (
+            "Spawning a subprocess inside setup.py runs arbitrary "
+            "commands during 'pip install'. There is no legitimate "
+            "use case; build systems should use proper hooks instead."
+        ),
+        "applies_to": "STDLIB001 signals in setup.py",
+        "effect": "severity = CRITICAL",
+    },
+    "default_stdlib001_in_pth": {
+        "description": "Promotes STDLIB001 in .pth files to CRITICAL.",
+        "why_it_matters": (
+            "Subprocess spawning from a .pth file runs at every "
+            "interpreter startup. Essentially indistinguishable from "
+            "malware."
+        ),
+        "applies_to": "STDLIB001 signals in .pth files",
+        "effect": "severity = CRITICAL",
+    },
+    "default_stdlib001_in_init_py_module_scope": {
+        "description": "Sets STDLIB001 at __init__.py module scope to HIGH.",
+        "why_it_matters": (
+            "Subprocess spawning at __init__.py module scope runs on "
+            "every import. Some legitimate packages do this, but it "
+            "warrants close inspection."
+        ),
+        "applies_to": "STDLIB001 in __init__.py at module scope",
+        "effect": "severity = HIGH",
+    },
+    "default_stdlib001_in_sitecustomize": {
+        "description": "Promotes STDLIB001 in sitecustomize.py to CRITICAL.",
+        "why_it_matters": (
+            "Subprocess spawning from sitecustomize.py runs at every "
+            "interpreter startup with the user's privileges."
+        ),
+        "applies_to": "STDLIB001 signals in sitecustomize.py",
+        "effect": "severity = CRITICAL",
+    },
+    "default_stdlib002_in_setup_py": {
+        "description": "Sets STDLIB002 in setup.py to HIGH severity.",
+        "why_it_matters": (
+            "Network access from setup.py is rarely legitimate and "
+            "is the main way malicious packages exfiltrate data or "
+            "download additional payloads."
+        ),
+        "applies_to": "STDLIB002 signals in setup.py",
+        "effect": "severity = HIGH",
+    },
+    "default_stdlib002_in_pth": {
+        "description": "Promotes STDLIB002 in .pth files to CRITICAL.",
+        "why_it_matters": (
+            "Network access from .pth files runs at every interpreter "
+            "startup. No legitimate use case."
+        ),
+        "applies_to": "STDLIB002 signals in .pth files",
+        "effect": "severity = CRITICAL",
+    },
+    "default_stdlib002_in_init_py_module_scope": {
+        "description": "Sets STDLIB002 at __init__.py module scope to HIGH.",
+        "why_it_matters": (
+            "Network access at __init__.py module scope runs on every "
+            "import. Legitimate packages defer network calls to "
+            "explicit functions."
+        ),
+        "applies_to": "STDLIB002 in __init__.py at module scope",
+        "effect": "severity = HIGH",
+    },
+    "default_stdlib003_in_setup_py": {
+        "description": "Promotes STDLIB003 in setup.py to CRITICAL.",
+        "why_it_matters": (
+            "Loading a native library from setup.py is a strong "
+            "attack indicator. Native code can do anything during "
+            "pip install."
+        ),
+        "applies_to": "STDLIB003 signals in setup.py",
+        "effect": "severity = CRITICAL",
+    },
+    "default_stdlib003_in_pth": {
+        "description": "Promotes STDLIB003 in .pth files to CRITICAL.",
+        "why_it_matters": (
+            "Loading native libraries from .pth files runs at every "
+            "interpreter startup."
+        ),
+        "applies_to": "STDLIB003 signals in .pth files",
+        "effect": "severity = CRITICAL",
+    },
+    "default_stdlib003_anywhere": {
+        "description": "Sets STDLIB003 anywhere to HIGH severity.",
+        "why_it_matters": (
+            "ctypes calls in pure-Python packages are uncommon. "
+            "Packages that legitimately wrap native libraries use "
+            "compiled extensions, not runtime ctypes loads. Users "
+            "with legitimate ctypes use can suppress via a user rule."
+        ),
+        "applies_to": "All STDLIB003 signals",
         "effect": "severity = HIGH",
     },
 }
