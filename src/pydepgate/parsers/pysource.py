@@ -196,35 +196,48 @@ def _fallback_comment_scan(source_bytes: bytes) -> tuple[Comment, ...]:
 
 def _extract_comments(source_bytes: bytes) -> tuple[tuple[Comment, ...], str]:
     """Tokenize source and extract all comment tokens.
-
+    
     Returns (comments, encoding_used). The encoding is reported by
     tokenize.detect_encoding based on BOM, PEP 263 declaration, or default.
-
     On tokenization failure, returns whatever comments were successfully
     extracted before the failure, and the encoding if it was detected.
+    Falls back to a manual scan if the declared encoding is unsupported
+    by Python's text codecs.
     """
+    # tokenize.tokenize wants a callable returning bytes (the readline
+    # interface). We wrap our bytes in a BytesIO.
     buf = io.BytesIO(source_bytes)
-    comments: list[Comment] = []
-    encoding_used = "utf-8"
     
+    # Detect encoding first. This also consumes the BOM if present.
+    # We need to rewind and re-tokenize because detect_encoding's position
+    # is not at a clean start for tokenize().
+    try:
+        encoding, _ = tokenize.detect_encoding(buf.readline)
+    except (SyntaxError, UnicodeDecodeError):
+        encoding = "utf-8"
+    buf.seek(0)
+    
+    comments: list[Comment] = []
     try:
         for tok in tokenize.tokenize(buf.readline):
-            if tok.type == tokenize.ENCODING:
-                encoding_used = tok.string
-            elif tok.type == tokenize.COMMENT:
-                comments.append(Comment(
-                    text=tok.string,
-                    line=tok.start[0],
-                    column=tok.start[1],
-                ))
-    except (tokenize.TokenError, UnicodeDecodeError, SyntaxError, ValueError):
-        # Tokenizer failures: malformed source, encoding mismatch, random
-        # bytes, etc. The rest of the scan proceeds without comment data;
-        # the AST parser has its own error handling for whatever made it
-        # here.
+            if tok.type == tokenize.COMMENT:
+                start_line, start_col = tok.start
+                location = SourceLocation(line=start_line, column=start_col)
+                comments.append(_classify_comment(tok.string, location))
+    except tokenize.TokenError:
         pass
+    except (SyntaxError, IndentationError):
+        pass
+    except LookupError:
+        comments = list(_fallback_comment_scan(source_bytes))
+    except UnicodeDecodeError:
+        # Python 3.11's tokenize raises raw UnicodeDecodeError when a line
+        # can't be decoded with the detected encoding (no PEP 263 declaration,
+        # bytes aren't valid UTF-8). 3.12+ wraps this in TokenError. Fall
+        # back to the manual scan, which works on raw bytes.
+        comments = list(_fallback_comment_scan(source_bytes))
     
-    return comments, encoding_used
+    return tuple(comments), encoding
 
 
 def parse_python_source(
