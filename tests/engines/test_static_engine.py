@@ -79,9 +79,9 @@ class StaticEngineSetupPyTests(unittest.TestCase):
         self.assertEqual(finding.signal.analyzer, "encoding_abuse")
         self.assertEqual(finding.context.internal_path, "setup.py")
 
-    def test_severity_derived_from_confidence(self):
-        # A long base64 literal should produce DEFINITE confidence,
-        # which maps to HIGH severity under the v0.1 bridge.
+    def test_severity_uses_rule_when_default_applies(self):
+        # ENC001 in setup.py has a default rule that assigns CRITICAL,
+        # overriding the mechanical confidence-based mapping.
         long_payload = "A" * 80
         source = (
             f"import base64\n"
@@ -93,8 +93,8 @@ class StaticEngineSetupPyTests(unittest.TestCase):
             artifact_kind=ArtifactKind.LOOSE_FILE,
         )
         self.assertEqual(len(result.findings), 1)
-        self.assertEqual(result.findings[0].severity, Severity.HIGH)
-
+        # Default rule 'default_enc001_in_setup_py' promotes this to CRITICAL.
+        self.assertEqual(result.findings[0].severity, Severity.CRITICAL)
 
 class StaticEngineInitPyTests(unittest.TestCase):
     """Top-level __init__.py is analyzed; deep ones are skipped in v0.1."""
