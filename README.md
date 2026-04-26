@@ -7,6 +7,9 @@ silently at interpreter startup. This was the attack class used by the
 March 2026 LiteLLM supply-chain compromise and catalogued as
 [MITRE ATT&CK T1546.018](https://attack.mitre.org/techniques/T1546/018/).
 
+<img width="713" height="215" alt="image" src="https://github.com/user-attachments/assets/a1940e49-5f3f-4b39-8398-0961fc2b0727" />
+
+
 ## Status
 
 **v0.0.4. Static analysis is functional end-to-end.**
