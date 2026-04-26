@@ -1,5 +1,7 @@
 # pydepgate
 
+[![PyPI](https://img.shields.io/pypi/v/pydepgate.svg)](https://pypi.org/project/pydepgate/)[![Downloads](https://pepy.tech/badge/pydepgate)](https://pepy.tech/project/pydepgate)
+
 **A lightweight Python runner that interdicts suspicious startup behavior.**
 
 pydepgate inspects Python packages and environments for code that executes
