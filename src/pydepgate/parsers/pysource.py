@@ -203,20 +203,10 @@ def _extract_comments(source_bytes: bytes) -> tuple[tuple[Comment, ...], str]:
     On tokenization failure, returns whatever comments were successfully
     extracted before the failure, and the encoding if it was detected.
     """
-    # tokenize.tokenize wants a callable returning bytes (the readline
-    # interface). We wrap our bytes in a BytesIO.
     buf = io.BytesIO(source_bytes)
-
-    # Detect encoding first. this also consumes the BOM if present.
-    # We need to rewind and re-tokenize because detect_encoding's position
-    # is not at a clean start for tokenize().
-    try:
-        encoding, _ = tokenize.detect_encoding(buf.readline)
-    except (SyntaxError, UnicodeDecodeError):
-        encoding = "utf-8"
-    buf.seek(0)
-
     comments: list[Comment] = []
+    encoding_used = "utf-8"
+    
     try:
         for tok in tokenize.tokenize(buf.readline):
             if tok.type == tokenize.ENCODING:
