@@ -85,6 +85,34 @@ class Finding:
 
 
 @dataclass(frozen=True)
+class SuppressedFinding:
+    """A finding that was suppressed by a rule.
+
+    Captured for audit visibility: users should be able to see what
+    suppression rules silenced, including what severity the finding
+    would have had without the suppression. This prevents accidentally
+    hiding real issues with overly broad suppression rules.
+
+    Attributes:
+        original_finding: The Finding that would have been emitted
+            without the suppression rule.
+        suppressing_rule_id: ID of the rule that suppressed this
+            finding.
+        suppressing_rule_source: Source category of the suppressing
+            rule (default/system/user). Useful for distinguishing
+            user-intentional suppressions from default-behavior ones.
+        would_have_been: Finding showing what default rules would
+            have produced. Same as original_finding when the
+            suppressing rule was itself a default; different when
+            user/system rules overrode a stronger default.
+    """
+    original_finding: "Finding"
+    suppressing_rule_id: str
+    suppressing_rule_source: str
+    would_have_been: "Finding"
+
+
+@dataclass(frozen=True)
 class SkippedFile:
     """A file that was not analyzed and why.
 
@@ -114,29 +142,15 @@ class ScanStatistics:
 
 @dataclass(frozen=True)
 class ScanResult:
-    """Top-level output of an engine scan.
-
-    Attributes:
-        artifact_identity: What was scanned.
-        artifact_kind: What kind of artifact it was.
-        findings: All findings produced during the scan.
-        skipped: Files that were not analyzed, with reasons.
-        statistics: Counts and timing for the scan.
-        diagnostics: Human-readable messages about scan-wide issues
-            (e.g., "could not open artifact", "analyzer X raised").
-    """
     artifact_identity: str
     artifact_kind: ArtifactKind
     findings: tuple[Finding, ...]
     skipped: tuple[SkippedFile, ...]
     statistics: ScanStatistics
     diagnostics: tuple[str, ...] = field(default_factory=tuple)
+    suppressed_findings: tuple[SuppressedFinding, ...] = field(default_factory=tuple)
 
-
-# Mapping from analyzer confidence to finding severity. Used by the
-# v0.1 engine, which does not yet have a rule layer. When rules land,
-# each rule assigns severity explicitly based on signal plus context,
-# and this mapping is replaced by rule evaluation.
+    
 def confidence_to_severity_v01(confidence: int) -> Severity:
     """Map a Signal's confidence (IntEnum value) to a default severity.
 

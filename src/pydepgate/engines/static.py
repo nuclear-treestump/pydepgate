@@ -49,8 +49,24 @@ class StaticEngine:
     __init__ unchanged.
     """
 
-    def __init__(self, analyzers: list[Analyzer]) -> None:
+    def __init__(
+        self,
+        analyzers: list[Analyzer],
+        rules: list | None = None,
+    ) -> None:
         self._analyzers: tuple[Analyzer, ...] = tuple(analyzers)
+        # Default to bundled rules if none provided. Allows tests to
+        # pass empty rules list to test pre-rules behavior, and
+        # callers can pass custom rules including user rules.
+        if rules is None:
+            from pydepgate.rules.defaults import DEFAULT_RULES
+            rules = list(DEFAULT_RULES)
+        self._rules = list(rules)
+
+    @property
+    def rules(self) -> list:
+        """The rules configured for this engine."""
+        return list(self._rules)
 
     @property
     def analyzers(self) -> tuple[Analyzer, ...]:
@@ -111,6 +127,7 @@ class StaticEngine:
         findings: list[Finding] = []
         skipped: list[SkippedFile] = []
         diagnostics: list[str] = []
+        suppressed: list[SuppressedFinding] = []
 
         started_at = time.perf_counter()
 
@@ -145,12 +162,28 @@ class StaticEngine:
         stats.signals_emitted = len(signals)
         stats.analyzers_run = len(self._analyzers)
 
+        from pydepgate.rules.base import evaluate_signal
+        from pydepgate.engines.base import SuppressedFinding
+
         for signal in signals:
-            findings.append(Finding(
-                signal=signal,
-                severity=confidence_to_severity_v01(signal.confidence),
-                context=context,
-            ))
+            result = evaluate_signal(signal, context, self._rules)
+            if result.finding is not None:
+                findings.append(result.finding)
+            elif result.suppressed_finding is not None:
+                suppressed.append(SuppressedFinding(
+                    original_finding=result.suppressed_finding,
+                    suppressing_rule_id=(
+                        result.suppressing_rule.rule_id
+                        if result.suppressing_rule else "unknown"
+                    ),
+                    suppressing_rule_source=(
+                        result.suppressing_rule.source.value
+                        if result.suppressing_rule else "unknown"
+                    ),
+                    would_have_been=(
+                        result.would_have_been or result.suppressed_finding
+                    ),
+                ))
 
         stats.duration_seconds = time.perf_counter() - started_at
         return ScanResult(
@@ -160,6 +193,7 @@ class StaticEngine:
             skipped=tuple(skipped),
             statistics=stats,
             diagnostics=tuple(diagnostics),
+            suppressed_findings=tuple(suppressed),
         )
 
     def _analyze_file(
@@ -355,10 +389,12 @@ class StaticEngine:
         ScanResult covering the whole artifact.
         """
         import time
+        from pydepgate.engines.base import SuppressedFinding
 
         all_findings: list[Finding] = []
         all_skipped: list[SkippedFile] = []
         all_diagnostics: list[str] = []
+        all_suppressed: list[SuppressedFinding] = []
         combined_stats = ScanStatistics()
 
         started_at = time.perf_counter()
@@ -401,6 +437,7 @@ class StaticEngine:
             all_findings.extend(file_result.findings)
             all_skipped.extend(file_result.skipped)
             all_diagnostics.extend(file_result.diagnostics)
+            all_suppressed.extend(file_result.suppressed_findings)
             combined_stats.files_scanned += file_result.statistics.files_scanned
             combined_stats.files_skipped += file_result.statistics.files_skipped
             combined_stats.signals_emitted += file_result.statistics.signals_emitted
@@ -415,6 +452,7 @@ class StaticEngine:
             skipped=tuple(all_skipped),
             statistics=combined_stats,
             diagnostics=tuple(all_diagnostics),
+            suppressed_findings=tuple(all_suppressed),
         )
 
 
