@@ -196,18 +196,19 @@ def _fallback_comment_scan(source_bytes: bytes) -> tuple[Comment, ...]:
 
 def _extract_comments(source_bytes: bytes) -> tuple[tuple[Comment, ...], str]:
     """Tokenize source and extract all comment tokens.
-
+    
     Returns (comments, encoding_used). The encoding is reported by
     tokenize.detect_encoding based on BOM, PEP 263 declaration, or default.
-
     On tokenization failure, returns whatever comments were successfully
     extracted before the failure, and the encoding if it was detected.
+    Falls back to a manual scan if the declared encoding is unsupported
+    by Python's text codecs.
     """
     # tokenize.tokenize wants a callable returning bytes (the readline
     # interface). We wrap our bytes in a BytesIO.
     buf = io.BytesIO(source_bytes)
-
-    # Detect encoding first. this also consumes the BOM if present.
+    
+    # Detect encoding first. This also consumes the BOM if present.
     # We need to rewind and re-tokenize because detect_encoding's position
     # is not at a clean start for tokenize().
     try:
@@ -215,7 +216,7 @@ def _extract_comments(source_bytes: bytes) -> tuple[tuple[Comment, ...], str]:
     except (SyntaxError, UnicodeDecodeError):
         encoding = "utf-8"
     buf.seek(0)
-
+    
     comments: list[Comment] = []
     try:
         for tok in tokenize.tokenize(buf.readline):
@@ -229,7 +230,13 @@ def _extract_comments(source_bytes: bytes) -> tuple[tuple[Comment, ...], str]:
         pass
     except LookupError:
         comments = list(_fallback_comment_scan(source_bytes))
-
+    except UnicodeDecodeError:
+        # Python 3.11's tokenize raises raw UnicodeDecodeError when a line
+        # can't be decoded with the detected encoding (no PEP 263 declaration,
+        # bytes aren't valid UTF-8). 3.12+ wraps this in TokenError. Fall
+        # back to the manual scan, which works on raw bytes.
+        comments = list(_fallback_comment_scan(source_bytes))
+    
     return tuple(comments), encoding
 
 
