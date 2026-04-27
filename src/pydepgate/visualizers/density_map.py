@@ -244,13 +244,15 @@ def _centered_border(left: str, right: str, label: str, inner_width: int) -> str
     dash_total  = max(dash_total, 0)
     left_dashes = dash_total // 2
     right_dashes = dash_total - left_dashes
+    horizontal = "\u2500"
     return (
-        f"{left}"
-        f"{'\u2500' * left_dashes}"
-        f"{label_with_spaces}"
-        f"{'\u2500' * right_dashes}"
-        f"{right}"
+        left
+        + horizontal * left_dashes
+        + label_with_spaces
+        + horizontal * right_dashes
+        + right
     )
+ 
 
 
 # ---------------------------------------------------------------------------
