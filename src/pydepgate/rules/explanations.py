@@ -264,10 +264,12 @@ SIGNAL_EXPLANATIONS = {
             "review and naive scanners."
         ),
         "common_evasions": [
-            "Splitting a packed payload across two slightly-shorter lines "
+            "Splitting a packed payload across two slightly-shorter lines ",
             "to dodge the per-line threshold",
-            "Embedding the payload in a string literal and exec'ing it "
-            "(caught by encoding_abuse and DENS010 instead)",
+            (
+                "Embedding the payload in a string literal and exec'ing it "
+                "(caught by encoding_abuse and DENS010 instead)"
+            ),
         ],
     },
     "DENS002": {
@@ -297,9 +299,9 @@ SIGNAL_EXPLANATIONS = {
             "CRITICAL for setup.py and .pth files."
         ),
         "common_evasions": [
-            "Splitting the payload into multiple shorter literals "
+            "Splitting the payload into multiple shorter literals ",
             "(STR-class signals catch the assembly)",
-            "XOR-encoding the payload first to lower its entropy "
+            "XOR-encoding the payload first to lower its entropy ",
             "(typically still high enough to fire MEDIUM)",
             "Embedding inside a docstring (caught by DENS050)",
         ],
@@ -360,9 +362,9 @@ SIGNAL_EXPLANATIONS = {
             "confidence."
         ),
         "common_evasions": [
-            "Using less-known invisible codepoints not in pydepgate's "
+            "Using less-known invisible codepoints not in pydepgate's ",
             "list (the project keeps a curated set of high-impact ones)",
-            "Encoding the source so the invisible character only "
+            "Encoding the source so the invisible character only ",
             "appears post-decode (caught by DENS010)",
         ],
     },
