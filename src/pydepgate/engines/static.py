@@ -96,74 +96,94 @@ class StaticEngine:
             artifact_kind=ArtifactKind.LOOSE_FILE,
             artifact_identity=str(path),
         )
+    
+    def scan_loose_file_as(
+            self,
+            path: Path,
+            file_kind: FileKind,
+        ) -> ScanResult:
+            """Scan a single loose file on disk, treating it as the given kind.
 
-    def scan_bytes(
+            Bypasses triage entirely. The file's real path is preserved
+            verbatim in the resulting ScanContext, so downstream reports
+            reference the actual filename rather than a synthetic
+            stand-in. Used by 'pydepgate scan --single' to allow
+            iteration testing on arbitrary files without renaming them
+            or restructuring directories.
+
+            Args:
+                path: Filesystem path to the file. Used both as the
+                    content source and as the internal_path/
+                    artifact_identity in the resulting context.
+                file_kind: Forced FileKind. Must not be FileKind.SKIP;
+                    pass the kind whose parser and rules you want
+                    applied (e.g. SETUP_PY for the most aggressive
+                    rule promotion, INIT_PY for module-import context).
+
+            Returns:
+                A ScanResult with findings (possibly empty). On read
+                failure, returns a ScanResult with an empty finding set
+                and a diagnostic explaining the failure.
+            """
+            if file_kind is FileKind.SKIP:
+                raise ValueError(
+                    "scan_loose_file_as cannot be called with FileKind.SKIP; "
+                    "pass an in-scope kind (PTH, SETUP_PY, INIT_PY, "
+                    "SITECUSTOMIZE, USERCUSTOMIZE)."
+                )
+
+            started_at = time.perf_counter()
+            stats = ScanStatistics(files_total=1)
+
+            try:
+                content = path.read_bytes()
+            except OSError as exc:
+                stats.duration_seconds = time.perf_counter() - started_at
+                return ScanResult(
+                    artifact_identity=str(path),
+                    artifact_kind=ArtifactKind.LOOSE_FILE,
+                    findings=(),
+                    skipped=(),
+                    statistics=stats,
+                    diagnostics=(f"failed to read {path}: {exc}",),
+                )
+
+            context = ScanContext(
+                artifact_kind=ArtifactKind.LOOSE_FILE,
+                artifact_identity=str(path),
+                internal_path=str(path),
+                file_kind=file_kind,
+                triage_reason=f"single-file mode: forced kind={file_kind.value}",
+            )
+            return self._evaluate_with_context(content, context, started_at, stats)
+
+    def _evaluate_with_context(
         self,
         content: bytes,
-        internal_path: str,
-        artifact_kind: ArtifactKind,
-        artifact_identity: str | None = None,
+        context: ScanContext,
+        started_at: float,
+        stats: ScanStatistics,
     ) -> ScanResult:
-        """Scan a single file's bytes, treated as part of an artifact.
+        """Run analyzers and rules with a pre-built context. No triage.
 
-        This is the primary entry point used internally by other scan
-        methods. When wheel and sdist support is added, those methods
-        call scan_bytes once per in-scope file and aggregate results.
-
-        Args:
-            content: The file's raw bytes.
-            internal_path: The file's path within its artifact. Used
-                by triage to decide scope.
-            artifact_kind: What kind of outer artifact this came from.
-            artifact_identity: Identifier for the outer artifact. If
-                None, the internal_path is used.
-
-        Returns:
-            A ScanResult containing findings (possibly empty) for
-            this file.
+        Shared spine for scan_bytes (triage-driven) and
+        scan_loose_file_as (forced-kind). Caller owns started_at and
+        stats so it can record SKIP early-returns with consistent
+        timing. The context's file_kind must not be SKIP.
         """
-        identity = artifact_identity or internal_path
-        stats = ScanStatistics(files_total=1)
+        from pydepgate.engines.base import SuppressedFinding
+        from pydepgate.rules.base import evaluate_signal
+
         findings: list[Finding] = []
-        skipped: list[SkippedFile] = []
         diagnostics: list[str] = []
         suppressed: list[SuppressedFinding] = []
 
-        started_at = time.perf_counter()
-
-        decision = triage(internal_path)
-
-        if decision.kind is FileKind.SKIP:
-            stats.files_skipped = 1
-            skipped.append(SkippedFile(
-                internal_path=decision.internal_path,
-                reason=decision.reason,
-            ))
-            stats.duration_seconds = time.perf_counter() - started_at
-            return ScanResult(
-                artifact_identity=identity,
-                artifact_kind=artifact_kind,
-                findings=(),
-                skipped=tuple(skipped),
-                statistics=stats,
-                diagnostics=tuple(diagnostics),
-            )
-
-        context = ScanContext(
-            artifact_kind=artifact_kind,
-            artifact_identity=identity,
-            internal_path=decision.internal_path,
-            file_kind=decision.kind,
-            triage_reason=decision.reason,
+        signals = self._analyze_file(
+            content, context.file_kind, context, diagnostics,
         )
-
-        signals = self._analyze_file(content, decision.kind, context, diagnostics)
         stats.files_scanned = 1
         stats.signals_emitted = len(signals)
         stats.analyzers_run = len(self._analyzers)
-
-        from pydepgate.rules.base import evaluate_signal
-        from pydepgate.engines.base import SuppressedFinding
 
         for signal in signals:
             result = evaluate_signal(signal, context, self._rules)
@@ -187,14 +207,69 @@ class StaticEngine:
 
         stats.duration_seconds = time.perf_counter() - started_at
         return ScanResult(
-            artifact_identity=identity,
-            artifact_kind=artifact_kind,
+            artifact_identity=context.artifact_identity,
+            artifact_kind=context.artifact_kind,
             findings=tuple(findings),
-            skipped=tuple(skipped),
+            skipped=(),
             statistics=stats,
             diagnostics=tuple(diagnostics),
             suppressed_findings=tuple(suppressed),
         )
+
+    def scan_bytes(
+            self,
+            content: bytes,
+            internal_path: str,
+            artifact_kind: ArtifactKind,
+            artifact_identity: str | None = None,
+        ) -> ScanResult:
+            """Scan a single file's bytes, treated as part of an artifact.
+
+            This is the primary entry point used internally by other scan
+            methods. When wheel and sdist support is added, those methods
+            call scan_bytes once per in-scope file and aggregate results.
+
+            Args:
+                content: The file's raw bytes.
+                internal_path: The file's path within its artifact. Used
+                    by triage to decide scope.
+                artifact_kind: What kind of outer artifact this came from.
+                artifact_identity: Identifier for the outer artifact. If
+                    None, the internal_path is used.
+
+            Returns:
+                A ScanResult containing findings (possibly empty) for
+                this file.
+            """
+            identity = artifact_identity or internal_path
+            stats = ScanStatistics(files_total=1)
+            started_at = time.perf_counter()
+
+            decision = triage(internal_path)
+
+            if decision.kind is FileKind.SKIP:
+                stats.files_skipped = 1
+                stats.duration_seconds = time.perf_counter() - started_at
+                return ScanResult(
+                    artifact_identity=identity,
+                    artifact_kind=artifact_kind,
+                    findings=(),
+                    skipped=(SkippedFile(
+                        internal_path=decision.internal_path,
+                        reason=decision.reason,
+                    ),),
+                    statistics=stats,
+                    diagnostics=(),
+                )
+
+            context = ScanContext(
+                artifact_kind=artifact_kind,
+                artifact_identity=identity,
+                internal_path=decision.internal_path,
+                file_kind=decision.kind,
+                triage_reason=decision.reason,
+            )
+            return self._evaluate_with_context(content, context, started_at, stats)
 
     def _analyze_file(
         self,
