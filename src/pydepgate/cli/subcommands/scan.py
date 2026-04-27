@@ -18,6 +18,7 @@ from pydepgate.analyzers.encoding_abuse import EncodingAbuseAnalyzer
 from pydepgate.analyzers.dynamic_execution import DynamicExecutionAnalyzer
 from pydepgate.analyzers.string_ops import StringOpsAnalyzer
 from pydepgate.analyzers.suspicious_stdlib import SuspiciousStdlibAnalyzer
+from pydepgate.analyzers.density_analyzer import CodeDensityAnalyzer
 from pydepgate.cli import exit_codes
 from pydepgate.cli.reporter import (
     render_human, render_json, render_sarif_stub,
@@ -88,6 +89,7 @@ def run(args: argparse.Namespace) -> int:
             DynamicExecutionAnalyzer(),
             StringOpsAnalyzer(),
             SuspiciousStdlibAnalyzer(),
+            CodeDensityAnalyzer(),
         ],
         rules=all_rules,
     )

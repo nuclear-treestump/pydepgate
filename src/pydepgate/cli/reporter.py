@@ -24,6 +24,8 @@ from pydepgate.engines.base import (
     Severity,
 )
 
+from pydepgate.visualizers.density_map import render_density_map
+
 
 # ANSI color codes. Using direct codes to avoid a dependency on a
 # color library. NO_COLOR support per https://no-color.org standard.
@@ -74,6 +76,17 @@ def _severity_color(severity: Severity, color: bool) -> tuple[str, str]:
     return (prefix, _Color.RESET if prefix else "")
 
 
+def _group_findings_by_path(
+    findings: list[Finding],
+) -> dict[str, list[Finding]]:
+    """Group findings by their internal file path, preserving order."""
+    groups: dict[str, list[Finding]] = {}
+    for finding in findings:
+        path = getattr(finding, "internal_path", None) or "unknown"
+        groups.setdefault(path, []).append(finding)
+    return groups
+
+
 def render_human(
     result: ScanResult,
     stream: TextIO,
@@ -100,19 +113,22 @@ def render_human(
         return
 
     if findings:
-        if not ci_mode:
-            bold_pre, bold_post = (
-                (_Color.BOLD, _Color.RESET) if color else ("", "")
-            )
-            stream.write(
-                f"\n{bold_pre}{len(findings)} finding"
-                f"{'s' if len(findings) != 1 else ''} in "
-                f"{result.artifact_identity}{bold_post}\n"
-            )
-            stream.write("=" * 60 + "\n\n")
+        groups = _group_findings_by_path(findings)
+        for path, file_findings in groups.items():
+            # Render all findings for this file.
+            for finding in file_findings:
+                _render_finding(finding, stream, color, ci_mode)
 
-        for finding in findings:
-            _render_finding(finding, stream, color, ci_mode)
+            # Render the density map for this file (no-op if color off or CI).
+            if not ci_mode:
+                map_str = render_density_map(
+                    filename=path,
+                    findings=file_findings,
+                    total_lines=None,   # approximate from max finding line
+                    color=color,
+                )
+                if map_str:
+                    stream.write("\n" + map_str + "\n")
 
     # Suppressed findings section.
     if suppressed:

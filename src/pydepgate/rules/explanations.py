@@ -250,6 +250,208 @@ SIGNAL_EXPLANATIONS = {
             "investigation."
         ),
     },
+    "DENS001": {
+        "description": (
+            "A single physical line contains an anomalously high number "
+            "of tokens, indicating minification or deliberate compression."
+        ),
+        "why_it_matters": (
+            "Minified Python is rare in legitimate packages distributed "
+            "via PyPI. Even densely-written Python rarely exceeds 30-35 "
+            "tokens per line. 100+ tokens on one line is almost always "
+            "either machine-generated (which has its own concerns in "
+            "startup-vector files) or deliberately packed to evade human "
+            "review and naive scanners."
+        ),
+        "common_evasions": [
+            "Splitting a packed payload across two slightly-shorter lines ",
+            "to dodge the per-line threshold",
+            (
+                "Embedding the payload in a string literal and exec'ing it "
+                "(caught by encoding_abuse and DENS010 instead)"
+            ),
+        ],
+    },
+    "DENS002": {
+        "description": (
+            "Multiple Python statements joined by semicolons on a single "
+            "physical line."
+        ),
+        "why_it_matters": (
+            "Semicolon chaining is rare in idiomatic Python and is a "
+            "near-universal hallmark of one-liner payloads, REPL pastes, "
+            "and minified attack code. .pth exec lines that chain "
+            "subprocess.Popen with sys.exit follow this exact shape."
+        ),
+    },
+    "DENS010": {
+        "description": (
+            "A string literal whose Shannon entropy and length together "
+            "are consistent with encoded, compressed, or encrypted data."
+        ),
+        "why_it_matters": (
+            "High-entropy strings in source are almost never user-readable "
+            "content. They are usually base64, gzip, or other encoded "
+            "payloads. The thresholds are calibrated against real attacks: "
+            "base64-encoded Python source lands at ~5.2-5.4 bits/char, "
+            "and the AMBIGUOUS confidence tier exists specifically to "
+            "catch this band. Rules promote AMBIGUOUS to MEDIUM/HIGH/"
+            "CRITICAL for setup.py and .pth files."
+        ),
+        "common_evasions": [
+            "Splitting the payload into multiple shorter literals ",
+            "(STR-class signals catch the assembly)",
+            "XOR-encoding the payload first to lower its entropy ",
+            "(typically still high enough to fire MEDIUM)",
+            "Embedding inside a docstring (caught by DENS050)",
+        ],
+    },
+    "DENS011": {
+        "description": (
+            "A long string literal whose character set is restricted to "
+            "the base64 alphabet."
+        ),
+        "why_it_matters": (
+            "DENS010 measures entropy; DENS011 measures alphabet shape. "
+            "A string can be clearly base64 by alphabet without quite "
+            "meeting the entropy threshold (e.g. encoded text with "
+            "repeated structure). DENS011 covers this gap. The two "
+            "signals are intentionally complementary and may both fire "
+            "on a single string."
+        ),
+    },
+    "DENS020": {
+        "description": (
+            "An identifier with a very low vowel ratio (consonant-heavy), "
+            "consistent with random or machine-generated naming."
+        ),
+        "why_it_matters": (
+            "Real code uses names humans can pronounce; obfuscated or "
+            "automatically-generated code often does not. This signal is "
+            "noisy on its own (legitimate abbreviations exist) but "
+            "valuable as one piece of evidence among many. Default rules "
+            "give it LOW severity."
+        ),
+    },
+    "DENS021": {
+        "description": (
+            "Single-character identifier 'l', 'O', or 'I' used as a "
+            "variable name."
+        ),
+        "why_it_matters": (
+            "PEP 8 explicitly prohibits these because they are visually "
+            "indistinguishable from 1, 0, and 1 in many fonts. In "
+            "obfuscated code they appear deliberately to confuse readers; "
+            "in normal code they appear by mistake. Default rules treat "
+            "this as INFO: stylistic, not security-critical, but worth "
+            "surfacing in code review."
+        ),
+    },
+    "DENS030": {
+        "description": (
+            "An invisible Unicode character (zero-width space, joiner, "
+            "BOM, RTL override, etc.) appears in the source."
+        ),
+        "why_it_matters": (
+            "This is the Trojan Source attack class (CVE-2021-42574). "
+            "Invisible characters can hide content from human reviewers "
+            "while still being executed by the parser, or reorder the "
+            "visual rendering of source so that what a reader sees is "
+            "not what the interpreter runs. RTL overrides specifically "
+            "weaponize this; pydepgate flags those with DEFINITE "
+            "confidence."
+        ),
+        "common_evasions": [
+            "Using less-known invisible codepoints not in pydepgate's ",
+            "list (the project keeps a curated set of high-impact ones)",
+            "Encoding the source so the invisible character only ",
+            "appears post-decode (caught by DENS010)",
+        ],
+    },
+    "DENS031": {
+        "description": (
+            "A non-ASCII character that is visually identical to an "
+            "ASCII letter is used in a Python identifier."
+        ),
+        "why_it_matters": (
+            "Cyrillic and Greek letters that look exactly like Latin "
+            "letters allow attackers to write identifiers that read as "
+            "'exec' or 'os.system' to humans but are completely "
+            "different strings to scanners that match on byte content. "
+            "This bypasses every grep-based defense. Detection is "
+            "DEFINITE: it is a positive identification of the codepoint."
+        ),
+    },
+    "DENS040": {
+        "description": (
+            "The AST is unusually deep relative to the file's line count, "
+            "indicating expression compression."
+        ),
+        "why_it_matters": (
+            "Code that does a lot of work on a few lines must compress "
+            "expressions: deeply nested calls, lambdas, comprehensions, "
+            "ternaries. While generated code (Cython, parser tables) "
+            "shows this pattern legitimately, in setup.py and .pth files "
+            "it is a strong attack indicator."
+        ),
+    },
+    "DENS041": {
+        "description": (
+            "Lambdas or comprehensions are nested beyond the configured "
+            "depth threshold."
+        ),
+        "why_it_matters": (
+            "Functional-style obfuscation chains lambdas and "
+            "comprehensions to make control flow opaque. While "
+            "occasionally seen in math-heavy code, three-deep nesting "
+            "of lambda within comprehension within lambda is rare "
+            "outside deliberately compressed code."
+        ),
+    },
+    "DENS042": {
+        "description": (
+            "A list or tuple literal contains many byte-range (0-255) "
+            "integers, suggesting shellcode or payload staging."
+        ),
+        "why_it_matters": (
+            "Byte arrays embedded as integer lists are a classic way to "
+            "smuggle binary payloads through string-content scanners. "
+            "Real shellcode-staging packages do exactly this and call "
+            "bytes(...) on the array before passing it to ctypes or "
+            "compile(). Cryptographic constants and lookup tables are "
+            "the main false-positive class; default rules use LOW "
+            "severity outside startup vectors."
+        ),
+    },
+    "DENS050": {
+        "description": (
+            "A string in docstring position has high Shannon entropy "
+            "and length, suggesting encoded content disguised as "
+            "documentation."
+        ),
+        "why_it_matters": (
+            "Docstrings are an attractive hiding place for payloads: "
+            "they live in __doc__ (machine-readable), are visually "
+            "innocuous (humans skim past long docstrings), and are not "
+            "caught by string-literal scanners that ignore docstring "
+            "position. A package that does `exec(__doc__.split('---')[1])` "
+            "is using the docstring as a payload carrier."
+        ),
+    },
+    "DENS051": {
+        "description": (
+            "A reference to __doc__ is passed as an argument to a "
+            "function call."
+        ),
+        "why_it_matters": (
+            "Reading __doc__ and handing it to a callable is the "
+            "execution half of the docstring-payload pattern: DENS050 "
+            "smuggles the content, DENS051 invokes it. Some "
+            "introspection tools legitimately read __doc__, so the "
+            "default severity is HIGH (not CRITICAL) outside startup "
+            "vectors."
+        ),
+    },
 }
 
 
@@ -487,6 +689,393 @@ RULE_EXPLANATIONS = {
             "with legitimate ctypes use can suppress via a user rule."
         ),
         "applies_to": "All STDLIB003 signals",
+        "effect": "severity = HIGH",
+    },
+    # DENS001
+    "default_dens001_in_pth": {
+        "description": "Promotes DENS001 in .pth files to HIGH severity.",
+        "why_it_matters": (
+            "Token-dense lines in .pth have no legitimate use; .pth "
+            "files contain paths or short imports."
+        ),
+        "applies_to": "DENS001 signals in .pth files",
+        "effect": "severity = HIGH",
+    },
+    "default_dens001_in_setup_py": {
+        "description": "Promotes DENS001 in setup.py to HIGH severity.",
+        "why_it_matters": (
+            "Minification in setup.py is an attack indicator; build "
+            "tools generate readable setup.py."
+        ),
+        "applies_to": "DENS001 signals in setup.py",
+        "effect": "severity = HIGH",
+    },
+    "default_dens001_in_sitecustomize": {
+        "description": "Promotes DENS001 in sitecustomize.py to HIGH.",
+        "why_it_matters": (
+            "Compressed lines in sitecustomize.py at every interpreter "
+            "startup is not a defensible pattern."
+        ),
+        "applies_to": "DENS001 signals in sitecustomize.py",
+        "effect": "severity = HIGH",
+    },
+    "default_dens001_anywhere": {
+        "description": "Sets DENS001 anywhere to LOW severity.",
+        "why_it_matters": (
+            "Token-dense lines in arbitrary code can be legitimate "
+            "(generated parsers, configuration). LOW baseline."
+        ),
+        "applies_to": "All DENS001 signals",
+        "effect": "severity = LOW",
+    },
+ 
+    # DENS002
+    "default_dens002_in_pth": {
+        "description": "Promotes DENS002 in .pth files to HIGH severity.",
+        "why_it_matters": (
+            "Semicolon chains in .pth exec lines are a packing pattern "
+            "with no legitimate counterpart."
+        ),
+        "applies_to": "DENS002 signals in .pth files",
+        "effect": "severity = HIGH",
+    },
+    "default_dens002_in_setup_py": {
+        "description": "Promotes DENS002 in setup.py to HIGH severity.",
+        "why_it_matters": (
+            "Multiple statements per line in setup.py is unusual; "
+            "build configurations are written one statement per line."
+        ),
+        "applies_to": "DENS002 signals in setup.py",
+        "effect": "severity = HIGH",
+    },
+    "default_dens002_anywhere": {
+        "description": "Sets DENS002 anywhere to LOW severity.",
+        "why_it_matters": (
+            "Semicolon chaining can be a stylistic choice in non-startup "
+            "code (one-liners, doctests)."
+        ),
+        "applies_to": "All DENS002 signals",
+        "effect": "severity = LOW",
+    },
+ 
+    # DENS010
+    "default_dens010_in_pth": {
+        "description": "Promotes DENS010 in .pth files to CRITICAL.",
+        "why_it_matters": (
+            "High-entropy strings in .pth files match the LiteLLM "
+            "1.82.8 attack shape: encoded payload on an auto-execute "
+            "vector."
+        ),
+        "applies_to": "DENS010 signals in .pth files",
+        "effect": "severity = CRITICAL",
+    },
+    "default_dens010_in_setup_py": {
+        "description": "Promotes DENS010 in setup.py to HIGH severity.",
+        "why_it_matters": (
+            "Encoded-looking strings in setup.py frequently turn out "
+            "to be payloads decoded later in the same file. The HIGH "
+            "promotion catches AMBIGUOUS-confidence signals at entropy "
+            "~5.3, which is where b64-encoded Python source lands."
+        ),
+        "applies_to": "DENS010 signals in setup.py",
+        "effect": "severity = HIGH",
+    },
+    "default_dens010_in_sitecustomize": {
+        "description": "Promotes DENS010 in sitecustomize.py to CRITICAL.",
+        "why_it_matters": (
+            "Encoded strings in sitecustomize.py have no legitimate "
+            "use; the file runs at every interpreter startup."
+        ),
+        "applies_to": "DENS010 signals in sitecustomize.py",
+        "effect": "severity = CRITICAL",
+    },
+    "default_dens010_in_init_py": {
+        "description": "Sets DENS010 in __init__.py to MEDIUM severity.",
+        "why_it_matters": (
+            "Some packages legitimately ship binary blobs as base64 "
+            "strings in __init__.py. MEDIUM severity surfaces it; "
+            "users with intentional embedded blobs can suppress."
+        ),
+        "applies_to": "DENS010 signals in package __init__.py",
+        "effect": "severity = MEDIUM",
+    },
+    "default_dens010_anywhere": {
+        "description": "Sets DENS010 anywhere to LOW severity.",
+        "why_it_matters": (
+            "High-entropy strings outside startup vectors are common "
+            "(UUIDs, hashes, fixture data)."
+        ),
+        "applies_to": "All DENS010 signals",
+        "effect": "severity = LOW",
+    },
+ 
+    # DENS011
+    "default_dens011_in_pth": {
+        "description": "Promotes DENS011 in .pth files to CRITICAL.",
+        "why_it_matters": (
+            "A base64-shaped string in a .pth file is an encoded "
+            "payload on an auto-execute vector."
+        ),
+        "applies_to": "DENS011 signals in .pth files",
+        "effect": "severity = CRITICAL",
+    },
+    "default_dens011_in_setup_py": {
+        "description": "Promotes DENS011 in setup.py to HIGH severity.",
+        "why_it_matters": (
+            "Long base64 strings in setup.py are rarely innocent and "
+            "are often paired with a delayed decode-and-exec."
+        ),
+        "applies_to": "DENS011 signals in setup.py",
+        "effect": "severity = HIGH",
+    },
+    "default_dens011_anywhere": {
+        "description": "Sets DENS011 anywhere to LOW severity.",
+        "why_it_matters": (
+            "Base64 strings outside startup vectors can be legitimate "
+            "(embedded assets, certificates, fixtures)."
+        ),
+        "applies_to": "All DENS011 signals",
+        "effect": "severity = LOW",
+    },
+ 
+    # DENS020
+    "default_dens020_anywhere": {
+        "description": "Sets DENS020 anywhere to LOW severity.",
+        "why_it_matters": (
+            "Vowel-poor identifiers correlate with machine-generated "
+            "or mangled names but produce false positives. LOW severity "
+            "as a contributing signal, not a standalone alert."
+        ),
+        "applies_to": "All DENS020 signals",
+        "effect": "severity = LOW",
+    },
+ 
+    # DENS021
+    "default_dens021_anywhere": {
+        "description": "Sets DENS021 anywhere to INFO severity.",
+        "why_it_matters": (
+            "Use of l/O/I as variable names is a PEP 8 issue rather "
+            "than a security one. INFO severity surfaces it without "
+            "contributing to exit-code escalation."
+        ),
+        "applies_to": "All DENS021 signals",
+        "effect": "severity = INFO",
+    },
+ 
+    # DENS030
+    "default_dens030_in_pth": {
+        "description": "Promotes DENS030 in .pth files to CRITICAL.",
+        "why_it_matters": (
+            "Invisible characters in a .pth file are weaponized hiding "
+            "on an auto-execute vector."
+        ),
+        "applies_to": "DENS030 signals in .pth files",
+        "effect": "severity = CRITICAL",
+    },
+    "default_dens030_in_setup_py": {
+        "description": "Promotes DENS030 in setup.py to CRITICAL.",
+        "why_it_matters": (
+            "Invisible Unicode in setup.py exists to deceive human "
+            "reviewers. There is no benign reason to ship this."
+        ),
+        "applies_to": "DENS030 signals in setup.py",
+        "effect": "severity = CRITICAL",
+    },
+    "default_dens030_in_sitecustomize": {
+        "description": "Promotes DENS030 in sitecustomize.py to CRITICAL.",
+        "why_it_matters": (
+            "Invisible characters in sitecustomize.py: no legitimate "
+            "use, high-impact vector."
+        ),
+        "applies_to": "DENS030 signals in sitecustomize.py",
+        "effect": "severity = CRITICAL",
+    },
+    "default_dens030_anywhere": {
+        "description": "Sets DENS030 anywhere to HIGH severity.",
+        "why_it_matters": (
+            "Invisible Unicode anywhere in source is suspicious "
+            "(Trojan Source / CVE-2021-42574). HIGH baseline."
+        ),
+        "applies_to": "All DENS030 signals",
+        "effect": "severity = HIGH",
+    },
+ 
+    # DENS031
+    "default_dens031_in_pth": {
+        "description": "Promotes DENS031 in .pth files to CRITICAL.",
+        "why_it_matters": (
+            "Homoglyphs in a .pth file are a string-match-evasion "
+            "technique on an auto-execute vector."
+        ),
+        "applies_to": "DENS031 signals in .pth files",
+        "effect": "severity = CRITICAL",
+    },
+    "default_dens031_in_setup_py": {
+        "description": "Promotes DENS031 in setup.py to CRITICAL.",
+        "why_it_matters": (
+            "Cyrillic/Greek lookalikes in setup.py identifiers exist "
+            "to evade scanners that match 'exec', 'os.system', etc."
+        ),
+        "applies_to": "DENS031 signals in setup.py",
+        "effect": "severity = CRITICAL",
+    },
+    "default_dens031_anywhere": {
+        "description": "Sets DENS031 anywhere to HIGH severity.",
+        "why_it_matters": (
+            "Homoglyph identifiers are almost always an attack indicator. "
+            "Legitimate non-Latin variable names are the false positive "
+            "class; HIGH rather than CRITICAL accommodates that."
+        ),
+        "applies_to": "All DENS031 signals",
+        "effect": "severity = HIGH",
+    },
+ 
+    # DENS040
+    "default_dens040_in_pth": {
+        "description": "Promotes DENS040 in .pth files to HIGH.",
+        "why_it_matters": (
+            "Deeply nested expressions in a .pth file indicate "
+            "expression-compression obfuscation."
+        ),
+        "applies_to": "DENS040 signals in .pth files",
+        "effect": "severity = HIGH",
+    },
+    "default_dens040_in_setup_py": {
+        "description": "Promotes DENS040 in setup.py to HIGH.",
+        "why_it_matters": (
+            "Deep expression nesting in setup.py is a hallmark of "
+            "minification or generator output."
+        ),
+        "applies_to": "DENS040 signals in setup.py",
+        "effect": "severity = HIGH",
+    },
+    "default_dens040_anywhere": {
+        "description": "Sets DENS040 anywhere to LOW severity.",
+        "why_it_matters": (
+            "AST depth disproportionate to line count occurs in "
+            "legitimate generated code (Cython, parser tables)."
+        ),
+        "applies_to": "All DENS040 signals",
+        "effect": "severity = LOW",
+    },
+ 
+    # DENS041
+    "default_dens041_in_setup_py": {
+        "description": "Promotes DENS041 in setup.py to HIGH.",
+        "why_it_matters": (
+            "Deeply nested lambdas/comprehensions in setup.py are a "
+            "common functional-style obfuscation."
+        ),
+        "applies_to": "DENS041 signals in setup.py",
+        "effect": "severity = HIGH",
+    },
+    "default_dens041_in_pth": {
+        "description": "Promotes DENS041 in .pth files to HIGH.",
+        "why_it_matters": (
+            "Lambda/comprehension nesting in .pth exec lines exists "
+            "purely for obfuscation."
+        ),
+        "applies_to": "DENS041 signals in .pth files",
+        "effect": "severity = HIGH",
+    },
+    "default_dens041_anywhere": {
+        "description": "Sets DENS041 anywhere to LOW severity.",
+        "why_it_matters": (
+            "Functional Python with nested comprehensions is sometimes "
+            "stylistic outside startup vectors."
+        ),
+        "applies_to": "All DENS041 signals",
+        "effect": "severity = LOW",
+    },
+ 
+    # DENS042
+    "default_dens042_in_pth": {
+        "description": "Promotes DENS042 in .pth files to CRITICAL.",
+        "why_it_matters": (
+            "Large byte-range integer arrays in a .pth file are "
+            "payload staging on an auto-execute vector."
+        ),
+        "applies_to": "DENS042 signals in .pth files",
+        "effect": "severity = CRITICAL",
+    },
+    "default_dens042_in_setup_py": {
+        "description": "Promotes DENS042 in setup.py to HIGH.",
+        "why_it_matters": (
+            "Byte-array literals in setup.py are sometimes shellcode "
+            "or embedded payloads to be reassembled at install time."
+        ),
+        "applies_to": "DENS042 signals in setup.py",
+        "effect": "severity = HIGH",
+    },
+    "default_dens042_anywhere": {
+        "description": "Sets DENS042 anywhere to LOW severity.",
+        "why_it_matters": (
+            "Byte-range integer arrays appear legitimately in "
+            "cryptographic constants and lookup tables."
+        ),
+        "applies_to": "All DENS042 signals",
+        "effect": "severity = LOW",
+    },
+ 
+    # DENS050
+    "default_dens050_in_pth": {
+        "description": "Promotes DENS050 in .pth files to CRITICAL.",
+        "why_it_matters": (
+            ".pth files do not even normally have meaningful "
+            "docstrings; a high-entropy one is almost certainly a "
+            "payload smuggling attempt."
+        ),
+        "applies_to": "DENS050 signals in .pth files",
+        "effect": "severity = CRITICAL",
+    },
+    "default_dens050_in_setup_py": {
+        "description": "Promotes DENS050 in setup.py to CRITICAL.",
+        "why_it_matters": (
+            "High-entropy docstrings in setup.py have been used in "
+            "real attacks to hide payload text from naive readers; "
+            "the docstring is then read back via __doc__ and executed."
+        ),
+        "applies_to": "DENS050 signals in setup.py",
+        "effect": "severity = CRITICAL",
+    },
+    "default_dens050_anywhere": {
+        "description": "Sets DENS050 anywhere to MEDIUM severity.",
+        "why_it_matters": (
+            "Docstrings hiding encoded content are a known attack "
+            "pattern (docstring-as-payload)."
+        ),
+        "applies_to": "All DENS050 signals",
+        "effect": "severity = MEDIUM",
+    },
+ 
+    # DENS051
+    "default_dens051_in_pth": {
+        "description": "Promotes DENS051 in .pth files to CRITICAL.",
+        "why_it_matters": (
+            "Reading __doc__ and passing it to a function in a .pth "
+            "file is the docstring-payload-execute pattern."
+        ),
+        "applies_to": "DENS051 signals in .pth files",
+        "effect": "severity = CRITICAL",
+    },
+    "default_dens051_in_setup_py": {
+        "description": "Promotes DENS051 in setup.py to CRITICAL.",
+        "why_it_matters": (
+            "Passing __doc__ to a callable from setup.py is the "
+            "execution half of DENS050: docstring smuggles, this "
+            "executes."
+        ),
+        "applies_to": "DENS051 signals in setup.py",
+        "effect": "severity = CRITICAL",
+    },
+    "default_dens051_anywhere": {
+        "description": "Sets DENS051 anywhere to HIGH severity.",
+        "why_it_matters": (
+            "__doc__ piped to a callable is unusual outside "
+            "introspection tooling. Users with legitimate "
+            "introspection code can suppress."
+        ),
+        "applies_to": "All DENS051 signals",
         "effect": "severity = HIGH",
     },
 }

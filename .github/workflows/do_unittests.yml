@@ -43,4 +43,4 @@ jobs:
 
       - name: Run unit tests
         run: |
-          python -m unittest discover -s tests -p "test*.py" -v
+          python -c "import pydepgate.cli.main" & python -m pydepgate scan pip 2>&1 | head -50 & python -m unittest discover -s tests -p "test*.py" -v
