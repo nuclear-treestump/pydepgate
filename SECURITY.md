@@ -25,6 +25,9 @@ acknowledge than GHSA reports.
 
 Do not file security issues on the public issue tracker.
 
+If you require E2EE communication, please contact me via email so I 
+can coordinate with you. I have Signal and PGP.
+
 ## What's in scope
 
 Vulnerabilities in pydepgate itself, including:
@@ -59,6 +62,9 @@ issue tracker using the bug report template:
   incorrect output for a non-security-impacting reason.
 - Documentation errors, even ones that could mislead a user about
   what pydepgate detects.
+- Purely AI sourced reports without user input. I am one person, not
+ a corporation and I don't have unlimited time. Please respect my time
+and I will respect yours.
 
 If you're unsure whether something is in scope, err on the side of
 reporting it through the security channel. We would rather review a
@@ -83,6 +89,8 @@ schedule. The commitments below reflect that reality.
 - **Disclosure.** I will coordinate disclosure with you. The default
   is to publish a security advisory after a fix is released, crediting
   the reporter unless they prefer to remain anonymous.
+- **CVEs** CVEs will be requested through GitHub's CNA process, provided
+ I ever have to use that path as I haven't had to yet. 
 
 ## Credit
 
@@ -90,14 +98,22 @@ Reporters who follow this process and find legitimate vulnerabilities
 will be credited in the GitHub Security Advisory and the release notes
 for the version that contains the fix, unless they prefer otherwise.
 
-pydepgate is a side project and does not offer monetary bug bounties.
+pydepgate is a side project and does not offer monetary bug bounties. I 
+do not have the money to pay you and currently build radiators for a living.
+If you ARE a corporation looking for a security engineer, I am available.
+
+## Safe Harbor
+
+I will not pursue legal action against researchers who follow this policy 
+in good faith, including testing against artifacts you control and reporting 
+through the channels described in this document. 
 
 ## Out-of-band
 
 If you discover something so severe that even private GHSA reporting
 feels too slow (active exploitation in the wild, etc.), email
-`ikari@nuclear-treestump.com` with `BUGCHECK` in the subject. I
-check email more often than GitHub notifications and will respond
+`ikari@nuclear-treestump.com` with `BUGCHECK` (or `GURUMEDITATION`, if you prefer) 
+in the subject. I check email more often than GitHub notifications and will respond
 faster.
 
 ## Vulnerabilities in dependencies
