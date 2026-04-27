@@ -1,11 +1,18 @@
 """
 The 'scan' subcommand: static analysis of a wheel, sdist, or
-installed package.
+installed package, plus single-file iteration mode.
 
-Auto-detection rules:
+Auto-detection rules (when neither --single nor a special suffix is given):
   - Path ending in .whl is treated as a wheel
   - Path ending in .tar.gz, .tgz, .tar.bz2, .tar.xz, .tar is an sdist
   - Anything else is treated as an installed package name
+
+Single-file mode (--single PATH):
+  Reads PATH directly, bypassing triage's name-based scope check, so
+  arbitrary files (test fixtures, garbage data, ad-hoc snippets) can
+  be analyzed without renaming them. The file's effective "kind"
+  determines which analyzers run and which default rules apply; it
+  is auto-detected from the filename or set explicitly with --as.
 """
 
 from __future__ import annotations
@@ -23,28 +30,84 @@ from pydepgate.cli import exit_codes
 from pydepgate.cli.reporter import (
     render_human, render_json, render_sarif_stub,
 )
-from pydepgate.engines.base import ScanResult, Severity
+from pydepgate.engines.base import ArtifactKind, ScanResult, ScanStatistics, Severity
 from pydepgate.engines.static import StaticEngine
 
 
 _SDIST_SUFFIXES = (".tar.gz", ".tgz", ".tar.bz2", ".tar.xz", ".tar")
 
 
+# Choices for --as. Maps the user-facing name to a synthetic
+# internal_path that triage will classify as the requested FileKind.
+# These paths are never written to disk; they only exist to give
+# triage something to recognize.
+_AS_KIND_CHOICES = ("setup_py", "init_py", "pth", "sitecustomize", "usercustomize")
+
+_AS_KIND_TO_INTERNAL_PATH = {
+    "setup_py": "setup.py",
+    # INIT_PY requires depth=1 (one directory above the file). A
+    # bare "__init__.py" at depth=0 is classified as SKIP. The
+    # synthetic "pkg/" prefix is invisible to the user; triage just
+    # needs it to land at the right depth.
+    "init_py": "pkg/__init__.py",
+    "pth": "single.pth",
+    "sitecustomize": "sitecustomize.py",
+    "usercustomize": "usercustomize.py",
+}
+
+# Filenames that triage classifies naturally without any rewriting.
+# Used by auto-detection when --as is not supplied.
+_NATURAL_KIND_FILENAMES = {
+    "setup.py": "setup.py",
+    "__init__.py": "pkg/__init__.py",  # depth fix, same reason as above
+    "sitecustomize.py": "sitecustomize.py",
+    "usercustomize.py": "usercustomize.py",
+}
+
+
 def register(subparsers) -> None:
     """Register the scan subcommand on the given subparsers object."""
     parser = subparsers.add_parser(
         "scan",
-        help="Statically analyze a wheel, sdist, or installed package",
+        help="Statically analyze a wheel, sdist, installed package, or single file",
         description=(
             "Statically analyze a Python package for suspicious "
             "startup-vector behavior. Accepts a path to a wheel or "
-            "sdist, or the name of an installed package."
+            "sdist, the name of an installed package, or a single "
+            "loose file via --single."
         ),
     )
     parser.add_argument(
         "target",
+        nargs="?",
         help=(
-            "Path to .whl/.tar.gz/etc., or name of an installed package"
+            "Path to .whl/.tar.gz/etc., or name of an installed package. "
+            "Omit when using --single."
+        ),
+    )
+    parser.add_argument(
+        "--single",
+        metavar="PATH",
+        default=None,
+        help=(
+            "Scan a single file directly, bypassing wheel/sdist/installed "
+            "dispatch. Useful for iterating on test fixtures or garbage "
+            "data. The file kind is auto-detected from the filename "
+            "(.pth -> pth, setup.py/__init__.py/sitecustomize.py/"
+            "usercustomize.py -> their natural kind, anything else -> "
+            "setup.py). Override with --as."
+        ),
+    )
+    parser.add_argument(
+        "--as",
+        dest="as_kind",  # 'as' is a Python keyword
+        choices=_AS_KIND_CHOICES,
+        default=None,
+        help=(
+            "Override the file kind for --single mode. Setup_py is the "
+            "most permissive context (density rules promote to HIGH/"
+            "CRITICAL there), making it the best default for iteration "
+            "testing of new signals."
         ),
     )
     parser.set_defaults(func=run)
@@ -55,7 +118,24 @@ def run(args: argparse.Namespace) -> int:
     from pydepgate.rules.defaults import DEFAULT_RULES
     from pydepgate.rules.loader import GateFileError, load_user_rules
 
-    target = args.target
+    # Argument validation: exactly one of target/--single must be given.
+    if args.single and args.target:
+        sys.stderr.write(
+            "error: cannot combine a positional target with --single. "
+            "Use --single PATH OR a positional target, not both.\n"
+        )
+        return exit_codes.TOOL_ERROR
+    if not args.single and not args.target:
+        sys.stderr.write(
+            "error: scan requires either a positional target "
+            "(wheel/sdist/installed-package-name) or --single PATH.\n"
+        )
+        return exit_codes.TOOL_ERROR
+    if args.as_kind and not args.single:
+        sys.stderr.write(
+            "error: --as only applies in --single mode.\n"
+        )
+        return exit_codes.TOOL_ERROR
 
     # Load user rules.
     rules_file = getattr(args, "rules_file", None)
@@ -94,7 +174,10 @@ def run(args: argparse.Namespace) -> int:
         rules=all_rules,
     )
 
-    result = _dispatch_scan(engine, target)
+    if args.single:
+        result = _dispatch_single(engine, args.single, args.as_kind)
+    else:
+        result = _dispatch_scan(engine, args.target)
     return _render_and_exit_code(result, args)
 
 
@@ -113,6 +196,82 @@ def _dispatch_scan(engine: StaticEngine, target: str) -> ScanResult:
 
     # Fallback: treat as installed package name.
     return engine.scan_installed(target)
+
+
+def _dispatch_single(
+    engine: StaticEngine,
+    path_str: str,
+    as_kind: str | None,
+) -> ScanResult:
+    """Scan a single loose file, bypassing triage's name check.
+
+    Reads the file, determines a synthetic internal_path that will
+    classify under the desired FileKind, and feeds the bytes through
+    engine.scan_bytes. The real filesystem path is preserved as
+    artifact_identity so the report still references the right file.
+    """
+    path = Path(path_str)
+    if not path.exists():
+        return _empty_result_with_diag(
+            path, f"file not found: {path}",
+        )
+    if not path.is_file():
+        return _empty_result_with_diag(
+            path, f"not a regular file: {path}",
+        )
+    try:
+        content = path.read_bytes()
+    except OSError as exc:
+        return _empty_result_with_diag(
+            path, f"failed to read {path}: {exc}",
+        )
+
+    internal_path = _internal_path_for_single(path, as_kind)
+    return engine.scan_bytes(
+        content=content,
+        internal_path=internal_path,
+        artifact_kind=ArtifactKind.LOOSE_FILE,
+        artifact_identity=str(path),
+    )
+
+
+def _internal_path_for_single(path: Path, as_kind: str | None) -> str:
+    """Decide what internal_path to feed triage in --single mode.
+
+    The internal_path drives both the parser/analyzer routing AND
+    which default rules apply (rules match on file_kind). For
+    iteration testing, defaulting to setup.py gives the most
+    aggressive rule promotion, surfacing every signal at a
+    realistic-attack severity rather than the mechanical-mapping
+    floor.
+    """
+    # Explicit override wins.
+    if as_kind is not None:
+        return _AS_KIND_TO_INTERNAL_PATH[as_kind]
+
+    # .pth at any depth is classified as PTH; use the real filename.
+    if path.suffix == ".pth":
+        return path.name
+
+    # Natural-kind filenames pass through with a depth fixup if needed.
+    if path.name in _NATURAL_KIND_FILENAMES:
+        return _NATURAL_KIND_FILENAMES[path.name]
+
+    # Fallback: treat arbitrary content as setup.py for maximum
+    # rule promotion. This is the iteration-testing default.
+    return "setup.py"
+
+
+def _empty_result_with_diag(path: Path, diagnostic: str) -> ScanResult:
+    """Build an empty ScanResult carrying a single diagnostic message."""
+    return ScanResult(
+        artifact_identity=str(path),
+        artifact_kind=ArtifactKind.LOOSE_FILE,
+        findings=(),
+        skipped=(),
+        statistics=ScanStatistics(),
+        diagnostics=(diagnostic,),
+    )
 
 
 def _render_and_exit_code(result: ScanResult, args: argparse.Namespace) -> int:
