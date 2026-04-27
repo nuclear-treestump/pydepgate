@@ -2,10 +2,15 @@
 Tests for the 'scan --single' flag.
 
 Two layers:
-  1. Unit tests on the routing helpers (_internal_path_for_single,
+  1. Unit tests on the routing helpers (_file_kind_for_single,
      _dispatch_single) without subprocess overhead.
   2. End-to-end subprocess tests confirming the CLI accepts the flag
      and produces sensible output.
+
+Critical invariant after the cleaner-engine refactor: every finding's
+context.internal_path matches the real filesystem path the user gave
+us, NOT a synthetic stand-in. Several tests below explicitly assert
+that property.
 """
 
 import json
@@ -18,14 +23,15 @@ import textwrap
 import unittest
 
 from pydepgate.cli.subcommands.scan import (
-    _AS_KIND_TO_INTERNAL_PATH,
+    _AS_KIND_TO_FILE_KIND,
     _dispatch_single,
-    _internal_path_for_single,
+    _file_kind_for_single,
 )
 from pydepgate.engines.static import StaticEngine
 from pydepgate.analyzers.density_analyzer import CodeDensityAnalyzer
 from pydepgate.analyzers.encoding_abuse import EncodingAbuseAnalyzer
 from pydepgate.engines.base import ArtifactKind, Severity
+from pydepgate.traffic_control.triage import FileKind
 
 
 def _run_cli(args, env=None):
@@ -47,86 +53,87 @@ def _run_cli(args, env=None):
 
 
 # =============================================================================
-# Tier 1: internal_path autodetection
+# Tier 1: FileKind autodetection
 # =============================================================================
 
-class InternalPathAutodetectTests(unittest.TestCase):
-    """_internal_path_for_single picks a triage-acceptable path."""
+class FileKindAutodetectTests(unittest.TestCase):
+    """_file_kind_for_single picks the right FileKind for each filename."""
 
-    def test_pth_uses_real_filename(self):
-        result = _internal_path_for_single(
+    def test_pth_extension_is_pth(self):
+        result = _file_kind_for_single(
             pathlib.Path("/tmp/foo.pth"), as_kind=None,
         )
-        self.assertEqual(result, "foo.pth")
+        self.assertIs(result, FileKind.PTH)
 
-    def test_setup_py_uses_setup_py(self):
-        result = _internal_path_for_single(
+    def test_setup_py_is_setup_py(self):
+        result = _file_kind_for_single(
             pathlib.Path("/tmp/setup.py"), as_kind=None,
         )
-        self.assertEqual(result, "setup.py")
+        self.assertIs(result, FileKind.SETUP_PY)
 
-    def test_init_py_gets_depth_fix(self):
-        # A bare __init__.py at depth 0 would be classified as SKIP.
-        # The helper must add a synthetic parent directory so triage
-        # sees it at depth 1.
-        result = _internal_path_for_single(
+    def test_init_py_is_init_py(self):
+        result = _file_kind_for_single(
             pathlib.Path("/tmp/__init__.py"), as_kind=None,
         )
-        self.assertEqual(result, "pkg/__init__.py")
+        self.assertIs(result, FileKind.INIT_PY)
 
-    def test_sitecustomize_passthrough(self):
-        result = _internal_path_for_single(
+    def test_sitecustomize_is_sitecustomize(self):
+        result = _file_kind_for_single(
             pathlib.Path("/tmp/sitecustomize.py"), as_kind=None,
         )
-        self.assertEqual(result, "sitecustomize.py")
+        self.assertIs(result, FileKind.SITECUSTOMIZE)
 
-    def test_usercustomize_passthrough(self):
-        result = _internal_path_for_single(
+    def test_usercustomize_is_usercustomize(self):
+        result = _file_kind_for_single(
             pathlib.Path("/tmp/usercustomize.py"), as_kind=None,
         )
-        self.assertEqual(result, "usercustomize.py")
+        self.assertIs(result, FileKind.USERCUSTOMIZE)
 
     def test_arbitrary_py_defaults_to_setup_py(self):
-        # The whole point: random "garbage_test.py" should be
+        # The iteration default: random "garbage_test.py" should be
         # treated as setup.py for maximum rule promotion.
-        result = _internal_path_for_single(
+        result = _file_kind_for_single(
             pathlib.Path("/tmp/garbage_test.py"), as_kind=None,
         )
-        self.assertEqual(result, "setup.py")
+        self.assertIs(result, FileKind.SETUP_PY)
 
     def test_no_extension_defaults_to_setup_py(self):
-        result = _internal_path_for_single(
+        result = _file_kind_for_single(
             pathlib.Path("/tmp/snippet"), as_kind=None,
         )
-        self.assertEqual(result, "setup.py")
+        self.assertIs(result, FileKind.SETUP_PY)
 
 
-class InternalPathOverrideTests(unittest.TestCase):
+class FileKindOverrideTests(unittest.TestCase):
     """--as KIND wins over auto-detection."""
 
     def test_explicit_setup_py_override(self):
-        result = _internal_path_for_single(
+        # File is .pth but --as forces setup_py.
+        result = _file_kind_for_single(
             pathlib.Path("/tmp/foo.pth"), as_kind="setup_py",
         )
-        # Even though the file is .pth, --as setup_py forces setup.py.
-        self.assertEqual(result, "setup.py")
+        self.assertIs(result, FileKind.SETUP_PY)
 
-    def test_explicit_init_py_override_includes_depth_fix(self):
-        result = _internal_path_for_single(
+    def test_explicit_init_py_override(self):
+        result = _file_kind_for_single(
             pathlib.Path("/tmp/foo.py"), as_kind="init_py",
         )
-        self.assertEqual(result, "pkg/__init__.py")
+        self.assertIs(result, FileKind.INIT_PY)
 
     def test_every_choice_has_a_mapping(self):
-        # Every value of _AS_KIND_CHOICES (the argparse choices) must
-        # have a corresponding entry in _AS_KIND_TO_INTERNAL_PATH so
-        # the helper never raises KeyError.
+        # Every value in argparse's choices must map to a FileKind.
         for kind in ("setup_py", "init_py", "pth", "sitecustomize",
                      "usercustomize"):
-            result = _internal_path_for_single(
+            result = _file_kind_for_single(
                 pathlib.Path("/tmp/anything"), as_kind=kind,
             )
-            self.assertEqual(result, _AS_KIND_TO_INTERNAL_PATH[kind])
+            self.assertIs(result, _AS_KIND_TO_FILE_KIND[kind])
+
+    def test_no_choice_maps_to_skip(self):
+        # Sanity: none of the user-facing choices should resolve to
+        # FileKind.SKIP, since the engine would reject it.
+        for kind in _AS_KIND_TO_FILE_KIND.values():
+            self.assertIsNot(kind, FileKind.SKIP)
 
 
 # =============================================================================
@@ -143,9 +150,7 @@ class DispatchSingleTests(unittest.TestCase):
 
     def test_nonexistent_file_returns_diag(self):
         result = _dispatch_single(
-            self.engine,
-            "/nonexistent/garbage.py",
-            as_kind=None,
+            self.engine, "/nonexistent/garbage.py", as_kind=None,
         )
         self.assertEqual(result.findings, ())
         self.assertEqual(len(result.diagnostics), 1)
@@ -169,16 +174,32 @@ class DispatchSingleTests(unittest.TestCase):
             path = pathlib.Path(tmp) / "garbage_test.py"
             path.write_bytes(source)
             result = _dispatch_single(self.engine, str(path), as_kind=None)
-            # The encoding_abuse analyzer should fire on this content.
             self.assertGreater(len(result.findings), 0)
-            # In setup.py context, ENC001 promotes to CRITICAL.
             critical = [f for f in result.findings
                         if f.severity == Severity.CRITICAL]
             self.assertGreater(len(critical), 0)
 
+    def test_finding_context_carries_real_path(self):
+        # THE bug the cleaner refactor fixed: findings used to
+        # report context.internal_path == "setup.py" no matter what
+        # file was scanned. Now they must carry the real path.
+        source = (
+            b"import base64\n"
+            b"exec(base64.b64decode('cHJpbnQoMSk='))\n"
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp) / "demo_fixture_42.py"
+            path.write_bytes(source)
+            result = _dispatch_single(self.engine, str(path), as_kind=None)
+            self.assertGreater(len(result.findings), 0)
+            for finding in result.findings:
+                self.assertEqual(
+                    finding.context.internal_path, str(path),
+                    msg=("finding context should reference the real "
+                         "path, not a synthetic stand-in"),
+                )
+
     def test_artifact_identity_is_real_path(self):
-        # The report should identify the actual file the user gave us,
-        # not the synthetic internal_path used internally.
         with tempfile.TemporaryDirectory() as tmp:
             path = pathlib.Path(tmp) / "garbage_test.py"
             path.write_bytes(b"x = 1\n")
@@ -186,8 +207,6 @@ class DispatchSingleTests(unittest.TestCase):
             self.assertEqual(result.artifact_identity, str(path))
 
     def test_pth_content_is_analyzed_as_pth(self):
-        # A .pth file should be parsed as .pth (one line at a time),
-        # not as Python source.
         content = (
             b"import base64; exec(base64.b64decode('cHJpbnQoMSk='))\n"
         )
@@ -196,11 +215,11 @@ class DispatchSingleTests(unittest.TestCase):
             path.write_bytes(content)
             result = _dispatch_single(self.engine, str(path), as_kind=None)
             self.assertGreater(len(result.findings), 0)
+            # And the path is preserved in the .pth path too.
+            for finding in result.findings:
+                self.assertEqual(finding.context.internal_path, str(path))
 
     def test_as_override_changes_severity(self):
-        # Same content scanned with --as setup_py vs --as init_py
-        # should produce different severities (setup_py rule for ENC001
-        # is CRITICAL, init_py rule is HIGH).
         source = (
             b"import base64\n"
             b"exec(base64.b64decode('cHJpbnQoMSk='))\n"
@@ -208,29 +227,24 @@ class DispatchSingleTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = pathlib.Path(tmp) / "garbage.py"
             path.write_bytes(source)
-            r_setup = _dispatch_single(self.engine, str(path),
-                                       as_kind="setup_py")
-            r_init = _dispatch_single(self.engine, str(path),
-                                      as_kind="init_py")
-        # Both should produce findings, with different severities.
-        self.assertGreater(len(r_setup.findings), 0)
-        self.assertGreater(len(r_init.findings), 0)
-        max_sev_setup = max(f.severity for f in r_setup.findings)
-        max_sev_init = max(f.severity for f in r_init.findings)
-        # CRITICAL > HIGH per the existing default rules.
+            r_setup = _dispatch_single(
+                self.engine, str(path), as_kind="setup_py",
+            )
+            r_init = _dispatch_single(
+                self.engine, str(path), as_kind="init_py",
+            )
+        max_setup = max(f.severity for f in r_setup.findings)
+        max_init = max(f.severity for f in r_init.findings)
         order = {Severity.LOW: 1, Severity.MEDIUM: 2,
                  Severity.HIGH: 3, Severity.CRITICAL: 4}
-        self.assertGreater(order[max_sev_setup], order[max_sev_init])
+        self.assertGreater(order[max_setup], order[max_init])
 
     def test_unparseable_content_does_not_crash(self):
-        # The whole point of iteration testing on garbage data: bad
-        # input should produce a clean (possibly empty) result, not
-        # a crash.
         with tempfile.TemporaryDirectory() as tmp:
             path = pathlib.Path(tmp) / "garbage.py"
             path.write_bytes(b"def (\n@@@ this is not python\n")
             result = _dispatch_single(self.engine, str(path), as_kind=None)
-            # No assertion on findings; just that we got a result.
+            # No assertion on findings; just that a result came back.
             self.assertIsNotNone(result)
 
 
@@ -248,12 +262,11 @@ class CliSingleFlagTests(unittest.TestCase):
             rc, out, err = _run_cli([
                 "scan", "--single", str(path), "--format", "json",
             ])
-            # rc=0 means the scan ran cleanly.
             self.assertEqual(rc, 0, msg=f"stderr: {err}")
             payload = json.loads(out)
             self.assertIn("findings", payload)
 
-    def test_single_flag_reports_real_path(self):
+    def test_single_flag_reports_real_path_in_artifact(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = pathlib.Path(tmp) / "garbage_xyz.py"
             path.write_bytes(b"x = 1\n")
@@ -263,10 +276,33 @@ class CliSingleFlagTests(unittest.TestCase):
             payload = json.loads(out)
             self.assertEqual(payload["artifact"]["identity"], str(path))
 
+    def test_single_flag_reports_real_path_in_findings(self):
+        # The bug the cleaner refactor fixed, end-to-end via subprocess.
+        # Findings should reference the actual file the user gave us.
+        source = (
+            b"import base64\n"
+            b"exec(base64.b64decode('cHJpbnQoMSk='))\n"
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp) / "demo_xyz.py"
+            path.write_bytes(source)
+            rc, out, err = _run_cli([
+                "scan", "--single", str(path), "--format", "json",
+            ])
+            payload = json.loads(out)
+            self.assertGreater(len(payload["findings"]), 0)
+            for finding in payload["findings"]:
+                # The JSON schema may carry the path under different
+                # keys depending on reporter version; at minimum, the
+                # real filename should appear somewhere in the
+                # finding's serialized context.
+                serialized = json.dumps(finding)
+                self.assertIn(
+                    str(path), serialized,
+                    msg=f"real path missing from finding: {finding}",
+                )
+
     def test_single_flag_finds_density_signal_in_garbage(self):
-        # A high-entropy string in a generic .py file should still
-        # surface a density signal under --single (because the file
-        # is treated as setup.py by default, which has a DENS010 rule).
         # 128 chars of base64 alphabet, entropy ~6.0:
         payload_str = (
             "QWxsIHRoZSB3b3JsZCdzIGEgc3RhZ2UsQWxsIHRoZSBz" * 4
@@ -290,7 +326,6 @@ class CliSingleFlagTests(unittest.TestCase):
                                msg=f"no density findings; got {ids}")
 
     def test_no_args_errors_clearly(self):
-        # Neither target nor --single -> error with helpful message.
         rc, out, err = _run_cli(["scan"])
         self.assertNotEqual(rc, 0)
         self.assertIn("either", err.lower())
@@ -328,7 +363,6 @@ class CliSingleFlagTests(unittest.TestCase):
             "scan", "--single", "/nonexistent/garbage.py",
             "--format", "json",
         ])
-        # Diagnostic recorded but the scan itself completed.
         payload = json.loads(out)
         self.assertEqual(payload["findings"], [])
         self.assertGreater(len(payload["diagnostics"]), 0)
