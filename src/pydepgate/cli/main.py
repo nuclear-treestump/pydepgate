@@ -121,6 +121,15 @@ def _add_global_flags(
                 "pydepgate.gate in cwd or venv. Env: PYDEPGATE_RULES_FILE"
             ),
         )
+    parser.add_argument(
+            "--no-map",
+            action="store_true",
+            default=bool(os.environ.get("PYDEPGATE_NO_MAP")),
+            help=(
+                "Suppress the density map visualization in human output. "
+                "Env: PYDEPGATE_NO_MAP"
+            ),
+        )
 
 
 def build_parser() -> argparse.ArgumentParser:
