@@ -8,9 +8,10 @@ Auto-detection rules (when neither --single nor a special suffix is given):
   - Anything else is treated as an installed package name
 
 Single-file mode (--single PATH):
-  Reads PATH directly, bypassing triage's name-based scope check, so
-  arbitrary files (test fixtures, garbage data, ad-hoc snippets) can
-  be analyzed without renaming them. The file's effective "kind"
+  Reads PATH directly via engine.scan_loose_file_as(), which bypasses
+  triage's name-based scope check. The real path is preserved in the
+  resulting finding contexts, so reports reference the actual file
+  rather than a synthetic stand-in. The file's effective "kind"
   determines which analyzers run and which default rules apply; it
   is auto-detected from the filename or set explicitly with --as.
 """
@@ -30,38 +31,36 @@ from pydepgate.cli import exit_codes
 from pydepgate.cli.reporter import (
     render_human, render_json, render_sarif_stub,
 )
-from pydepgate.engines.base import ArtifactKind, ScanResult, ScanStatistics, Severity
+from pydepgate.engines.base import (
+    ArtifactKind, ScanResult, ScanStatistics, Severity,
+)
 from pydepgate.engines.static import StaticEngine
+from pydepgate.traffic_control.triage import FileKind
 
 
 _SDIST_SUFFIXES = (".tar.gz", ".tgz", ".tar.bz2", ".tar.xz", ".tar")
 
 
-# Choices for --as. Maps the user-facing name to a synthetic
-# internal_path that triage will classify as the requested FileKind.
-# These paths are never written to disk; they only exist to give
-# triage something to recognize.
+# Choices for the --as flag, mapped to the FileKind the engine will
+# treat the file as. These names are user-facing; FileKind values are
+# internal. Keep this dict in sync with the choices argparse exposes.
 _AS_KIND_CHOICES = ("setup_py", "init_py", "pth", "sitecustomize", "usercustomize")
 
-_AS_KIND_TO_INTERNAL_PATH = {
-    "setup_py": "setup.py",
-    # INIT_PY requires depth=1 (one directory above the file). A
-    # bare "__init__.py" at depth=0 is classified as SKIP. The
-    # synthetic "pkg/" prefix is invisible to the user; triage just
-    # needs it to land at the right depth.
-    "init_py": "pkg/__init__.py",
-    "pth": "single.pth",
-    "sitecustomize": "sitecustomize.py",
-    "usercustomize": "usercustomize.py",
+_AS_KIND_TO_FILE_KIND = {
+    "setup_py": FileKind.SETUP_PY,
+    "init_py": FileKind.INIT_PY,
+    "pth": FileKind.PTH,
+    "sitecustomize": FileKind.SITECUSTOMIZE,
+    "usercustomize": FileKind.USERCUSTOMIZE,
 }
 
-# Filenames that triage classifies naturally without any rewriting.
-# Used by auto-detection when --as is not supplied.
-_NATURAL_KIND_FILENAMES = {
-    "setup.py": "setup.py",
-    "__init__.py": "pkg/__init__.py",  # depth fix, same reason as above
-    "sitecustomize.py": "sitecustomize.py",
-    "usercustomize.py": "usercustomize.py",
+# Filenames that map naturally to a known startup-vector kind. Used
+# by autodetection when --as is omitted.
+_NATURAL_KIND_FILES = {
+    "setup.py": FileKind.SETUP_PY,
+    "__init__.py": FileKind.INIT_PY,
+    "sitecustomize.py": FileKind.SITECUSTOMIZE,
+    "usercustomize.py": FileKind.USERCUSTOMIZE,
 }
 
 
@@ -91,11 +90,12 @@ def register(subparsers) -> None:
         default=None,
         help=(
             "Scan a single file directly, bypassing wheel/sdist/installed "
-            "dispatch. Useful for iterating on test fixtures or garbage "
-            "data. The file kind is auto-detected from the filename "
-            "(.pth -> pth, setup.py/__init__.py/sitecustomize.py/"
-            "usercustomize.py -> their natural kind, anything else -> "
-            "setup.py). Override with --as."
+            "dispatch. The real path is preserved in the report so "
+            "findings reference the actual file. The file kind is "
+            "auto-detected from the filename (.pth -> pth, "
+            "setup.py/__init__.py/sitecustomize.py/usercustomize.py -> "
+            "their natural kind, anything else -> setup_py for maximum "
+            "rule promotion). Override with --as."
         ),
     )
     parser.add_argument(
@@ -104,7 +104,7 @@ def register(subparsers) -> None:
         choices=_AS_KIND_CHOICES,
         default=None,
         help=(
-            "Override the file kind for --single mode. Setup_py is the "
+            "Override the file kind for --single mode. setup_py is the "
             "most permissive context (density rules promote to HIGH/"
             "CRITICAL there), making it the best default for iteration "
             "testing of new signals."
@@ -203,63 +203,43 @@ def _dispatch_single(
     path_str: str,
     as_kind: str | None,
 ) -> ScanResult:
-    """Scan a single loose file, bypassing triage's name check.
+    """Scan a single loose file via the engine's bypass-triage entry point.
 
-    Reads the file, determines a synthetic internal_path that will
-    classify under the desired FileKind, and feeds the bytes through
-    engine.scan_bytes. The real filesystem path is preserved as
-    artifact_identity so the report still references the right file.
+    Pre-checks for nonexistent paths and directories so we get clean
+    diagnostic messages rather than raw OSError text. Once we know
+    the file is real, hand off to engine.scan_loose_file_as which
+    preserves the real path through to the report.
     """
     path = Path(path_str)
     if not path.exists():
-        return _empty_result_with_diag(
-            path, f"file not found: {path}",
-        )
+        return _empty_result_with_diag(path, f"file not found: {path}")
     if not path.is_file():
-        return _empty_result_with_diag(
-            path, f"not a regular file: {path}",
-        )
-    try:
-        content = path.read_bytes()
-    except OSError as exc:
-        return _empty_result_with_diag(
-            path, f"failed to read {path}: {exc}",
-        )
+        return _empty_result_with_diag(path, f"not a regular file: {path}")
 
-    internal_path = _internal_path_for_single(path, as_kind)
-    return engine.scan_bytes(
-        content=content,
-        internal_path=internal_path,
-        artifact_kind=ArtifactKind.LOOSE_FILE,
-        artifact_identity=str(path),
-    )
+    file_kind = _file_kind_for_single(path, as_kind)
+    return engine.scan_loose_file_as(path, file_kind)
 
 
-def _internal_path_for_single(path: Path, as_kind: str | None) -> str:
-    """Decide what internal_path to feed triage in --single mode.
+def _file_kind_for_single(path: Path, as_kind: str | None) -> FileKind:
+    """Decide the FileKind for a --single-mode scan.
 
-    The internal_path drives both the parser/analyzer routing AND
-    which default rules apply (rules match on file_kind). For
-    iteration testing, defaulting to setup.py gives the most
+    The kind drives both the parser/analyzer routing AND which
+    default rules apply (rules match on file_kind). For iteration
+    testing, defaulting unknown content to SETUP_PY gives the most
     aggressive rule promotion, surfacing every signal at a
-    realistic-attack severity rather than the mechanical-mapping
-    floor.
+    realistic-attack severity.
     """
-    # Explicit override wins.
     if as_kind is not None:
-        return _AS_KIND_TO_INTERNAL_PATH[as_kind]
+        return _AS_KIND_TO_FILE_KIND[as_kind]
 
-    # .pth at any depth is classified as PTH; use the real filename.
     if path.suffix == ".pth":
-        return path.name
+        return FileKind.PTH
 
-    # Natural-kind filenames pass through with a depth fixup if needed.
-    if path.name in _NATURAL_KIND_FILENAMES:
-        return _NATURAL_KIND_FILENAMES[path.name]
+    if path.name in _NATURAL_KIND_FILES:
+        return _NATURAL_KIND_FILES[path.name]
 
-    # Fallback: treat arbitrary content as setup.py for maximum
-    # rule promotion. This is the iteration-testing default.
-    return "setup.py"
+    # Fallback: arbitrary content gets the setup.py treatment.
+    return FileKind.SETUP_PY
 
 
 def _empty_result_with_diag(path: Path, diagnostic: str) -> ScanResult:
