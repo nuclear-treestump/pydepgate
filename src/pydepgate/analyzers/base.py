@@ -11,6 +11,9 @@ They do:
   - walk the parsed structure
   - emit Signals with a confidence level
   - include enough location context for downstream layers to reason about
+
+  
+
 """
 
 from __future__ import annotations
@@ -76,6 +79,29 @@ class Analyzer(ABC):
     pattern during a single analyze() call). Subclasses implement the
     analyze() method for Python source, and/or analyze_pth() for .pth
     files. Most analyzers only care about one input type.
+
+    Statelessness contract:
+
+    Implementations MUST NOT retain mutable state across
+    `analyze_python` invocations. Two reasons:
+
+    1. The engine reserves the right to invoke `analyze_python`
+        concurrently from worker processes (currently serial; the
+        pipeline is shaped to make parallelism a one-line change).
+        Mutable per-instance state would be invisible across worker
+        boundaries and produce silent inconsistencies between serial
+        and parallel scans.
+
+    2. A single `StaticEngine` instance handles many scans across
+        its lifetime. State retained between calls would make scan N
+        depend on scans 1..N-1, which is the wrong contract.
+
+    Analyzers may hold immutable configuration in `__init__`
+    (thresholds, regex compilations, alphabet tables); they may
+    not accumulate findings, counters, or caches across calls.
+    Construct any per-call accumulators inside `analyze_python`
+    and discard them on return.
+
     """
 
     @property
