@@ -1,3 +1,4 @@
+
 # pydepgate
 
 [![PyPI](https://img.shields.io/pypi/v/pydepgate.svg)](https://pypi.org/project/pydepgate/)[![Downloads](https://pepy.tech/badge/pydepgate)](https://pepy.tech/project/pydepgate)[![Unit tests](https://github.com/nuclear-treestump/pydep-vector-runner/actions/workflows/do_unittests.yml/badge.svg)](https://github.com/nuclear-treestump/pydep-vector-runner/actions/workflows/do_unittests.yml)
@@ -9,7 +10,7 @@ silently at interpreter startup. This was the attack class used by the
 March 2026 LiteLLM supply-chain compromise and catalogued as
 [MITRE ATT&CK T1546.018](https://attack.mitre.org/techniques/T1546/018/).
 
-<img width="990" height="465" alt="image" src="https://github.com/user-attachments/assets/a723be7f-2a61-4de8-8758-9b87928e782f" />
+<img width="1086" height="720" alt="Screen Recording 2026-04-28 091139" src="https://github.com/user-attachments/assets/28a737fd-4ba0-4401-b49e-5d84703cad25" />
 
 ## Status
 
