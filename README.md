@@ -281,6 +281,150 @@ Three actions are supported: `set_severity`, `suppress`, and `set_description`. 
 
 Run `pydepgate explain --list` to see all default rules and signals, with descriptions of what they catch and how rules promote them.
 
+## Writing rules
+ 
+Rules live in `pydepgate.gate` files. The format is either TOML or
+JSON; pydepgate auto-detects from content. A rule has three parts:
+identity (an `id`), a match (which signals it applies to), and an
+action (what to do when matched).
+ 
+### Discovery
+ 
+When you run `pydepgate scan`, rules are loaded from the first match
+of:
+ 
+1. The `--rules-file` CLI flag, if given.
+2. The `PYDEPGATE_RULES_FILE` environment variable.
+3. `./pydepgate.gate` in the current directory.
+4. `<venv>/pydepgate.gate` in the active virtualenv, if any.
+If multiple files exist, only the first is loaded. The others are
+listed in the scan summary so you can see what was skipped.
+ 
+### Minimal rule (TOML)
+ 
+```toml
+[[rule]]
+id = "my-package-uses-large-base64"
+signal_id = "DENS010"
+path_glob = "my_package/embedded/*.py"
+action = "suppress"
+explain = "We legitimately ship a 200KB embedded model in this dir."
+```
+ 
+The `id` is yours. `signal_id` is what to match (see
+`pydepgate explain --list` for the catalogue). `path_glob` is an
+fnmatch-style pattern matched against the internal path of the file.
+`action` is one of `set_severity`, `suppress`, or `set_description`.
+`explain` is optional but encouraged: it shows up in
+`pydepgate explain --rule USER_my-package-uses-large-base64`.
+ 
+### Match conditions
+ 
+All non-empty match fields must be satisfied for a rule to apply.
+The supported fields:
+ 
+| Field                | Matches against                                      |
+|----------------------|------------------------------------------------------|
+| `signal_id`          | `Signal.signal_id` (e.g. `"DENS010"`)                |
+| `analyzer`           | `Signal.analyzer` (e.g. `"code_density"`)            |
+| `file_kind`          | The triage decision: `pth`, `setup_py`, `init_py`, `sitecustomize`, `library_py`, etc. |
+| `scope`              | `Signal.scope`: `module`, `function`, `class`        |
+| `path_glob`          | fnmatch pattern against the file's internal path     |
+| `context_contains`   | Dict of `{key: value}` pairs that must appear in `Signal.context` with strict equality |
+| `context_predicates` | Dict of `{key: {operator: value}}` pairs evaluated against `Signal.context` (richer than `context_contains`, see below) |
+ 
+### Context predicates
+ 
+`context_predicates` extends `context_contains` with comparison
+operators. Each predicate takes the form `{field: {op: value}}`. The
+inner dict has exactly one operator key. Multiple predicates on
+different fields are AND-ed.
+ 
+```toml
+# Block any base64-shaped string of 10KB or larger anywhere
+[[rule]]
+id = "block-large-base64"
+signal_id = "DENS010"
+context_predicates = { length = { gte = 10240 } }
+action = "set_severity"
+severity = "critical"
+ 
+# Suppress confusable single-char identifiers in test files only
+[[rule]]
+id = "ignore-confusables-in-tests"
+signal_id = "DENS021"
+path_glob = "tests/**/*.py"
+context_predicates = { identifier = { in = ["l", "O", "I"] } }
+action = "suppress"
+```
+ 
+Available operators:
+ 
+| Category   | Operators                                  | Value type             |
+|------------|--------------------------------------------|------------------------|
+| Numeric    | `eq`, `ne`, `gt`, `gte`, `lt`, `lte`       | int or float           |
+| String     | `eq`, `ne`, `contains`, `startswith`, `endswith` | string         |
+| Collection | `in`, `not_in`                             | list, tuple, or set    |
+ 
+Type mismatches (e.g. `gte` against a string) cause the predicate to
+silently fail to match rather than error. To AND multiple conditions
+on the same field, write multiple rules.
+ 
+### Equivalent JSON
+ 
+```json
+{
+  "_pydepgate_format": "json",
+  "_pydepgate_version": 1,
+  "rules": [
+    {
+      "id": "block-large-base64",
+      "signal_id": "DENS010",
+      "context_predicates": {"length": {"gte": 10240}},
+      "action": "set_severity",
+      "severity": "critical"
+    }
+  ]
+}
+```
+ 
+### Actions
+ 
+- **`set_severity`**: requires a `severity` field
+  (`info`, `low`, `medium`, `high`, `critical`).
+- **`suppress`**: drop the finding from the scan output. The
+  suppression is still recorded; `pydepgate scan -v` shows what was
+  suppressed and which rule did it.
+- **`set_description`**: requires a `description` field; replaces the
+  finding's text.
+### Precedence
+ 
+When multiple rules match a signal, pydepgate picks one winner using
+this order:
+ 
+1. Source priority: user rules win over system rules win over
+   defaults, regardless of specificity.
+2. Specificity: among rules of the same source, more match fields
+   wins. Each `context_predicates` entry counts as one match field.
+3. Load order: among ties on source and specificity, the earlier
+   rule wins.
+This means a user `[[rule]]` with the same shape as a default rule
+always wins. If you want your rule to lose to a more-specific default,
+add fewer match fields than the rule you want to override.
+ 
+### Validation
+ 
+Rules are validated when loaded. Errors are accumulated and reported
+together; if any rule fails validation, the entire file is rejected
+(no rules loaded). Common errors:
+ 
+- Unknown field name: `Did you mean 'context_contains'?`
+- Unknown operator: `Did you mean 'gte'?`
+- Multiple operators in one predicate: must be exactly one per field.
+- Missing `severity` for `set_severity` action.
+Run `pydepgate scan --rules-file my.gate` once after editing to
+confirm everything parses.
+
 ## Design constraints
 
 - **Zero runtime dependencies.** Standard library only. This is a load-bearing design constraint, not a stylistic preference: every additional dependency is a supply-chain attack surface for a tool whose job is to defend against supply-chain attacks.
