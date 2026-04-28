@@ -103,7 +103,7 @@ You will get credit if I make the improvement, unless you request otherwise.
 3. Version of Python in use
    > Only 3.11, 3.12, 3.13, and beyond are in scope
 5. Working proof of concept (a reproducer artifact, a command line, and the observed output)
-  > Reports that consist primarily of AI-generated analysis without a verified reproducer will be closed with a request for verification.
+   > Reports that consist primarily of AI-generated analysis without a verified reproducer will be closed with a request for verification.
 5. Explanation of how this vulnerability could be used or if applicable potential killchains.
 6. Please confirm if you'd like credit or prefer to be anonymous.
 7. (optional) If you have found a way to fix this, please share the fix so I can validate it. This is not required, but greatly appreciated.
