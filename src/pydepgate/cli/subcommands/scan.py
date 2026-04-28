@@ -45,6 +45,7 @@ from pydepgate.engines.base import (
 )
 from pydepgate.engines.static import StaticEngine
 from pydepgate.traffic_control.triage import FileKind
+from pydepgate.cli.peek_args import build_peek_enricher, peek_chain_enabled
 
 
 _SDIST_SUFFIXES = (".tar.gz", ".tgz", ".tar.bz2", ".tar.xz", ".tar")
@@ -213,7 +214,10 @@ def run(args: argparse.Namespace) -> int:
             )
     for warning in loaded.warnings:
         sys.stderr.write(f"warning: {warning}\n")
-
+    enrichers = []
+    peek_enricher = build_peek_enricher(args)
+    if peek_enricher is not None:
+        enrichers.append(peek_enricher)
     engine = StaticEngine(
         analyzers=[
             EncodingAbuseAnalyzer(),
@@ -222,6 +226,7 @@ def run(args: argparse.Namespace) -> int:
             SuspiciousStdlibAnalyzer(),
             CodeDensityAnalyzer(),
         ],
+        enrichers=enrichers,
         rules=all_rules,
         deep_mode=args.deep,
     )
@@ -360,7 +365,8 @@ def _render_and_exit_code(result: ScanResult, args: argparse.Namespace) -> int:
         statistics=result.statistics,
         diagnostics=result.diagnostics,
     )
-
+    peek_chain = peek_chain_enabled(args)
+    
     # Render in the requested format.
     if args.format == "json":
         render_json(filtered, sys.stdout)
@@ -368,7 +374,7 @@ def _render_and_exit_code(result: ScanResult, args: argparse.Namespace) -> int:
         render_sarif_stub(sys.stdout)
         return exit_codes.TOOL_ERROR
     else:
-        render_human(filtered, sys.stdout, no_color=args.no_color, ci_mode=args.ci)
+        render_human(filtered, sys.stdout, no_color=args.no_color, ci_mode=args.ci, peek_chain=peek_chain)
 
     # Compute exit code from the appropriate finding set.
     findings_for_exit = (

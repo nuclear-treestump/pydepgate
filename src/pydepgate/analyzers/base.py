@@ -62,7 +62,16 @@ class Scope(IntEnum):
 
 @dataclass(frozen=True)
 class Signal:
-    """A single notable pattern detected by an analyzer."""
+    """A single notable pattern detected by an analyzer.
+
+    The `enrichment_hints` field carries names of enrichers (see
+    `pydepgate.enrichers`) that the analyzer wants invoked on this
+    signal. An empty frozenset (the default) means no enrichment is
+    requested. The hint is set by the analyzer at construction time
+    based on the analyzer's local knowledge of the data; the
+    enricher uses the hint as a coarse filter before applying its
+    own (size, format, budget) criteria.
+    """
     analyzer: str
     signal_id: str
     confidence: Confidence
@@ -70,7 +79,7 @@ class Signal:
     location: SourceLocation
     description: str
     context: dict[str, Any] = field(default_factory=dict)
-
+    enrichment_hints: frozenset[str] = field(default_factory=frozenset)
 
 class Analyzer(ABC):
     """Base class for analyzers.

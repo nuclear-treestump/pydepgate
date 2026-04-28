@@ -52,6 +52,36 @@ SIGNAL_EXPLANATIONS = {
             "obfuscation."
         ),
     },
+    "ENC002": {
+        "description": (
+            "Deeply-nested encoded payload: a string literal that, when "
+            "passed through the unwrap loop, required 2+ transformations "
+            "to reach a terminal form (or exhausted the depth limit "
+            "with more decoding still possible)."
+        ),
+        "why_it_matters": (
+            "Single-layer encoding (base64-then-exec) is the LiteLLM "
+            "1.82.8 attack pattern; one decode step is enough to defeat "
+            "naive string-match scanners. Nested encoding (b64 of zlib "
+            "of b64 of source) exists specifically to defeat the next "
+            "layer of static analysis: a scanner that sees and decodes "
+            "the outer base64 still has to decompress and decode again "
+            "to reach the actual payload. Each additional layer is "
+            "evidence of intent to evade. Three or more layers, or any "
+            "chain that wanted to keep going past the unwrap depth "
+            "limit, has no benign interpretation we have ever observed."
+        ),
+        "common_evasions": [
+            "Splitting the encoded payload across multiple variables ",
+            "and concatenating before decode (string_ops STR-class "
+            "signals catch the assembly).",
+            "Using uncommon encoding combinations (lzma + b85, etc.) ",
+            "to fall outside the unwrap loop's recognized transforms.",
+            "Encoding the inner payload as a Python int array then ",
+            "rebuilding it via a list comprehension (DENS042 catches ",
+            "the array shape).",
+        ],
+    },
     "DYN002": {
         "description": (
             "exec/eval/compile called at module scope with a "

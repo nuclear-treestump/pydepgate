@@ -81,6 +81,184 @@ DEFAULT_RULES = [
         ),
     ),
 
+    # ---------------------------------------------------------------------
+    # ENC002: deeply-nested encoded payload
+    #
+    # Emitted by the payload_peek enricher when the unwrap chain reaches
+    # 2+ transformations or exhausts the configured depth limit. The
+    # analyzer-side confidence reflects depth (AMBIGUOUS at 2,
+    # MEDIUM at 3, HIGH on exhaustion); these rules promote to severity
+    # based on file kind.
+    # ---------------------------------------------------------------------
+
+    Rule(
+        rule_id="default_enc002_in_pth",
+        source=RuleSource.DEFAULT,
+        match=RuleMatch(signal_id="ENC002", file_kind=FileKind.PTH),
+        effect=_set_severity(Severity.CRITICAL),
+        explain=(
+            "Any encoded payload in a .pth file is the LiteLLM 1.82.8 "
+            "shape; nesting it 2+ deep is gratuitous obfuscation on top "
+            "of an already-illegitimate use of the .pth vector. "
+            "CRITICAL regardless of unwrap depth or terminal kind."
+        ),
+    ),
+    Rule(
+        rule_id="default_enc002_in_sitecustomize",
+        source=RuleSource.DEFAULT,
+        match=RuleMatch(
+            signal_id="ENC002", file_kind=FileKind.SITECUSTOMIZE,
+        ),
+        effect=_set_severity(Severity.CRITICAL),
+        explain=(
+            "sitecustomize.py runs at every interpreter startup. "
+            "Encoded content of any kind is illegitimate here; nested "
+            "encoding is decisively malicious."
+        ),
+    ),
+    Rule(
+        rule_id="default_enc002_in_usercustomize",
+        source=RuleSource.DEFAULT,
+        match=RuleMatch(
+            signal_id="ENC002", file_kind=FileKind.USERCUSTOMIZE,
+        ),
+        effect=_set_severity(Severity.CRITICAL),
+        explain=(
+            "usercustomize.py shares sitecustomize's auto-execute "
+            "vector at user scope. Same reasoning."
+        ),
+    ),
+    Rule(
+        rule_id="default_enc002_in_setup_py_exhausted",
+        source=RuleSource.DEFAULT,
+        match=RuleMatch(
+            signal_id="ENC002",
+            file_kind=FileKind.SETUP_PY,
+            context_predicates={
+                "unwrap_status": ContextPredicate(
+                    op="eq", value="exhausted_depth",
+                ),
+            },
+        ),
+        effect=_set_severity(Severity.CRITICAL),
+        explain=(
+            "An encoded payload in setup.py that exceeded the configured "
+            "unwrap depth limit is the strongest possible signal short of "
+            "actual decoded content: legitimate setup.py code never wraps "
+            "anything more than once."
+        ),
+    ),
+    Rule(
+        rule_id="default_enc002_in_setup_py",
+        source=RuleSource.DEFAULT,
+        match=RuleMatch(signal_id="ENC002", file_kind=FileKind.SETUP_PY),
+        effect=_set_severity(Severity.HIGH),
+        explain=(
+            "Two or more layers of encoding around a payload in setup.py "
+            "is rarely innocent. Even when the unwrap loop completed "
+            "cleanly, the obfuscation pattern is a strong signal."
+        ),
+    ),
+    Rule(
+        rule_id="default_enc002_in_init_py_python_source",
+        source=RuleSource.DEFAULT,
+        match=RuleMatch(
+            signal_id="ENC002",
+            file_kind=FileKind.INIT_PY,
+            context_predicates={
+                "final_kind": ContextPredicate(
+                    op="eq", value="python_source",
+                ),
+            },
+        ),
+        effect=_set_severity(Severity.CRITICAL),
+        explain=(
+            "Nested encoding in __init__.py whose final form is Python "
+            "source has no benign interpretation: the package is hiding "
+            "executable code behind multiple decode steps."
+        ),
+    ),
+    Rule(
+        rule_id="default_enc002_in_init_py_exhausted",
+        source=RuleSource.DEFAULT,
+        match=RuleMatch(
+            signal_id="ENC002",
+            file_kind=FileKind.INIT_PY,
+            context_predicates={
+                "unwrap_status": ContextPredicate(
+                    op="eq", value="exhausted_depth",
+                ),
+            },
+        ),
+        effect=_set_severity(Severity.HIGH),
+        explain=(
+            "Encoded content in __init__.py that wanted to chain past "
+            "the unwrap depth limit. HIGH because some packages legitimately "
+            "ship deeply-nested encoded assets, but the pattern is "
+            "uncommon enough to surface."
+        ),
+    ),
+    Rule(
+        rule_id="default_enc002_in_init_py",
+        source=RuleSource.DEFAULT,
+        match=RuleMatch(signal_id="ENC002", file_kind=FileKind.INIT_PY),
+        effect=_set_severity(Severity.MEDIUM),
+        explain=(
+            "Two or more encoding layers around content in __init__.py. "
+            "Some packages legitimately ship encoded assets this deep; "
+            "MEDIUM surfaces the observation without overstating it."
+        ),
+    ),
+    Rule(
+        rule_id="default_enc002_exhausted_anywhere",
+        source=RuleSource.DEFAULT,
+        match=RuleMatch(
+            signal_id="ENC002",
+            context_predicates={
+                "unwrap_status": ContextPredicate(
+                    op="eq", value="exhausted_depth",
+                ),
+            },
+        ),
+        effect=_set_severity(Severity.HIGH),
+        explain=(
+            "An encoded payload that chained past the configured unwrap "
+            "depth limit. The chain would have continued; we stopped. "
+            "HIGH everywhere because this pattern essentially never "
+            "appears in legitimate code."
+        ),
+    ),
+    Rule(
+        rule_id="default_enc002_python_source_anywhere",
+        source=RuleSource.DEFAULT,
+        match=RuleMatch(
+            signal_id="ENC002",
+            context_predicates={
+                "final_kind": ContextPredicate(
+                    op="eq", value="python_source",
+                ),
+            },
+        ),
+        effect=_set_severity(Severity.HIGH),
+        explain=(
+            "Nested encoding around a Python source payload is the "
+            "exact obfuscation pattern used to defeat string-match "
+            "scanners. HIGH regardless of file kind."
+        ),
+    ),
+    Rule(
+        rule_id="default_enc002_anywhere",
+        source=RuleSource.DEFAULT,
+        match=RuleMatch(signal_id="ENC002"),
+        effect=_set_severity(Severity.MEDIUM),
+        explain=(
+            "Two or more encoding layers around a payload. MEDIUM "
+            "baseline; rule precedence promotes specific shapes (Python "
+            "source terminal, exhausted depth, certain file kinds) to "
+            "HIGH or CRITICAL above this."
+        ),
+    ),
+
     # -----------------------------------------------------------------------------
     # dynamic_execution rules
     # -----------------------------------------------------------------------------

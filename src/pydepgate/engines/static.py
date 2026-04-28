@@ -60,14 +60,15 @@ from pydepgate.parsers.pth import parse_pth, LineKind
 from pydepgate.parsers.pysource import SourceLocation, parse_python_source
 from pydepgate.rules.base import evaluate_signal
 from pydepgate.traffic_control.triage import FileKind, triage
+from pydepgate.enrichers.base import Enricher
 
 
 class StaticEngine:
     """Static analysis engine for pydepgate artifacts.
 
     The engine is stateless across scans: a single instance can serve
-    many scan calls. Analyzers, rules, and the deep_mode flag are
-    set at construction time and never mutated afterward.
+    many scan calls. Analyzers, enrichers, rules, and the deep_mode
+    flag are set at construction time and never mutated afterward.
 
     The per-file pipeline (`_scan_one_file`) does not touch instance
     state. This is a load-bearing property: when the engine is
@@ -81,6 +82,7 @@ class StaticEngine:
         analyzers: list[Analyzer],
         rules: list | None = None,
         deep_mode: bool = False,
+        enrichers: list[Enricher] | None = None,
     ) -> None:
         self._analyzers: tuple[Analyzer, ...] = tuple(analyzers)
         # Default to bundled rules if none provided. Allows tests to
@@ -91,6 +93,7 @@ class StaticEngine:
             rules = list(DEFAULT_RULES)
         self._rules = list(rules)
         self._deep_mode = deep_mode
+        self._enrichers: tuple[Enricher, ...] = tuple(enrichers or ())
 
     @property
     def rules(self) -> list:
@@ -101,6 +104,11 @@ class StaticEngine:
     def analyzers(self) -> tuple[Analyzer, ...]:
         """The analyzers configured for this engine, in registration order."""
         return self._analyzers
+    
+    @property
+    def enrichers(self) -> tuple[Enricher, ...]:
+        """The enrichers configured for this engine, in registration order."""
+        return self._enrichers
 
     @property
     def deep_mode(self) -> bool:
@@ -341,15 +349,22 @@ class StaticEngine:
         """Run the per-file scan pipeline. Pure function in call shape.
 
         Contract (load-bearing for future parallelism):
-          1. Does not mutate self. Reads `self._analyzers`,
-             `self._rules`, and `self._deep_mode` only.
-          2. Inputs and outputs are pickle-safe by construction
-             (FileScanInput and FileScanOutput hold only primitives,
-             enums, and tuples of frozen dataclasses).
-          3. Analyzers invoked here must be stateless across calls
-             (enforced by the Analyzer ABC contract).
-          4. Rule evaluation is a pure function of the triple
-             (signal, context, rules).
+        1. Does not mutate self. Reads `self._analyzers`,
+            `self._enrichers`, `self._rules`, and `self._deep_mode`
+            only.
+        2. Inputs and outputs are pickle-safe by construction
+            (FileScanInput and FileScanOutput hold only primitives,
+            enums, and tuples of frozen dataclasses).
+        3. Analyzers, enrichers, and rule evaluation invoked here
+            must all be stateless across calls (enforced by the
+            Analyzer ABC, Enricher ABC, and rule evaluator
+            contracts respectively).
+        4. Rule evaluation is a pure function of the triple
+            (signal, context, rules).
+        5. Enricher exceptions are caught here and recorded in
+            diagnostics; enrichment failure falls back to the
+            un-enriched signal stream so a buggy enricher cannot
+            block delivery of analyzer findings.
 
         Together these properties mean this method can be called in
         a worker process by a future ProcessPoolExecutor without
@@ -385,7 +400,7 @@ class StaticEngine:
                 ),
             )
 
-        # Step 3: Build the context and run the analyzer/rule pipeline.
+    # Step 3: Build the context and run the analyzer/rule pipeline.
         context = ScanContext(
             artifact_kind=inp.artifact_kind,
             artifact_identity=inp.artifact_identity,
@@ -397,6 +412,16 @@ class StaticEngine:
         signals = self._analyze_file(
             inp.content, decided_kind, context, diagnostics,
         )
+
+        # Step 3.5: Run enrichers on the signal stream.
+        # No-op when no enrichers are configured. Errors inside an
+        # enricher are caught and recorded in diagnostics; the chain
+        # proceeds with the un-enriched stream so a buggy enricher
+        # cannot block delivery of analyzer findings.
+        if self._enrichers:
+            signals = self._run_enrichers(
+                signals, inp.content, context, diagnostics,
+            )
 
         # Step 4: Evaluate signals against rules.
         findings: list[Finding] = []
@@ -433,6 +458,7 @@ class StaticEngine:
                 files_scanned=1,
                 signals_emitted=len(signals),
                 analyzers_run=len(self._select_analyzers_for_kind(decided_kind)),
+                enrichers_run=len(self._enrichers),
                 duration_seconds=duration,
             ),
         )
@@ -524,6 +550,47 @@ class StaticEngine:
         return self._analyze_python_source(
             content, context, diagnostics, analyzers,
         )
+
+    def _run_enrichers(
+        self,
+        signals: list[Signal],
+        content: bytes,
+        context: ScanContext,
+        diagnostics: list[str],
+    ) -> list[Signal]:
+        """Apply each registered enricher to the signal stream in order.
+
+        Each enricher receives the current (post-previous-enricher)
+        stream as a tuple and returns an iterable of Signals. The
+        return value is materialized as a tuple before passing to
+        the next enricher so each link in the chain works on an
+        immutable shape and final output is concrete by construction.
+
+        Errors in any enricher are caught and recorded in
+        diagnostics; the chain proceeds with the un-enriched stream
+        from before that enricher's invocation. Subsequent enrichers
+        still run on that fallback stream.
+
+        Why catch broadly: enrichment is opt-in decoration on top of
+        the analyzer pass. A bug in (say) payload_peek's magic-byte
+        detector must not block the user from seeing the underlying
+        DENS011 finding it was meant to enrich. The diagnostic
+        surface is the correct place to report the failure; aborting
+        the scan would lose findings the user needs.
+        """
+        current: tuple[Signal, ...] = tuple(signals)
+        for enricher in self._enrichers:
+            try:
+                current = tuple(enricher.enrich(current, content, context))
+            except Exception as exc:
+                diagnostics.append(
+                    f"enricher {enricher.name} raised: "
+                    f"{type(exc).__name__}: {exc}; "
+                    f"continuing with un-enriched signals"
+                )
+                # 'current' is unchanged; the next enricher will see
+                # the same stream this one received.
+        return list(current)
 
     def _analyze_python_source(
         self,
