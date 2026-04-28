@@ -1049,6 +1049,7 @@ class CodeDensityAnalyzer(Analyzer):
     alphabet, and Unicode anomalies) since .pth exec lines are single
     statements and AST-depth or docstring checks are not meaningful.
     """
+    safe_for_library_scan = True
 
     @property
     def name(self) -> str:

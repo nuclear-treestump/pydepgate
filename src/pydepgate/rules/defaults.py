@@ -773,5 +773,162 @@ DEFAULT_RULES = [
             "code can suppress."
         ),
     ),
+    # -----------------------------------------------------------------------------
+    # code_density rules: LIBRARY_PY (deep mode)
+    # -----------------------------------------------------------------------------
+    # Calibrated for the false-positive shapes that occur in real
+    # library code. Most signals fall into two buckets: "no legitimate
+    # use case" (Unicode anomalies, docstring smuggling) and "common
+    # in legitimate code" (entropy from UUIDs, structural patterns
+    # from generated code). Severities reflect the bucket.
+
+    Rule(
+        rule_id="default_dens001_in_library_py",
+        source=RuleSource.DEFAULT,
+        match=RuleMatch(signal_id="DENS001", file_kind=FileKind.LIBRARY_PY),
+        effect=_set_severity(Severity.LOW),
+        explain=(
+            "Token-dense lines in library code can be legitimate (vendored "
+            "minified bundles, generated parser tables) but warrant a look. "
+            "LOW severity in deep-mode library scans."
+        ),
+    ),
+    Rule(
+        rule_id="default_dens002_in_library_py",
+        source=RuleSource.DEFAULT,
+        match=RuleMatch(signal_id="DENS002", file_kind=FileKind.LIBRARY_PY),
+        effect=_set_severity(Severity.LOW),
+        explain=(
+            "Semicolon-chained statements appear occasionally in library "
+            "code (one-liners, doctest fragments). LOW severity in deep "
+            "mode; user rules can promote for stricter policies."
+        ),
+    ),
+    Rule(
+        rule_id="default_dens010_in_library_py",
+        source=RuleSource.DEFAULT,
+        match=RuleMatch(signal_id="DENS010", file_kind=FileKind.LIBRARY_PY),
+        effect=_set_severity(Severity.MEDIUM),
+        explain=(
+            "High-entropy strings in library code often turn out to be "
+            "UUIDs, embedded certificates, or base64 image assets. They "
+            "also occasionally turn out to be embedded payloads. MEDIUM "
+            "surfaces the observation without escalating to blocking "
+            "severity by default."
+        ),
+    ),
+    Rule(
+        rule_id="default_dens011_in_library_py",
+        source=RuleSource.DEFAULT,
+        match=RuleMatch(signal_id="DENS011", file_kind=FileKind.LIBRARY_PY),
+        effect=_set_severity(Severity.MEDIUM),
+        explain=(
+            "Base64-shaped strings in library code: same calibration as "
+            "DENS010 in the same context. Embedded assets are the main "
+            "false-positive class; payloads are the worst case."
+        ),
+    ),
+    Rule(
+        rule_id="default_dens020_in_library_py",
+        source=RuleSource.DEFAULT,
+        match=RuleMatch(signal_id="DENS020", file_kind=FileKind.LIBRARY_PY),
+        effect=_set_severity(Severity.INFO),
+        explain=(
+            "Vowel-poor identifiers are common in scientific Python "
+            "(NumPy-style abbreviations: nd, lhs, rhs, xt). INFO surfaces "
+            "the observation without contributing to exit-code escalation."
+        ),
+    ),
+    Rule(
+        rule_id="default_dens021_in_library_py",
+        source=RuleSource.DEFAULT,
+        match=RuleMatch(signal_id="DENS021", file_kind=FileKind.LIBRARY_PY),
+        effect=_set_severity(Severity.INFO),
+        explain=(
+            "PEP 8 confusable identifiers (l/O/I) are a style issue, not "
+            "a security one. Same severity as the anywhere rule."
+        ),
+    ),
+    Rule(
+        rule_id="default_dens030_in_library_py",
+        source=RuleSource.DEFAULT,
+        match=RuleMatch(signal_id="DENS030", file_kind=FileKind.LIBRARY_PY),
+        effect=_set_severity(Severity.HIGH),
+        explain=(
+            "Invisible Unicode characters in library code have no benign "
+            "use case. Trojan Source / CVE-2021-42574 territory regardless "
+            "of which file in the package contains them."
+        ),
+    ),
+    Rule(
+        rule_id="default_dens031_in_library_py",
+        source=RuleSource.DEFAULT,
+        match=RuleMatch(signal_id="DENS031", file_kind=FileKind.LIBRARY_PY),
+        effect=_set_severity(Severity.HIGH),
+        explain=(
+            "Homoglyph identifiers in library code are almost always an "
+            "attack indicator. The legitimate-non-Latin-naming false "
+            "positive is suppressible via a user rule for codebases that "
+            "intentionally use non-Latin variable names."
+        ),
+    ),
+    Rule(
+        rule_id="default_dens040_in_library_py",
+        source=RuleSource.DEFAULT,
+        match=RuleMatch(signal_id="DENS040", file_kind=FileKind.LIBRARY_PY),
+        effect=_set_severity(Severity.INFO),
+        explain=(
+            "AST depth disproportionate to line count is heavily "
+            "false-positive on legitimate generated code (Cython output, "
+            "parser-generator tables, regex compilations as Python "
+            "literals). INFO baseline for library context."
+        ),
+    ),
+    Rule(
+        rule_id="default_dens041_in_library_py",
+        source=RuleSource.DEFAULT,
+        match=RuleMatch(signal_id="DENS041", file_kind=FileKind.LIBRARY_PY),
+        effect=_set_severity(Severity.INFO),
+        explain=(
+            "Deep lambda/comprehension nesting is a stylistic choice in "
+            "functional Python codebases. INFO baseline for library "
+            "context; surfaces the observation without escalating."
+        ),
+    ),
+    Rule(
+        rule_id="default_dens042_in_library_py",
+        source=RuleSource.DEFAULT,
+        match=RuleMatch(signal_id="DENS042", file_kind=FileKind.LIBRARY_PY),
+        effect=_set_severity(Severity.LOW),
+        explain=(
+            "Byte-range integer arrays in library code are usually "
+            "lookup tables (Unicode categories, color palettes) or "
+            "cryptographic constants (S-boxes, magic values). LOW "
+            "baseline; rare malicious cases are still surfaced."
+        ),
+    ),
+    Rule(
+        rule_id="default_dens050_in_library_py",
+        source=RuleSource.DEFAULT,
+        match=RuleMatch(signal_id="DENS050", file_kind=FileKind.LIBRARY_PY),
+        effect=_set_severity(Severity.HIGH),
+        explain=(
+            "High-entropy docstrings are rare in legitimate library "
+            "code; they're a known smuggling pattern (docstring carries "
+            "the payload, runtime decodes via __doc__). HIGH baseline."
+        ),
+    ),
+    Rule(
+        rule_id="default_dens051_in_library_py",
+        source=RuleSource.DEFAULT,
+        match=RuleMatch(signal_id="DENS051", file_kind=FileKind.LIBRARY_PY),
+        effect=_set_severity(Severity.HIGH),
+        explain=(
+            "Reading __doc__ and passing it to a callable is rare in "
+            "library code. Introspection tooling does this legitimately "
+            "(can be suppressed via user rule); the rest is the "
+            "execution half of docstring-payload smuggling."
+        ),
+    ),
 
 ]
