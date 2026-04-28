@@ -25,6 +25,11 @@ from pydepgate.engines.base import (
 )
 
 from pydepgate.visualizers.density_map import render_density_map
+from pydepgate.visualizers.peek_render import (
+    ANSI as _PEEK_ANSI,
+    PLAIN as _PEEK_PLAIN,
+    render_decoded_block,
+)
 
 
 # ANSI color codes. Using direct codes to avoid a dependency on a
@@ -92,6 +97,7 @@ def render_human(
     stream: TextIO,
     no_color: bool = False,
     ci_mode: bool = False,
+    peek_chain: bool = False,
 ) -> None:
     """Render a ScanResult as colored, human-readable terminal output."""
     color = _color_enabled(no_color)
@@ -117,7 +123,7 @@ def render_human(
         for path, file_findings in groups.items():
             # Render all findings for this file.
             for finding in file_findings:
-                _render_finding(finding, stream, color, ci_mode)
+                _render_finding(finding, stream, color, ci_mode, peek_chain)
 
             # Render the density map for this file (no-op if color off or CI).
             if not ci_mode:
@@ -192,7 +198,8 @@ def _render_suppressed_finding(
 
 
 def _render_finding(
-    finding: Finding, stream: TextIO, color: bool, ci_mode: bool
+    finding: Finding, stream: TextIO, color: bool, ci_mode: bool,
+    peek_chain: bool = False,
 ) -> None:
     """Render a single finding."""
     sev_pre, sev_post = _severity_color(finding.severity, color)
@@ -228,7 +235,6 @@ def _render_finding(
     stream.write("\n")
     stream.write(f"  {sig.description}\n")
     if sig.context:
-        # Show a few key context fields if present, useful for diagnostics.
         interesting_keys = [
             "resolved_value", "matched_sensitive", "primitive",
             "decode_function", "namespace",
@@ -238,6 +244,19 @@ def _render_finding(
                 stream.write(
                     f"  {dim_pre}{key}: {sig.context[key]!r}{dim_post}\n"
                 )
+
+        # Render the payload_peek decoded block, if present. Summary
+        # mode runs whenever the block exists; verbose per-layer mode
+        # is gated on --peek-chain.
+        decoded = sig.context.get("decoded")
+        if decoded is not None:
+            scheme = _PEEK_ANSI if color else _PEEK_PLAIN
+            stream.write(render_decoded_block(
+                decoded,
+                verbose=peek_chain,
+                color=scheme,
+                indent="  ",
+            ))
     stream.write("\n")
 
 
@@ -264,7 +283,7 @@ def _render_statistics(result: ScanResult, stream: TextIO, color: bool) -> None:
 def render_json(result: ScanResult, stream: TextIO) -> None:
     """Render a ScanResult as a single JSON object on stdout."""
     payload = {
-        "schema_version": 1,
+        "schema_version": 2,
         "artifact": {
             "identity": result.artifact_identity,
             "kind": result.artifact_kind.value,

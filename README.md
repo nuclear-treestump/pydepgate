@@ -47,6 +47,14 @@ What works today:
   output modes.
 - Three output formats: human-readable terminal, JSON, and a stub for
   SARIF (planned for v0.5).
+- An optional payload-peek enricher (`--peek`) that safely
+  partial-decodes large encoded literals so you can see what's inside
+  without executing anything. Handles base64, hex, zlib, gzip, bzip2,
+  and lzma chains up to a configurable depth, classifies the terminal
+  payload (Python source, pickle, PE/ELF, archive, image), and emits
+  ENC002 when the unwrap chain is nested. Pickle data is detected
+  but never deserialized; decompression bombs are bounded by an
+  in-flight byte budget.
 
 What is in active development:
 
@@ -156,6 +164,74 @@ Scan an entire library archive:
 pydepgate scan --deep somefile.whl
 ```
 
+### Payload peek
+
+Some malware compresses or base64-encodes its payload to slip past
+naive string-match scanners. The payload-peek enricher attempts safe
+partial decoding of large encoded literals so you can see what's
+actually inside a flagged blob without ever executing it. Off by
+default; opt in with `--peek`.
+
+| Flag | Env var | Default | Notes |
+|---|---|---|---|
+| `--peek` | `PYDEPGATE_PEEK` | off | Enable the enricher. Runs a bounded decode pass over hint-tagged signals. |
+| `--peek-depth N` | `PYDEPGATE_PEEK_DEPTH` | 3 | Max unwrap layers. Floor 1, ceiling 10. |
+| `--peek-budget BYTES` | `PYDEPGATE_PEEK_BUDGET` | 524288 (512 KB) | Cumulative output cap across all layers. Floor 1024. |
+| `--peek-chain` | `PYDEPGATE_PEEK_CHAIN` | off | Verbose per-layer breakdown with xxd-style hex dump in human output. |
+
+These behave as global flags — accepted before or after the subcommand:
+
+```bash
+pydepgate --peek scan litellm-1.82.8-py3-none-any.whl
+pydepgate scan litellm-1.82.8-py3-none-any.whl --peek --peek-chain
+```
+
+Scanning the LiteLLM 1.82.8 wheel with `--peek` surfaces the embedded
+payload directly:
+
+```
+[CRITICAL] DENS010 (code_density)
+  in litellm/proxy/proxy_server.py:130:14
+  string literal at line 130 has Shannon entropy 5.61 bits/char (length 34460)
+  decoded chain: base64 -> python_source (1 layer, 25.2 KB)
+  indicators: subprocess, base64.b64decode
+```
+
+The same `decoded` block lands in JSON output under
+`findings[*].context.decoded` regardless of `--peek-chain`, with the
+full chain, terminal classification, indicators list, and a hex-encoded
+preview of the unwrapped bytes. See `docs/json_schema_v2.md` for the
+field reference.
+
+#### Safety guarantees
+
+The peek loop is strictly read-only. Three specific guarantees worth
+stating explicitly:
+
+**Pickle is detected, never deserialized.** When the unwrap loop hits
+a Python pickle stream as a terminal layer, it sets
+`pickle_warning: true` in the decoded block and stops.
+`pickle.loads()` on attacker-controlled bytes is code execution by
+design — that is the bug being analyzed, not a tool action. Inspect
+such payloads with `pickletools.dis()` (which walks the opcode stream
+without executing it) in an isolated environment.
+
+**Decompression bombs are bounded.** Cumulative output across all
+unwrap layers is capped by `--peek-budget`. A 2 KB zlib stream that
+would expand to 2 GB trips the cap at 512 KB (default), records
+`unwrap_status: exhausted_budget`, and stops. The cap is enforced
+in-flight via incremental `decompressobj.decompress(data, max_length=N)`
+calls — bytes that exceed the budget are never materialized.
+
+**ENC002 fires on nested chains.** When the unwrap chain reaches
+depth 2 or exhausts `--peek-depth` with more transformations still
+possible, the enricher emits an `ENC002` signal carrying the decoded
+block plus a chain summary. A single base64 layer is unremarkable —
+it's the lingua franca of certificates, tokens, and config blobs.
+Stacked layers (`base64 → zlib → python_source`) are intent. Default
+severities for ENC002 vary by file kind and unwrap status; see
+`pydepgate.rules.defaults` for the full table.
+
 ### Exit codes
 
 - `0` Clean. No findings (or no findings above `--min-severity`).
@@ -177,12 +253,16 @@ All flags can be set via environment variables. Explicit flags override environm
 | `PYDEPGATE_MIN_SEVERITY` | `--min-severity` |
 | `PYDEPGATE_STRICT_EXIT` | `--strict-exit` |
 | `PYDEPGATE_RULES_FILE` | `--rules-file` |
+| `PYDEPGATE_PEEK` | `--peek` |
+| `PYDEPGATE_PEEK_DEPTH` | `--peek-depth` |
+| `PYDEPGATE_PEEK_BUDGET` | `--peek-budget` |
+| `PYDEPGATE_PEEK_CHAIN` | `--peek-chain` |
 
 ## What pydepgate detects
 
 The current analyzer set covers five major classes of suspicious behavior in startup vectors:
 
-**Encoding abuse (ENC001).** Patterns where encoded content is decoded and executed in a single chain, e.g. `exec(base64.b64decode(payload))`. Catches base64, hex, codec-based, zlib, bz2, lzma, and gzip variants.
+**Encoding abuse (ENC001, ENC002).** Patterns where encoded content is decoded and executed in a single chain, e.g. `exec(base64.b64decode(payload))`. Catches base64, hex, codec-based, zlib, bz2, lzma, and gzip variants. With `--peek` enabled, ENC002 also fires when the partial-decoder unwrap loop reaches 2+ chain layers or exhausts its configured depth — strong evidence that a literal is intentionally obfuscated rather than a benign encoded blob.
 
 **Dynamic execution (DYN001-007).** Direct calls to `exec`, `eval`, `compile`, or `__import__`; access to exec primitives via `getattr`, `globals()`, `locals()`, `vars()`, or `__builtins__` subscripts; compile-then-exec across the file; and aliased call shapes that catch `e = exec; e(...)` evasions.
 
@@ -462,6 +542,10 @@ analyzers/         structured representations -> raw signals
   string_ops          STR001-004
   suspicious_stdlib   STDLIB001-003
   density_analyzer    DENS001-051
+enrichers/         signal hints -> enriched signal context
+  _magic.py           magic-byte tables and ASCII-alphabet predicates
+  _unwrap.py          bounded multi-layer decode/decompress loop
+  payload_peek        ENC002 emission and decoded context block
 rules/             signals + context -> severity-rated findings
   base.py             rule data model and matching logic
   defaults.py         default rule set (90+ rules across all signals)
