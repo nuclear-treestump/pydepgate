@@ -149,6 +149,12 @@ Apply a custom rules file:
 pydepgate scan some-package.whl --rules-file company-rules.gate
 ```
 
+Scan an entire library archive:
+> Recommend using --min-severity as this is noisy by design.
+```bash
+pydepgate scan --deep somefile.whl
+```
+
 ### Exit codes
 
 - `0` Clean. No findings (or no findings above `--min-severity`).
