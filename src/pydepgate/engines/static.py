@@ -40,6 +40,7 @@ from __future__ import annotations
 import time
 from dataclasses import replace
 from pathlib import Path
+from typing import Callable
 
 from pydepgate.analyzers.base import Analyzer, Signal
 from pydepgate.engines.base import (
@@ -226,79 +227,111 @@ class StaticEngine:
             output=output,
         )
 
-    def scan_wheel(self, path: Path) -> ScanResult:
-        """Scan a wheel file by enumerating its entries and analyzing each."""
-        from pydepgate.parsers.wheel import (
-            iter_wheel_files_with_diagnostics,
-            SkippedEntry as WheelSkippedEntry,
-            WheelEntry,
-        )
-        return self._scan_artifact_with_enumerator(
-            identity=str(path),
-            artifact_kind=ArtifactKind.WHEEL,
-            enumerate_fn=lambda: iter_wheel_files_with_diagnostics(path),
-            extract_entry=lambda item: (
-                (item[0].internal_path, item[0].content)
-                if isinstance(item[0], WheelEntry)
-                else None
-            ),
-            extract_skipped=lambda item: (
-                SkippedFile(
-                    internal_path=item[0].raw_name,
-                    reason=item[0].reason,
-                )
-                if isinstance(item[0], WheelSkippedEntry)
-                else None
-            ),
-        )
+    def scan_wheel(
+            self,
+            path: Path,
+            *,
+            progress_callback: Callable[[int, int], None] | None = None,
+        ) -> ScanResult:
+            """Scan a wheel file by enumerating its entries and analyzing each.
 
-    def scan_sdist(self, path: Path) -> ScanResult:
-        """Scan an sdist file by enumerating its entries."""
-        from pydepgate.parsers.sdist import (
-            iter_sdist_files_with_diagnostics,
-            SkippedEntry as SdistSkippedEntry,
-            SdistEntry,
-        )
-        return self._scan_artifact_with_enumerator(
-            identity=str(path),
-            artifact_kind=ArtifactKind.SDIST,
-            enumerate_fn=lambda: iter_sdist_files_with_diagnostics(path),
-            extract_entry=lambda item: (
-                (item.internal_path, item.content)
-                if isinstance(item, SdistEntry)
-                else None
-            ),
-            extract_skipped=lambda item: (
-                SkippedFile(internal_path=item.raw_name, reason=item.reason)
-                if isinstance(item, SdistSkippedEntry)
-                else None
-            ),
-        )
-
-    def scan_installed(self, package_name: str) -> ScanResult:
-        """Scan the files of an installed package by name."""
-        from pydepgate.introspection.installed import (
-            iter_installed_package_files,
-            InstalledPackageNotFound,
-        )
-        try:
-            files_iter = iter_installed_package_files(package_name)
-        except InstalledPackageNotFound:
-            return ScanResult(
-                artifact_identity=package_name,
-                artifact_kind=ArtifactKind.INSTALLED_ENV,
-                findings=(),
-                skipped=(),
-                statistics=ScanStatistics(),
-                diagnostics=(f"package not installed: {package_name}",),
+            Args:
+                path: Path to the .whl file.
+                progress_callback: Optional callable invoked once per file
+                    during Phase 2 of the scan, with (completed, total)
+                    where total is the number of in-scope files. Used by
+                    the CLI to render a progress bar; pass None to scan
+                    silently.
+            """
+            from pydepgate.parsers.wheel import (
+                iter_wheel_files_with_diagnostics,
+                SkippedEntry as WheelSkippedEntry,
+                WheelEntry,
             )
-        return self._scan_artifact_with_enumerator(
-            identity=package_name,
-            artifact_kind=ArtifactKind.INSTALLED_ENV,
-            enumerate_fn=lambda: ((f, None) for f in files_iter),
-            extract_entry=lambda item: (item[0].internal_path, item[0].content),
-            extract_skipped=lambda item: None,
-        )
+            return self._scan_artifact_with_enumerator(
+                identity=str(path),
+                artifact_kind=ArtifactKind.WHEEL,
+                enumerate_fn=lambda: iter_wheel_files_with_diagnostics(path),
+                extract_entry=lambda item: (
+                    (item[0].internal_path, item[0].content)
+                    if isinstance(item[0], WheelEntry)
+                    else None
+                ),
+                extract_skipped=lambda item: (
+                    SkippedFile(
+                        internal_path=item[0].raw_name,
+                        reason=item[0].reason,
+                    )
+                    if isinstance(item[0], WheelSkippedEntry)
+                    else None
+                ),
+                progress_callback=progress_callback,
+            )
+
+    def scan_sdist(
+            self,
+            path: Path,
+            *,
+            progress_callback: Callable[[int, int], None] | None = None,
+        ) -> ScanResult:
+            """Scan an sdist file by enumerating its entries.
+
+            See scan_wheel for the progress_callback contract.
+            """
+            from pydepgate.parsers.sdist import (
+                iter_sdist_files_with_diagnostics,
+                SkippedEntry as SdistSkippedEntry,
+                SdistEntry,
+            )
+            return self._scan_artifact_with_enumerator(
+                identity=str(path),
+                artifact_kind=ArtifactKind.SDIST,
+                enumerate_fn=lambda: iter_sdist_files_with_diagnostics(path),
+                extract_entry=lambda item: (
+                    (item.internal_path, item.content)
+                    if isinstance(item, SdistEntry)
+                    else None
+                ),
+                extract_skipped=lambda item: (
+                    SkippedFile(internal_path=item.raw_name, reason=item.reason)
+                    if isinstance(item, SdistSkippedEntry)
+                    else None
+                ),
+                progress_callback=progress_callback,
+            )
+    def scan_installed(
+            self,
+            package_name: str,
+            *,
+            progress_callback: Callable[[int, int], None] | None = None,
+        ) -> ScanResult:
+            """Scan the files of an installed package by name.
+
+            See scan_wheel for the progress_callback contract.
+            """
+            from pydepgate.introspection.installed import (
+                iter_installed_package_files,
+                InstalledPackageNotFound,
+            )
+            try:
+                files_iter = iter_installed_package_files(package_name)
+            except InstalledPackageNotFound:
+                return ScanResult(
+                    artifact_identity=package_name,
+                    artifact_kind=ArtifactKind.INSTALLED_ENV,
+                    findings=(),
+                    skipped=(),
+                    statistics=ScanStatistics(),
+                    diagnostics=(f"package not installed: {package_name}",),
+                )
+            return self._scan_artifact_with_enumerator(
+                identity=package_name,
+                artifact_kind=ArtifactKind.INSTALLED_ENV,
+                enumerate_fn=lambda: ((f, None) for f in files_iter),
+                extract_entry=lambda item: (item[0].internal_path, item[0].content),
+                extract_skipped=lambda item: None,
+                progress_callback=progress_callback,
+            )
 
     # ========================================================================
     # The per-file pipeline (pure-function spine)
@@ -562,76 +595,89 @@ class StaticEngine:
     # ========================================================================
 
     def _scan_artifact_with_enumerator(
-        self,
-        identity: str,
-        artifact_kind: ArtifactKind,
-        enumerate_fn,
-        extract_entry,
-        extract_skipped,
-    ) -> ScanResult:
-        """Run the full pipeline over the output of an entry enumerator.
+            self,
+            identity: str,
+            artifact_kind: ArtifactKind,
+            enumerate_fn,
+            extract_entry,
+            extract_skipped,
+            progress_callback: Callable[[int, int], None] | None = None,
+        ) -> ScanResult:
+            """Run the full pipeline over the output of an entry enumerator.
 
-        Three phases:
-          1. Enumerate the artifact and build FileScanInputs.
-          2. Run _scan_one_file over each input. (Today serial; this
-             is the line that becomes a process pool later.)
-          3. Aggregate per-file outputs into a single ScanResult.
+            Three phases:
+            1. Enumerate the artifact and build FileScanInputs.
+            2. Run _scan_one_file over each input. (Today serial; this
+                is the line that becomes a process pool later.)
+            3. Aggregate per-file outputs into a single ScanResult.
 
-        Each caller provides:
-          - enumerate_fn: returns an iterable of items.
-          - extract_entry: given an item, return (path, bytes) or None.
-          - extract_skipped: given an item, return a SkippedFile or None.
-        """
-        started_at = time.perf_counter()
+            Each caller provides:
+            - enumerate_fn: returns an iterable of items.
+            - extract_entry: given an item, return (path, bytes) or None.
+            - extract_skipped: given an item, return a SkippedFile or None.
+            - progress_callback: optional callable invoked once per file
+                in Phase 2, with (completed, total). Receives `total =
+                len(inputs)`, i.e. only files that survived Phase 1
+                triage. Failures inside the callback are swallowed so a
+                broken progress bar can never abort a scan.
+            """
+            started_at = time.perf_counter()
 
-        # ---- Phase 1: enumerate -------------------------------------------
-        try:
-            items = list(enumerate_fn())
-        except Exception as exc:
-            return ScanResult(
-                artifact_identity=identity,
+            # ---- Phase 1: enumerate -------------------------------------------
+            try:
+                items = list(enumerate_fn())
+            except Exception as exc:
+                return ScanResult(
+                    artifact_identity=identity,
+                    artifact_kind=artifact_kind,
+                    findings=(),
+                    skipped=(),
+                    statistics=ScanStatistics(
+                        duration_seconds=time.perf_counter() - started_at,
+                    ),
+                    diagnostics=(f"failed to enumerate {identity}: {exc}",),
+                )
+
+            pre_skipped: list[SkippedFile] = []
+            inputs: list[FileScanInput] = []
+            for item in items:
+                skipped = extract_skipped(item)
+                if skipped is not None:
+                    pre_skipped.append(skipped)
+                    continue
+                entry = extract_entry(item)
+                if entry is None:
+                    continue
+                internal_path, content = entry
+                inputs.append(FileScanInput(
+                    content=content,
+                    internal_path=internal_path,
+                    artifact_kind=artifact_kind,
+                    artifact_identity=identity,
+                    forced_file_kind=None,
+                ))
+
+            # ---- Phase 2: per-file scans --------------------------------------
+            # When parallelism lands, the loop body becomes:
+            #   futures = [executor.submit(self._scan_one_file, inp) for inp in inputs]
+            #   for i, future in enumerate(as_completed(futures), start=1):
+            #       outputs.append(future.result())
+            #       _safe_progress(progress_callback, i, total)
+            # The progress_callback contract still works under that shape.
+            total = len(inputs)
+            outputs: list[FileScanOutput] = []
+            for i, inp in enumerate(inputs, start=1):
+                outputs.append(self._scan_one_file(inp))
+                _safe_progress(progress_callback, i, total)
+
+            # ---- Phase 3: aggregate -------------------------------------------
+            return self._aggregate_outputs(
+                identity=identity,
                 artifact_kind=artifact_kind,
-                findings=(),
-                skipped=(),
-                statistics=ScanStatistics(
-                    duration_seconds=time.perf_counter() - started_at,
-                ),
-                diagnostics=(f"failed to enumerate {identity}: {exc}",),
+                outputs=outputs,
+                pre_skipped=tuple(pre_skipped),
+                started_at=started_at,
             )
-
-        pre_skipped: list[SkippedFile] = []
-        inputs: list[FileScanInput] = []
-        for item in items:
-            skipped = extract_skipped(item)
-            if skipped is not None:
-                pre_skipped.append(skipped)
-                continue
-            entry = extract_entry(item)
-            if entry is None:
-                continue
-            internal_path, content = entry
-            inputs.append(FileScanInput(
-                content=content,
-                internal_path=internal_path,
-                artifact_kind=artifact_kind,
-                artifact_identity=identity,
-                forced_file_kind=None,
-            ))
-
-        # ---- Phase 2: per-file scans --------------------------------------
-        # When parallelism lands, this is the line that changes:
-        #   outputs = list(executor.map(self._scan_one_file, inputs))
-        # Everything else stays.
-        outputs = [self._scan_one_file(inp) for inp in inputs]
-
-        # ---- Phase 3: aggregate -------------------------------------------
-        return self._aggregate_outputs(
-            identity=identity,
-            artifact_kind=artifact_kind,
-            outputs=outputs,
-            pre_skipped=tuple(pre_skipped),
-            started_at=started_at,
-        )
 
     def _aggregate_outputs(
         self,
@@ -730,3 +776,24 @@ def _remap_signal_location(signal: Signal, base_line: int):
         column=signal.location.column,
     )
     return replace(signal, location=new_location)
+
+def _safe_progress(
+    callback: Callable[[int, int], None] | None,
+    completed: int,
+    total: int,
+) -> None:
+    """Invoke a progress callback, swallowing any exception.
+
+    The progress callback is a UX nicety, not a correctness
+    requirement. A buggy bar must never be allowed to abort a scan.
+    Errors are silently dropped here; the user might see a glitchy
+    bar but the scan completes.
+    """
+    if callback is None:
+        return
+    try:
+        callback(completed, total)
+    except Exception:
+        # Intentionally broad: anything from the callback is a UX
+        # problem, not a scan problem. Swallow and continue.
+        pass
