@@ -1078,6 +1078,134 @@ RULE_EXPLANATIONS = {
         "applies_to": "All DENS051 signals",
         "effect": "severity = HIGH",
     },
+    # DENS rules in LIBRARY_PY context (deep mode)
+    "default_dens001_in_library_py": {
+        "description": "Sets DENS001 in library .py files (deep mode) to LOW.",
+        "why_it_matters": (
+            "Token-dense lines in library code can be vendored bundles "
+            "or generated parser output. LOW severity surfaces the "
+            "observation without crying wolf."
+        ),
+        "applies_to": "DENS001 signals in FileKind.LIBRARY_PY (deep mode)",
+        "effect": "severity = LOW",
+    },
+    "default_dens002_in_library_py": {
+        "description": "Sets DENS002 in library .py files (deep mode) to LOW.",
+        "why_it_matters": (
+            "Semicolon-chained statements appear occasionally in "
+            "legitimate library code. LOW baseline."
+        ),
+        "applies_to": "DENS002 signals in FileKind.LIBRARY_PY",
+        "effect": "severity = LOW",
+    },
+    "default_dens010_in_library_py": {
+        "description": "Sets DENS010 in library .py files (deep mode) to MEDIUM.",
+        "why_it_matters": (
+            "High-entropy strings in library code are common (UUIDs, "
+            "embedded certificates, base64 image assets) but occasionally "
+            "indicate embedded payloads. MEDIUM surfaces them without "
+            "contributing to a blocking exit code by default."
+        ),
+        "applies_to": "DENS010 signals in FileKind.LIBRARY_PY",
+        "effect": "severity = MEDIUM",
+    },
+    "default_dens011_in_library_py": {
+        "description": "Sets DENS011 in library .py files (deep mode) to MEDIUM.",
+        "why_it_matters": (
+            "Base64-shaped strings in library code: same calibration as "
+            "DENS010. Embedded assets are the main false-positive class."
+        ),
+        "applies_to": "DENS011 signals in FileKind.LIBRARY_PY",
+        "effect": "severity = MEDIUM",
+    },
+    "default_dens020_in_library_py": {
+        "description": "Sets DENS020 in library .py files (deep mode) to INFO.",
+        "why_it_matters": (
+            "Vowel-poor identifiers are common in scientific Python "
+            "(NumPy-style abbreviations). INFO so the signal does not "
+            "contribute to exit-code escalation."
+        ),
+        "applies_to": "DENS020 signals in FileKind.LIBRARY_PY",
+        "effect": "severity = INFO",
+    },
+    "default_dens021_in_library_py": {
+        "description": "Sets DENS021 in library .py files (deep mode) to INFO.",
+        "why_it_matters": (
+            "Confusable single-character identifiers (l/O/I) are a PEP 8 "
+            "issue regardless of file context. INFO baseline."
+        ),
+        "applies_to": "DENS021 signals in FileKind.LIBRARY_PY",
+        "effect": "severity = INFO",
+    },
+    "default_dens030_in_library_py": {
+        "description": "Sets DENS030 in library .py files (deep mode) to HIGH.",
+        "why_it_matters": (
+            "Invisible Unicode in any source has no benign use case. "
+            "Trojan Source / CVE-2021-42574 attack class regardless of "
+            "which file in the package contains it."
+        ),
+        "applies_to": "DENS030 signals in FileKind.LIBRARY_PY",
+        "effect": "severity = HIGH",
+    },
+    "default_dens031_in_library_py": {
+        "description": "Sets DENS031 in library .py files (deep mode) to HIGH.",
+        "why_it_matters": (
+            "Homoglyph identifiers in library code are almost always an "
+            "attack indicator. Suppressible via user rule for codebases "
+            "that intentionally use non-Latin naming."
+        ),
+        "applies_to": "DENS031 signals in FileKind.LIBRARY_PY",
+        "effect": "severity = HIGH",
+    },
+    "default_dens040_in_library_py": {
+        "description": "Sets DENS040 in library .py files (deep mode) to INFO.",
+        "why_it_matters": (
+            "AST depth disproportionate to line count is heavily false-"
+            "positive on Cython output, parser-generator tables, and "
+            "regex literals. INFO baseline for library context."
+        ),
+        "applies_to": "DENS040 signals in FileKind.LIBRARY_PY",
+        "effect": "severity = INFO",
+    },
+    "default_dens041_in_library_py": {
+        "description": "Sets DENS041 in library .py files (deep mode) to INFO.",
+        "why_it_matters": (
+            "Deep lambda/comprehension nesting is a stylistic choice in "
+            "functional Python codebases. INFO baseline."
+        ),
+        "applies_to": "DENS041 signals in FileKind.LIBRARY_PY",
+        "effect": "severity = INFO",
+    },
+    "default_dens042_in_library_py": {
+        "description": "Sets DENS042 in library .py files (deep mode) to LOW.",
+        "why_it_matters": (
+            "Byte-range integer arrays in library code are usually "
+            "lookup tables or cryptographic constants. LOW baseline; "
+            "rare malicious cases are still surfaced."
+        ),
+        "applies_to": "DENS042 signals in FileKind.LIBRARY_PY",
+        "effect": "severity = LOW",
+    },
+    "default_dens050_in_library_py": {
+        "description": "Sets DENS050 in library .py files (deep mode) to HIGH.",
+        "why_it_matters": (
+            "High-entropy docstrings are rare in legitimate library code "
+            "and are a known payload-smuggling pattern. HIGH baseline."
+        ),
+        "applies_to": "DENS050 signals in FileKind.LIBRARY_PY",
+        "effect": "severity = HIGH",
+    },
+    "default_dens051_in_library_py": {
+        "description": "Sets DENS051 in library .py files (deep mode) to HIGH.",
+        "why_it_matters": (
+            "Reading __doc__ and passing it to a callable in library "
+            "code is rare. Legitimate introspection tools do this and "
+            "can be suppressed via user rule; the rest is the execution "
+            "half of docstring-payload smuggling."
+        ),
+        "applies_to": "DENS051 signals in FileKind.LIBRARY_PY",
+        "effect": "severity = HIGH",
+    },
 }
 
 

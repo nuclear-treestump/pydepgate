@@ -10,6 +10,15 @@ name matter.
 
 Downstream layers (parsers, analyzers, rules) only ever see files that
 this module has approved.
+
+Deep mode (deep_mode=True):
+  Extends scope to include "library" .py files: ordinary Python source
+  that lives inside a package but isn't on a recognized startup vector.
+  Used by `pydepgate scan --deep` to surface obfuscation patterns
+  anywhere in a package, not just in setup.py / __init__.py / .pth.
+  Files inside excluded directories (tests/, docs/, __pycache__/, etc.)
+  remain skipped even in deep mode; deep mode does NOT mean "scan
+  everything indiscriminately."
 """
 
 from __future__ import annotations
@@ -27,6 +36,10 @@ class FileKind(Enum):
     INIT_PY = "init_py"
     SITECUSTOMIZE = "sitecustomize"
     USERCUSTOMIZE = "usercustomize"
+    LIBRARY_PY = "library_py"
+    """Ordinary Python source that's not on a startup vector. Only
+    produced by triage when deep_mode=True. Matched by the
+    DENSxxx_in_library_py default rules."""
     ENTRY_POINTS = "entry_points"
 
 
@@ -95,8 +108,23 @@ def _path_contains_excluded_directory(path: str) -> str | None:
     return None
 
 
-def triage(internal_path: str) -> TriageDecision:
-    """Decide whether a single file is in scope for pydepgate analysis."""
+def triage(
+    internal_path: str,
+    deep_mode: bool = False,
+) -> TriageDecision:
+    """Decide whether a single file is in scope for pydepgate analysis.
+
+    Args:
+        internal_path: The file's path within its containing artifact
+            (or a loose-file path).
+        deep_mode: When True, ordinary .py files outside startup
+            vectors return FileKind.LIBRARY_PY instead of SKIP.
+            Files inside excluded directories still skip; this flag
+            only upgrades the "not a known startup vector" cases.
+
+    Returns:
+        A TriageDecision describing the kind, reason, and depth.
+    """
     path = _normalize_path(internal_path).lstrip("/")
     parts = path.split("/")
     depth = len(parts) - 1
@@ -163,6 +191,18 @@ def triage(internal_path: str) -> TriageDecision:
                 reason="top-level setup.py",
                 depth=depth,
             )
+        # setup.py not at root: usually vendored or an example.
+        # In deep mode, treat it as library code IF it's not inside
+        # an excluded directory (tests/, docs/, examples/).
+        if deep_mode:
+            excluded = _path_contains_excluded_directory(path)
+            if excluded is None:
+                return TriageDecision(
+                    kind=FileKind.LIBRARY_PY,
+                    internal_path=path,
+                    reason="vendored setup.py treated as library code in deep mode",
+                    depth=depth,
+                )
         return TriageDecision(
             kind=FileKind.SKIP,
             internal_path=path,
@@ -196,14 +236,25 @@ def triage(internal_path: str) -> TriageDecision:
                 reason=f"top-level package __init__.py ({parent}/)",
                 depth=depth,
             )
-        # Deeper __init__.py files: skipped in v0.1, but still check
-        # exclusion so we can report a clearer reason.
+        # Deeper __init__.py files: skipped in default mode, treated
+        # as library code in deep mode (unless inside an excluded
+        # directory, which still skips).
         excluded = _path_contains_excluded_directory(path)
         if excluded is not None:
             return TriageDecision(
                 kind=FileKind.SKIP,
                 internal_path=path,
                 reason=f"inside excluded directory: {excluded}",
+                depth=depth,
+            )
+        if deep_mode:
+            return TriageDecision(
+                kind=FileKind.LIBRARY_PY,
+                internal_path=path,
+                reason=(
+                    f"package __init__.py at depth {depth} treated as "
+                    f"library code in deep mode"
+                ),
                 depth=depth,
             )
         return TriageDecision(
@@ -216,7 +267,9 @@ def triage(internal_path: str) -> TriageDecision:
     # EXCLUSION RULES
     # Nothing above matched, so we fall through to general exclusions.
 
-    # Excluded directories (tests/, docs/, __pycache__/, etc.).
+    # Excluded directories (tests/, docs/, __pycache__/, etc.). These
+    # remain skipped even in deep mode. Deep mode is "scan library
+    # code" not "scan everything indiscriminately."
     excluded = _path_contains_excluded_directory(path)
     if excluded is not None:
         return TriageDecision(
@@ -226,7 +279,8 @@ def triage(internal_path: str) -> TriageDecision:
             depth=depth,
         )
 
-    # Excluded extensions.
+    # Excluded extensions. These remain skipped in deep mode too;
+    # the density analyzer expects parseable Python source.
     for ext in _EXCLUDED_EXTENSIONS:
         if filename.endswith(ext):
             return TriageDecision(
@@ -236,7 +290,17 @@ def triage(internal_path: str) -> TriageDecision:
                 depth=depth,
             )
 
-    # Default: unknown file, out of scope.
+    # Default: unknown file.
+    # In deep mode, .py files reach here legitimately and become
+    # LIBRARY_PY; everything else (and all files in default mode)
+    # remain SKIP.
+    if deep_mode and filename.endswith(".py"):
+        return TriageDecision(
+            kind=FileKind.LIBRARY_PY,
+            internal_path=path,
+            reason="library code (deep mode)",
+            depth=depth,
+        )
     return TriageDecision(
         kind=FileKind.SKIP,
         internal_path=path,
@@ -245,6 +309,9 @@ def triage(internal_path: str) -> TriageDecision:
     )
 
 
-def triage_many(paths: list[str]) -> list[TriageDecision]:
+def triage_many(
+    paths: list[str],
+    deep_mode: bool = False,
+) -> list[TriageDecision]:
     """Triage a batch of paths. Convenience wrapper."""
-    return [triage(p) for p in paths]
+    return [triage(p, deep_mode=deep_mode) for p in paths]

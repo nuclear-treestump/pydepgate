@@ -14,6 +14,14 @@ Single-file mode (--single PATH):
   rather than a synthetic stand-in. The file's effective "kind"
   determines which analyzers run and which default rules apply; it
   is auto-detected from the filename or set explicitly with --as.
+
+Deep mode (--deep):
+  Extends the artifact scan to include ordinary library .py files
+  that triage would normally skip. Only the density analyzer runs
+  on those files (other analyzers' signals would produce too many
+  false positives without rule-layer promotion). Useful for finding
+  obfuscated code anywhere in a package, not just in startup vectors.
+  Incompatible with --single.
 """
 
 from __future__ import annotations
@@ -44,7 +52,11 @@ _SDIST_SUFFIXES = (".tar.gz", ".tgz", ".tar.bz2", ".tar.xz", ".tar")
 # Choices for the --as flag, mapped to the FileKind the engine will
 # treat the file as. These names are user-facing; FileKind values are
 # internal. Keep this dict in sync with the choices argparse exposes.
-_AS_KIND_CHOICES = ("setup_py", "init_py", "pth", "sitecustomize", "usercustomize")
+_AS_KIND_CHOICES = (
+    "setup_py", "init_py", "pth",
+    "sitecustomize", "usercustomize",
+    "library_py",
+)
 
 _AS_KIND_TO_FILE_KIND = {
     "setup_py": FileKind.SETUP_PY,
@@ -52,6 +64,7 @@ _AS_KIND_TO_FILE_KIND = {
     "pth": FileKind.PTH,
     "sitecustomize": FileKind.SITECUSTOMIZE,
     "usercustomize": FileKind.USERCUSTOMIZE,
+    "library_py": FileKind.LIBRARY_PY,
 }
 
 # Filenames that map naturally to a known startup-vector kind. Used
@@ -95,7 +108,8 @@ def register(subparsers) -> None:
             "auto-detected from the filename (.pth -> pth, "
             "setup.py/__init__.py/sitecustomize.py/usercustomize.py -> "
             "their natural kind, anything else -> setup_py for maximum "
-            "rule promotion). Override with --as."
+            "rule promotion). Override with --as. Incompatible with "
+            "--deep."
         ),
     )
     parser.add_argument(
@@ -107,7 +121,22 @@ def register(subparsers) -> None:
             "Override the file kind for --single mode. setup_py is the "
             "most permissive context (density rules promote to HIGH/"
             "CRITICAL there), making it the best default for iteration "
-            "testing of new signals."
+            "testing of new signals. library_py iterates on deep-mode "
+            "calibration."
+        ),
+    )
+    parser.add_argument(
+        "--deep",
+        action="store_true",
+        default=False,
+        help=(
+            "Deep scan: also analyze ordinary library .py files in "
+            "the artifact, not just startup vectors. Only the density "
+            "analyzer runs on library files (other analyzers' signals "
+            "would be too noisy outside startup-vector context). "
+            "Useful for finding obfuscation anywhere in a package. "
+            "Files inside excluded directories (tests/, docs/, etc.) "
+            "remain skipped. Incompatible with --single."
         ),
     )
     parser.set_defaults(func=run)
@@ -118,7 +147,7 @@ def run(args: argparse.Namespace) -> int:
     from pydepgate.rules.defaults import DEFAULT_RULES
     from pydepgate.rules.loader import GateFileError, load_user_rules
 
-    # Argument validation: exactly one of target/--single must be given.
+    # Argument validation.
     if args.single and args.target:
         sys.stderr.write(
             "error: cannot combine a positional target with --single. "
@@ -134,6 +163,15 @@ def run(args: argparse.Namespace) -> int:
     if args.as_kind and not args.single:
         sys.stderr.write(
             "error: --as only applies in --single mode.\n"
+        )
+        return exit_codes.TOOL_ERROR
+    if args.deep and args.single:
+        sys.stderr.write(
+            "error: --deep and --single are incompatible. --deep scans "
+            "entire artifacts (wheels, sdists, installed packages); "
+            "--single scans one file at a time. To iterate on a single "
+            "file with library-mode rules, use '--single PATH --as "
+            "library_py' instead.\n"
         )
         return exit_codes.TOOL_ERROR
 
@@ -172,6 +210,7 @@ def run(args: argparse.Namespace) -> int:
             CodeDensityAnalyzer(),
         ],
         rules=all_rules,
+        deep_mode=args.deep,
     )
 
     if args.single:
