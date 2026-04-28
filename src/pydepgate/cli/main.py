@@ -22,6 +22,13 @@ from pydepgate.cli.subcommands import (
 )
 from pydepgate.cli.subcommands.version import get_version
 
+from pydepgate.cli.peek_args import (
+    add_peek_arguments,
+    build_peek_enricher,
+    peek_chain_enabled,
+    validate_peek_args,
+)
+
 
 def _env_bool(name: str) -> bool:
     """Read a boolean environment variable.
@@ -130,6 +137,7 @@ def _add_global_flags(
                 "Env: PYDEPGATE_NO_MAP"
             ),
         )
+    add_peek_arguments(parser, is_subparser=is_subparser)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -220,6 +228,7 @@ def main(argv: list[str] | None = None) -> int:
     """Top-level entry point. Returns an exit code."""
     parser = build_parser()
     args = parser.parse_args(argv)
+    validate_peek_args(args)
 
     if not args.subcommand:
         parser.print_help()
