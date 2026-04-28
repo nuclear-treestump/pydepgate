@@ -36,6 +36,7 @@ from pydepgate.analyzers.string_ops import StringOpsAnalyzer
 from pydepgate.analyzers.suspicious_stdlib import SuspiciousStdlibAnalyzer
 from pydepgate.analyzers.density_analyzer import CodeDensityAnalyzer
 from pydepgate.cli import exit_codes
+from pydepgate.cli.progress import make_progress_callback
 from pydepgate.cli.reporter import (
     render_human, render_json, render_sarif_stub,
 )
@@ -139,6 +140,18 @@ def register(subparsers) -> None:
             "remain skipped. Incompatible with --single."
         ),
     )
+    parser.add_argument(
+        "--no-bar",
+        action="store_true",
+        default=False,
+        help=(
+            "Suppress the per-file progress bar shown during artifact "
+            "scans. The bar is automatically suppressed when stderr is "
+            "not a TTY (piped output, CI runs, redirected logs), so "
+            "this flag is mainly for users who want to silence it in "
+            "an interactive terminal. No effect in --single mode."
+        ),
+    )
     parser.set_defaults(func=run)
 
 
@@ -216,25 +229,54 @@ def run(args: argparse.Namespace) -> int:
     if args.single:
         result = _dispatch_single(engine, args.single, args.as_kind)
     else:
-        result = _dispatch_scan(engine, args.target)
+        # Build the progress bar callbacks. The factory returns
+        # no-ops when --no-bar is set or stderr isn't a TTY, so
+        # callers don't need to branch on those conditions.
+        update_progress, finish_progress = make_progress_callback(
+            no_bar=args.no_bar,
+        )
+        try:
+            result = _dispatch_scan(
+                engine, args.target,
+                progress_callback=update_progress,
+            )
+        finally:
+            # Always terminate the bar with a newline, even if the
+            # scan raised. Otherwise an exception traceback would
+            # render on the same line as the bar.
+            finish_progress()
     return _render_and_exit_code(result, args)
 
 
-def _dispatch_scan(engine: StaticEngine, target: str) -> ScanResult:
-    """Auto-detect target type and run the appropriate scan method."""
+def _dispatch_scan(
+    engine: StaticEngine,
+    target: str,
+    *,
+    progress_callback=None,
+) -> ScanResult:
+    """Auto-detect target type and run the appropriate scan method.
+
+    The progress_callback is threaded through to whichever engine
+    method handles the target. None means no progress bar (engine
+    treats it as a no-op).
+    """
     path = Path(target)
 
     if path.suffix == ".whl" and path.is_file():
-        return engine.scan_wheel(path)
+        return engine.scan_wheel(path, progress_callback=progress_callback)
 
     for suffix in _SDIST_SUFFIXES:
         if target.endswith(suffix):
             if path.is_file():
-                return engine.scan_sdist(path)
+                return engine.scan_sdist(
+                    path, progress_callback=progress_callback,
+                )
             break
 
     # Fallback: treat as installed package name.
-    return engine.scan_installed(target)
+    return engine.scan_installed(
+        target, progress_callback=progress_callback,
+    )
 
 
 def _dispatch_single(
