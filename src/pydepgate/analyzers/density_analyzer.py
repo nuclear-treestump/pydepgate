@@ -85,6 +85,7 @@ from pydepgate.analyzers.base import (
 )
 from pydepgate.analyzers._visitor import _ScopeTracker
 from pydepgate.parsers.pysource import ParsedPySource, SourceLocation
+from pydepgate.analyzers._enrichment import stash_value
 
 
 # ---------------------------------------------------------------------------
@@ -671,6 +672,16 @@ class _Visitor(_ScopeTracker):
         else:
             return
 
+        stashed, truncated = stash_value(value)
+        dens010_context: dict = {
+            "entropy": round(entropy, 4),
+            "length": len(s),
+            "value_preview": _value_preview(value),
+            "scope_name": self.current_scope.name.lower(),
+            "_full_value": stashed,
+        }
+        if truncated:
+            dens010_context["_full_value_truncated"] = True
         self.signals.append(Signal(
             analyzer=self._analyzer_name,
             signal_id="DENS010",
@@ -682,14 +693,9 @@ class _Visitor(_ScopeTracker):
                 f"{entropy:.2f} bits/char (length {len(s)}), "
                 f"consistent with base64, compressed, or encrypted content"
             ),
-            context={
-                "entropy": round(entropy, 4),
-                "length": len(s),
-                "value_preview": _value_preview(value),
-                "scope_name": self.current_scope.name.lower(),
-            },
+            context=dens010_context,
+            enrichment_hints=frozenset({"payload_peek"}),
         ))
-
     def _check_b64_alphabet(
         self,
         node: ast.Constant,
@@ -723,6 +729,15 @@ class _Visitor(_ScopeTracker):
         # high enough. The two signals are intentionally distinct
         # perspectives (entropy vs alphabet) and rules can suppress one
         # if the duplication is unwanted.
+        stashed, truncated = stash_value(value)
+        dens011_context: dict = {
+            "length": len(s),
+            "value_preview": _value_preview(s),
+            "scope_name": self.current_scope.name.lower(),
+            "_full_value": stashed,
+        }
+        if truncated:
+            dens011_context["_full_value_truncated"] = True
         self.signals.append(Signal(
             analyzer=self._analyzer_name,
             signal_id="DENS011",
@@ -734,11 +749,8 @@ class _Visitor(_ScopeTracker):
                 f"uses only base64-alphabet characters, may be an encoded "
                 f"payload even without an accompanying decode/exec call"
             ),
-            context={
-                "length": len(s),
-                "value_preview": _value_preview(s),
-                "scope_name": self.current_scope.name.lower(),
-            },
+            context=dens011_context,
+            enrichment_hints=frozenset({"payload_peek"}),
         ))
 
     def _check_docstring_entropy(self, node: ast.Constant) -> None:

@@ -325,9 +325,17 @@ def _finding_to_dict(finding: Finding) -> dict:
 
 
 def _serialize_context(context: dict) -> dict:
-    """Make a context dict JSON-safe by coercing tuples to lists."""
+    """Make a context dict JSON-safe by coercing tuples to lists.
+
+    Underscore-prefixed keys are pipeline-internal (carrying data
+    such as the stashed `_full_value` for enrichers) and are
+    omitted from JSON output to keep the wire format lean and to
+    avoid emitting raw payload bytes that consumers do not need.
+    """
     out = {}
     for key, value in context.items():
+        if key.startswith("_"):
+            continue
         if isinstance(value, tuple):
             out[key] = list(value)
         elif isinstance(value, (str, int, float, bool, type(None), list, dict)):
