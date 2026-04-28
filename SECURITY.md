@@ -1,5 +1,7 @@
 # Security Policy
 
+> Last Updated: 04/28/2026
+
 pydepgate is a security tool, which means the bar for its own security
 is higher than for ordinary software. A vulnerability in pydepgate is
 worse than a vulnerability in most projects of comparable size because
@@ -23,7 +25,7 @@ If you prefer email, you can reach the maintainer at
 `ikari@nuclear-treestump.com`. Email reports may take longer to
 acknowledge than GHSA reports.
 
-Do not file security issues on the public issue tracker.
+Please, do NOT file security issues on the public issue tracker.
 
 If you require E2EE communication, please contact me via email so I 
 can coordinate with you. I have Signal and PGP.
@@ -62,23 +64,60 @@ issue tracker using the bug report template:
   incorrect output for a non-security-impacting reason.
 - Documentation errors, even ones that could mislead a user about
   what pydepgate detects.
+- Third party interactions with pydepgate. I cannot anticipate how
+ other software will interact with pydepgate. I've done my best to adhere
+to a standard, but if you find interesting interactions, please raise it. 
 - Purely AI sourced reports without user input. I am one person, not
  a corporation and I don't have unlimited time. Please respect my time
 and I will respect yours.
+  - This is NOT meant to say "No AI assistance", just please verify your
+   findings first.
+- Malicious detections in test fixtures or tests/ directory. The tests are
+benign but look scary for the tool to test detection without detonating malware
+ on my only computer.
 
 If you're unsure whether something is in scope, err on the side of
 reporting it through the security channel. We would rather review a
 bug report through the security path than miss a real vulnerability
 because someone wasn't sure.
 
+## Not in either scope but appreciated
+
+These are items I would prefer raised as feature requests or PRs. The Vulnerability Report workflow 
+is the wrong tool for the job here. Please raise an Issue.
+
+- New detection methods for pydepgate. 
+- Expanded documentation on the existing API.
+- New operational modes.
+- Other ideas that I haven't thought of.
+
+Even if its just a conceptual idea, I will do my best to analyze and see if it is possible.
+
+You will get credit if I make the improvement, unless you request otherwise.
+
+## Submission Requirements
+
+1. Version of pydepgate in use
+   > `pydepgate --version`
+2. OS in use
+3. Version of Python in use
+   > Only 3.11, 3.12, 3.13, and beyond are in scope
+5. Working proof of concept (a reproducer artifact, a command line, and the observed output)
+  > Reports that consist primarily of AI-generated analysis without a verified reproducer will be closed with a request for verification.
+5. Explanation of how this vulnerability could be used or if applicable potential killchains.
+6. Please confirm if you'd like credit or prefer to be anonymous.
+7. (optional) If you have found a way to fix this, please share the fix so I can validate it. This is not required, but greatly appreciated.
+
 ## What to expect
 
 pydepgate is currently maintained by one person on a side-project
-schedule. The commitments below reflect that reality.
+schedule. I check my email daily. The commitments below reflect that reality.
 
 - **Acknowledgment.** I will acknowledge receipt within five business
   days. If you don't hear back in that window, the report didn't get
   to me, please send a follow-up.
+  - The five days is the ceiling, not the floor.
+  I will do my best to get back to you as fast as I am able. 
 - **Triage.** I will tell you whether the report is in scope and
   approximately what severity I'm assigning within two weeks.
 - **Fix.** Timeline depends on severity:
@@ -89,8 +128,12 @@ schedule. The commitments below reflect that reality.
 - **Disclosure.** I will coordinate disclosure with you. The default
   is to publish a security advisory after a fix is released, crediting
   the reporter unless they prefer to remain anonymous.
-- **CVEs** CVEs will be requested through GitHub's CNA process, provided
- I ever have to use that path as I haven't had to yet. 
+- **CVEs.** CVEs will be requested through GitHub's CNA process. I haven't had to
+ use that path yet, but the workflow is documented and I'll execute it when needed.
+- **Lack of Response.** If I have not responded with a fix or a coordinated extension
+within 90 days, the reporter is free to disclose publicly.
+  - Please reach out to me before it gets to this point. I do not want you to feel stuck and
+ I don't want to blindside my users.
 
 ## Credit
 
@@ -100,7 +143,10 @@ for the version that contains the fix, unless they prefer otherwise.
 
 pydepgate is a side project and does not offer monetary bug bounties. I 
 do not have the money to pay you and currently build radiators for a living.
+
 If you ARE a corporation looking for a security engineer, I am available.
+
+If my living situation changes, a paid bug bounty may be enacted.
 
 ## Safe Harbor
 
