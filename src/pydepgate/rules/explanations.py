@@ -808,7 +808,119 @@ RULE_EXPLANATIONS = {
         "applies_to": "All DENS010 signals",
         "effect": "severity = LOW",
     },
- 
+ "default_dens010_huge_anywhere": {
+        "description": (
+            "Escalates DENS010 to CRITICAL when the high-entropy string "
+            "is at least 10240 bytes long, regardless of which file "
+            "contains it."
+        ),
+        "why_it_matters": (
+            "Above 10KB, the legitimate uses of base64-or-similar encoded "
+            "string literals essentially evaporate. Embedded test "
+            "certificates are typically 1-3KB; embedded fonts and icons "
+            "are usually ~2-8KB; legitimate fixture data is rarely this "
+            "large. The 10KB-and-up band is dominated by intentionally "
+            "embedded code or configuration. The LiteLLM 1.82.8 "
+            "second-payload at proxy_server.py:130 is 34460 bytes; the "
+            "sibling .pth payload is 34501 bytes."
+        ),
+        "applies_to": "DENS010 in any file kind, when length >= 10240",
+        "effect": "Severity set to CRITICAL",
+    },
+    "default_dens010_long_anywhere": {
+        "description": (
+            "Escalates DENS010 to HIGH when the high-entropy string is "
+            "at least 1024 bytes long, regardless of file kind."
+        ),
+        "why_it_matters": (
+            "Above 1KB, high-entropy string literals are well past the "
+            "embedded-test-cert / embedded-asset band where most "
+            "legitimate uses live. Below 10KB they're not yet definitively "
+            "payloads, but they're worth surfacing at HIGH severity for "
+            "review. Users who ship larger encoded blobs intentionally "
+            "(certificates pinned for offline use, embedded model "
+            "weights) can suppress this rule with a user rule scoped to "
+            "their package."
+        ),
+        "applies_to": (
+            "DENS010 in init_py, library_py, or files without a more "
+            "specific high-baseline rule, when length >= 1024. Does not "
+            "downgrade rules for .pth, sitecustomize, or setup.py "
+            "(those baselines are already HIGH or CRITICAL)."
+        ),
+        "effect": "Severity set to HIGH",
+    },
+    "default_dens011_huge_anywhere": {
+        "description": (
+            "Escalates DENS011 to CRITICAL when the base64-shaped string "
+            "is at least 10240 bytes long, regardless of file kind."
+        ),
+        "why_it_matters": (
+            "A base64-alphabet string of 10KB or more in Python source "
+            "is not a thing legitimate code does. Every reference case "
+            "I've seen at this length is an encoded payload waiting to "
+            "be decoded. The signal complements DENS010_huge_anywhere: "
+            "DENS011 fires on alphabet membership without requiring "
+            "high entropy, catching cases where the string is "
+            "deliberately padded or chunked to look less suspicious."
+        ),
+        "applies_to": "DENS011 in any file kind, when length >= 10240",
+        "effect": "Severity set to CRITICAL",
+    },
+    "default_dens011_long_anywhere": {
+        "description": (
+            "Escalates DENS011 to HIGH when the base64-shaped string is "
+            "at least 1024 bytes long, regardless of file kind."
+        ),
+        "why_it_matters": (
+            "Past 1KB, base64-alphabet strings are well past the band "
+            "where embedded certificates and small assets live. Worth "
+            "surfacing at HIGH severity even in less-suspicious file "
+            "kinds. Suppress per-package via a user rule for legitimate "
+            "use cases."
+        ),
+        "applies_to": (
+            "DENS011 in init_py, library_py, or files without a more "
+            "specific high-baseline rule, when length >= 1024."
+        ),
+        "effect": "Severity set to HIGH",
+    },
+    "default_dens050_huge_anywhere": {
+        "description": (
+            "Escalates DENS050 to CRITICAL when the high-entropy "
+            "docstring is at least 10240 bytes long."
+        ),
+        "why_it_matters": (
+            "A docstring of 10KB or more with high entropy is the "
+            "docstring-as-payload pattern at scale. Legitimate "
+            "docstrings of this length tend to be technical references "
+            "or examples, with entropy in the 4.0-4.5 range; high-entropy "
+            "docstrings of this size are payloads. The pattern is "
+            "complete via DENS051 (dynamic __doc__ reference passed to "
+            "exec/eval) but the size signal alone is enough to escalate."
+        ),
+        "applies_to": "DENS050 in any file kind, when length >= 10240",
+        "effect": "Severity set to CRITICAL",
+    },
+    "default_dens050_long_anywhere": {
+        "description": (
+            "Escalates DENS050 to HIGH when the high-entropy docstring "
+            "is at least 1024 bytes long, regardless of file kind."
+        ),
+        "why_it_matters": (
+            "Examples-with-base64 in docstrings sometimes happen "
+            "legitimately, but rarely past 1KB. Above this threshold "
+            "the docstring is doing more than illustrating; it's "
+            "carrying content. HIGH severity surfaces these for review "
+            "without requiring the full docstring-as-payload pattern "
+            "(DENS051) to also be present."
+        ),
+        "applies_to": (
+            "DENS050 in any file kind without a more-specific "
+            "high-baseline rule, when length >= 1024."
+        ),
+        "effect": "Severity set to HIGH",
+    },
     # DENS011
     "default_dens011_in_pth": {
         "description": "Promotes DENS011 in .pth files to CRITICAL.",

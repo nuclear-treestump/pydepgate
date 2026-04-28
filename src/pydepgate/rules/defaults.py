@@ -19,6 +19,7 @@ from pydepgate.rules.base import (
     RuleEffect,
     RuleMatch,
     RuleSource,
+    ContextPredicate
 )
 from pydepgate.traffic_control.triage import FileKind
 
@@ -411,7 +412,24 @@ DEFAULT_RULES = [
         ),
     ),
     
-    # DENS010: high-entropy string literal
+# DENS010: high-entropy string literal
+    Rule(
+        rule_id="default_dens010_huge_anywhere",
+        source=RuleSource.DEFAULT,
+        match=RuleMatch(
+            signal_id="DENS010",
+            context_predicates={
+                "length": ContextPredicate(op="gte", value=10240),
+            },
+        ),
+        effect=_set_severity(Severity.CRITICAL),
+        explain=(
+            "High-entropy string literal of 10KB or more. No legitimate "
+            "use of base64-or-similar encoded content in Python source "
+            "extends to this length; the band above 10KB is essentially "
+            "always a payload. CRITICAL regardless of file kind."
+        ),
+    ),
     Rule(
         rule_id="default_dens010_in_pth",
         source=RuleSource.DEFAULT,
@@ -448,6 +466,24 @@ DEFAULT_RULES = [
         ),
     ),
     Rule(
+        rule_id="default_dens010_long_anywhere",
+        source=RuleSource.DEFAULT,
+        match=RuleMatch(
+            signal_id="DENS010",
+            context_predicates={
+                "length": ContextPredicate(op="gte", value=1024),
+            },
+        ),
+        effect=_set_severity(Severity.HIGH),
+        explain=(
+            "High-entropy string literal of 1KB or more. Past the "
+            "embedded-test-cert / embedded-icon size band, but below the "
+            "definitively-payload threshold. HIGH baseline; user rules "
+            "can suppress for packages that legitimately ship larger "
+            "encoded blobs."
+        ),
+    ),
+    Rule(
         rule_id="default_dens010_in_init_py",
         source=RuleSource.DEFAULT,
         match=RuleMatch(signal_id="DENS010", file_kind=FileKind.INIT_PY),
@@ -469,8 +505,24 @@ DEFAULT_RULES = [
             "(UUIDs, hashes, fixture data). LOW severity baseline."
         ),
     ),
-    
-    # DENS011: base64-alphabet string literal
+# DENS011: base64-alphabet string literal
+    Rule(
+        rule_id="default_dens011_huge_anywhere",
+        source=RuleSource.DEFAULT,
+        match=RuleMatch(
+            signal_id="DENS011",
+            context_predicates={
+                "length": ContextPredicate(op="gte", value=10240),
+            },
+        ),
+        effect=_set_severity(Severity.CRITICAL),
+        explain=(
+            "Base64-shaped string literal of 10KB or more. No legitimate "
+            "case I've ever seen in Python packaging extends a base64 "
+            "literal to this length; it's a payload. CRITICAL regardless "
+            "of file kind."
+        ),
+    ),
     Rule(
         rule_id="default_dens011_in_pth",
         source=RuleSource.DEFAULT,
@@ -490,6 +542,23 @@ DEFAULT_RULES = [
         explain=(
             "Long base64-alphabet strings in setup.py are rarely innocent "
             "and are often paired with a delayed decode-and-exec."
+        ),
+    ),
+    Rule(
+        rule_id="default_dens011_long_anywhere",
+        source=RuleSource.DEFAULT,
+        match=RuleMatch(
+            signal_id="DENS011",
+            context_predicates={
+                "length": ContextPredicate(op="gte", value=1024),
+            },
+        ),
+        effect=_set_severity(Severity.HIGH),
+        explain=(
+            "Base64-shaped string literal of 1KB or more. Past the "
+            "embedded-cert / embedded-asset band where most legitimate "
+            "uses live. HIGH baseline; user rules can suppress for "
+            "packages with intentional larger blobs."
         ),
     ),
     Rule(
@@ -707,7 +776,24 @@ DEFAULT_RULES = [
         ),
     ),
     
-    # DENS050: high-entropy docstring
+# DENS050: high-entropy docstring
+    Rule(
+        rule_id="default_dens050_huge_anywhere",
+        source=RuleSource.DEFAULT,
+        match=RuleMatch(
+            signal_id="DENS050",
+            context_predicates={
+                "length": ContextPredicate(op="gte", value=10240),
+            },
+        ),
+        effect=_set_severity(Severity.CRITICAL),
+        explain=(
+            "High-entropy docstring of 10KB or more. Legitimate "
+            "docstrings of this length and entropy do not exist; "
+            "this is the docstring-as-payload pattern at scale. "
+            "CRITICAL regardless of file kind."
+        ),
+    ),
     Rule(
         rule_id="default_dens050_in_pth",
         source=RuleSource.DEFAULT,
@@ -728,6 +814,22 @@ DEFAULT_RULES = [
             "High-entropy docstrings in setup.py have been used in real "
             "attacks to hide payload text from naive readers; the "
             "docstring is then read back via __doc__ and executed."
+        ),
+    ),
+    Rule(
+        rule_id="default_dens050_long_anywhere",
+        source=RuleSource.DEFAULT,
+        match=RuleMatch(
+            signal_id="DENS050",
+            context_predicates={
+                "length": ContextPredicate(op="gte", value=1024),
+            },
+        ),
+        effect=_set_severity(Severity.HIGH),
+        explain=(
+            "High-entropy docstring of 1KB or more. Past the band where "
+            "examples-with-base64 in docstrings live; this is large "
+            "enough to be worth flagging. HIGH baseline."
         ),
     ),
     Rule(
