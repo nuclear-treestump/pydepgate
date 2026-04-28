@@ -4,6 +4,8 @@ Core data structures and evaluator for the pydepgate rules engine.
 This module defines:
   - RuleAction, RuleSource: enums describing what a rule does and
     where it came from.
+  - ContextPredicate: a typed predicate over a single signal.context
+    field (gte, lte, contains, in, etc).
   - RuleMatch: the match conditions a rule checks against a signal
     plus its scan context. All non-None fields must match.
   - RuleEffect: what to do when a rule matches.
@@ -13,6 +15,12 @@ This module defines:
 
 The evaluator is pure: same inputs always produce the same outputs.
 It does not maintain state between calls.
+
+Backward-compatibility note: the legacy `RuleMatch.context_contains`
+field is now a shim. At construction time it's normalized into
+`context_predicates` as a dict of `eq` predicates. Both fields are
+preserved on the dataclass for inspection, but only
+`context_predicates` is consulted at match time.
 """
 
 from __future__ import annotations
@@ -47,6 +55,92 @@ class RuleSource(Enum):
     USER = "user"
 
 
+# ---------------------------------------------------------------------------
+# Context predicates
+# ---------------------------------------------------------------------------
+
+# Operators supported by ContextPredicate. Centralized so the loader's
+# validation and the evaluator's dispatch share one source of truth.
+VALID_OPERATORS = frozenset({
+    # Numeric / comparable
+    "eq", "ne", "gt", "gte", "lt", "lte",
+    # String
+    "contains", "startswith", "endswith",
+    # Collection membership
+    "in", "not_in",
+})
+
+
+@dataclass(frozen=True)
+class ContextPredicate:
+    """A predicate over a single field of Signal.context.
+
+    Each predicate has an operator and a value. The operator decides
+    how the actual context value is compared against `self.value`.
+    Type-safety is best-effort: invalid type combinations
+    (e.g. `gte` with a string actual) cause the predicate to fail
+    rather than raise, so a single mistyped predicate doesn't blow
+    up an entire scan.
+
+    Operators:
+      Numeric/comparable: eq, ne, gt, gte, lt, lte
+      String:             eq, ne, contains, startswith, endswith
+      Collection:         in, not_in
+
+    `eq` and `ne` work for any type. `contains` works on strings
+    (substring match) and on lists/tuples (membership). `in`/`not_in`
+    test whether the actual value appears in `self.value`, which
+    must be a list, tuple, or set.
+    """
+    op: str
+    value: Any
+
+    def evaluate(self, actual: Any) -> bool:
+        """Apply the predicate to a signal's context value.
+
+        Returns False on type mismatches (e.g. comparing a string
+        with `gte`) rather than raising. The loader catches unknown
+        operators at file-load time, so this method's "unknown
+        operator" branch is defensive.
+        """
+        op = self.op
+        try:
+            if op == "eq":
+                return actual == self.value
+            if op == "ne":
+                return actual != self.value
+            if op == "gt":
+                return actual > self.value
+            if op == "gte":
+                return actual >= self.value
+            if op == "lt":
+                return actual < self.value
+            if op == "lte":
+                return actual <= self.value
+            if op == "contains":
+                return self.value in actual
+            if op == "startswith":
+                if not isinstance(actual, str):
+                    return False
+                return actual.startswith(self.value)
+            if op == "endswith":
+                if not isinstance(actual, str):
+                    return False
+                return actual.endswith(self.value)
+            if op == "in":
+                return actual in self.value
+            if op == "not_in":
+                return actual not in self.value
+        except (TypeError, ValueError):
+            return False
+        return False  # unknown operator
+
+
+# ---------------------------------------------------------------------------
+# Rule data model
+# ---------------------------------------------------------------------------
+
+
 @dataclass(frozen=True)
 class RuleMatch:
     """Conditions that must all be satisfied for a rule to match.
@@ -62,9 +156,14 @@ class RuleMatch:
         scope: Match against Signal.scope.
         path_glob: fnmatch-style pattern matched against the file's
             internal_path. Use '/' as separator. e.g. 'tests/**/*.py'.
-        context_contains: Subset match against Signal.context. Every
-            key/value pair in this dict must be present in the
-            signal's context with equal value.
+        context_contains: LEGACY. Subset match against Signal.context
+            with strict equality on each pair. Internally shimmed to
+            context_predicates at construction; preserved on the
+            dataclass for backward inspection. New code should use
+            context_predicates directly.
+        context_predicates: Dict mapping context-field-name to
+            ContextPredicate. Each predicate is checked against the
+            signal's context; all must pass for the rule to match.
     """
     signal_id: str | None = None
     analyzer: str | None = None
@@ -72,12 +171,37 @@ class RuleMatch:
     scope: Scope | None = None
     path_glob: str | None = None
     context_contains: dict[str, Any] | None = None
+    context_predicates: dict[str, ContextPredicate] | None = None
+
+    def __post_init__(self) -> None:
+        """Shim: normalize context_contains into context_predicates.
+
+        If both fields are provided, predicates from
+        context_predicates take precedence on key collision (the
+        explicit predicate wins over the implicit eq-shim).
+        """
+        if self.context_contains is None:
+            return
+        shimmed = {
+            k: ContextPredicate(op="eq", value=v)
+            for k, v in self.context_contains.items()
+        }
+        if self.context_predicates is None:
+            object.__setattr__(self, "context_predicates", shimmed)
+        else:
+            # Merge: explicit predicates win on collision.
+            merged = {**shimmed, **self.context_predicates}
+            object.__setattr__(self, "context_predicates", merged)
 
     def specificity(self) -> int:
         """Count of non-None match fields. More specific = higher value.
 
         Used as a tiebreaker among rules from the same source. Across
         sources, RuleSource ordering wins regardless of specificity.
+
+        Note: context_contains is no longer counted directly because
+        it's shimmed into context_predicates by __post_init__. Each
+        predicate counts as 1.
         """
         count = 0
         if self.signal_id is not None:
@@ -90,8 +214,8 @@ class RuleMatch:
             count += 1
         if self.path_glob is not None:
             count += 1
-        if self.context_contains is not None:
-            count += len(self.context_contains)
+        if self.context_predicates is not None:
+            count += len(self.context_predicates)
         return count
 
 
@@ -138,11 +262,11 @@ def matches(rule: Rule, signal: Signal, context: ScanContext) -> bool:
     if m.path_glob is not None:
         if not fnmatch.fnmatchcase(context.internal_path, m.path_glob):
             return False
-    if m.context_contains is not None:
-        for key, value in m.context_contains.items():
+    if m.context_predicates is not None:
+        for key, predicate in m.context_predicates.items():
             if key not in signal.context:
                 return False
-            if signal.context[key] != value:
+            if not predicate.evaluate(signal.context[key]):
                 return False
     return True
 
