@@ -149,6 +149,99 @@ class ScanResult:
     statistics: ScanStatistics
     diagnostics: tuple[str, ...] = field(default_factory=tuple)
     suppressed_findings: tuple[SuppressedFinding, ...] = field(default_factory=tuple)
+    per_file_statistics: tuple[FileStatsEntry, ...] = ()
+    """Per-file stats for multi-file scans. Empty for single-file
+    scans (scan_file, scan_bytes, scan_loose_file_as), populated
+    for artifact scans (scan_wheel, scan_sdist, scan_installed).
+    """
+
+@dataclass(frozen=True)
+class FileScanInput:
+    """Input for a single per-file scan invocation.
+
+    Designed as a pickle-safe boundary type. All fields are either
+    primitive values or immutable enum values, so an instance can
+    be sent to a worker process by a future parallel executor
+    without further marshaling.
+
+    Attributes:
+        content: The file's raw bytes.
+        internal_path: The file's path within its containing
+            artifact (or the loose-file path for single-file mode).
+            Used by triage when forced_file_kind is None.
+        artifact_kind: What kind of outer artifact this file came
+            from. Surfaced in finding contexts.
+        artifact_identity: Identifier for the outer artifact
+            (wheel path, sdist path, package name, or loose file
+            path). Surfaced in finding contexts.
+        forced_file_kind: If set, bypass triage and treat the file
+            as this kind. Used by `scan_loose_file_as` for
+            `pydepgate scan --single` mode. Must not be
+            FileKind.SKIP at the public API boundary; callers
+            handle that case before constructing this input.
+    """
+    content: bytes
+    internal_path: str
+    artifact_kind: ArtifactKind
+    artifact_identity: str
+    forced_file_kind: FileKind | None = None
+
+@dataclass(frozen=True)
+class FileScanOutput:
+    """Output from a single per-file scan invocation.
+
+    Designed as a pickle-safe boundary type. Aggregated by the
+    artifact-level scan methods (scan_wheel, scan_sdist,
+    scan_installed) into a ScanResult.
+
+    Attributes:
+        internal_path: The file's path as supplied in the input.
+            Echoed back so aggregators can build per-file stats
+            entries without retaining the input.
+        findings: Findings produced by this file's analyzers and
+            rule evaluation.
+        skipped: SkippedFile entries produced when this file was
+            triaged out (zero or one entries).
+        diagnostics: Per-file diagnostic messages from analyzers
+            or parsers that failed.
+        suppressed_findings: Findings that would have fired but
+            were suppressed by user rules.
+        statistics: Per-file ScanStatistics. files_total is
+            always 1; files_scanned is 1 if the file was
+            analyzed, 0 if it was triaged out; files_skipped is
+            the inverse; signals_emitted is the count of raw
+            signals before rule evaluation.
+    """
+    internal_path: str
+    findings: tuple[Finding, ...]
+    skipped: tuple[SkippedFile, ...]
+    diagnostics: tuple[str, ...]
+    suppressed_findings: tuple[SuppressedFinding, ...]
+    statistics: ScanStatistics
+
+@dataclass(frozen=True)
+class FileStatsEntry:
+    """Per-file timing and output statistics for a multi-file scan.
+
+    Populated for wheel, sdist, and installed-package scans where
+    multiple files contribute to a single ScanResult. Useful for
+    diagnosing slow files in large scans (numpy, tensorflow) and
+    for the planned --deep mode where ten thousand files might
+    contribute to one result.
+
+    Attributes:
+        internal_path: The file's path within the artifact.
+        duration_seconds: Wall-clock time spent scanning this
+            file alone (parser + all analyzers + rule evaluation).
+        signals_emitted: Number of raw signals from analyzers,
+            before rule evaluation.
+        findings_count: Number of findings retained after rule
+            evaluation. Suppressed findings are not counted here.
+    """
+    internal_path: str
+    duration_seconds: float
+    signals_emitted: int
+    findings_count: int
 
     
 def confidence_to_severity_v01(confidence: int) -> Severity:
