@@ -137,6 +137,7 @@ class ScanStatistics:
     files_failed_to_parse: int = 0
     signals_emitted: int = 0
     analyzers_run: int = 0
+    enrichers_run: int = 0
     duration_seconds: float = 0.0
 
 
