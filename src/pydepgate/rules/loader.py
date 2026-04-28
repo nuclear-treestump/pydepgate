@@ -24,11 +24,13 @@ from pathlib import Path
 from pydepgate.analyzers.base import Scope
 from pydepgate.engines.base import Severity
 from pydepgate.rules.base import (
+    ContextPredicate,
     Rule,
     RuleAction,
     RuleEffect,
     RuleMatch,
     RuleSource,
+    VALID_OPERATORS,
 )
 from pydepgate.traffic_control.triage import FileKind
 
@@ -39,7 +41,7 @@ ENV_RULES_FILE = "PYDEPGATE_RULES_FILE"
 # Valid field names for a rule. Used by the typo-suggestion logic.
 _VALID_RULE_FIELDS = frozenset({
     "id", "signal_id", "analyzer", "file_kind", "scope",
-    "path_glob", "context_contains",
+    "path_glob", "context_contains", "context_predicates",
     "action", "severity", "description", "explain",
 })
 
@@ -194,10 +196,67 @@ def _detect_format_and_parse(content: bytes) -> tuple[str, dict, list[str]]:
 # ---- Schema validation ----
 
 
-def _suggest_field(unknown: str, valid: set[str]) -> str | None:
+def _suggest_field(unknown: str, valid: set[str] | frozenset[str]) -> str | None:
     """Return a typo correction suggestion if one looks plausible."""
-    matches = difflib.get_close_matches(unknown, valid, n=1, cutoff=0.6)
+    matches = difflib.get_close_matches(
+        unknown, list(valid), n=1, cutoff=0.6,
+    )
     return matches[0] if matches else None
+
+
+def _validate_context_predicates(
+    cp: object,
+    rule_id: str,
+    errors: list[str],
+) -> None:
+    """Validate the context_predicates field structure.
+
+    Expected shape:
+      { field_name: { operator: value, ... }, ... }
+
+    Each inner dict must have exactly one key, which must be a known
+    operator. The value can be anything (type compatibility is
+    checked at evaluation time, not load time).
+    """
+    if not isinstance(cp, dict):
+        errors.append(
+            f"Rule {rule_id}: context_predicates must be a dict/object, "
+            f"got {type(cp).__name__}"
+        )
+        return
+
+    for field_name, predicate_spec in cp.items():
+        if not isinstance(predicate_spec, dict):
+            errors.append(
+                f"Rule {rule_id}: context_predicates['{field_name}'] must "
+                f"be a dict like {{op: value}}, got "
+                f"{type(predicate_spec).__name__}"
+            )
+            continue
+        if len(predicate_spec) == 0:
+            errors.append(
+                f"Rule {rule_id}: context_predicates['{field_name}'] is "
+                f"empty; must contain exactly one operator"
+            )
+            continue
+        if len(predicate_spec) > 1:
+            keys = sorted(predicate_spec.keys())
+            errors.append(
+                f"Rule {rule_id}: context_predicates['{field_name}'] must "
+                f"have exactly one operator, got {len(predicate_spec)} "
+                f"({', '.join(keys)}). To express AND of multiple "
+                f"conditions on the same field, write multiple rules."
+            )
+            continue
+        op = next(iter(predicate_spec.keys()))
+        if op not in VALID_OPERATORS:
+            suggestion = _suggest_field(op, VALID_OPERATORS)
+            hint = f" Did you mean '{suggestion}'?" if suggestion else ""
+            errors.append(
+                f"Rule {rule_id}: context_predicates['{field_name}'] uses "
+                f"unknown operator '{op}'.{hint} "
+                f"Valid: {', '.join(sorted(VALID_OPERATORS))}."
+            )
 
 
 def _validate_rule_dict(
@@ -292,13 +351,36 @@ def _validate_rule_dict(
             f"Valid: {', '.join(sorted(_VALID_SCOPES))}."
         )
 
-    # context_contains must be a dict if present.
+    # context_contains must be a dict if present (legacy field).
     cc = rule_dict.get("context_contains")
     if cc is not None and not isinstance(cc, dict):
         errors.append(
             f"Rule {rule_id}: context_contains must be a dict/object, "
             f"got {type(cc).__name__}"
         )
+
+    # context_predicates: structured validation.
+    cp = rule_dict.get("context_predicates")
+    if cp is not None:
+        _validate_context_predicates(cp, rule_id, errors)
+
+
+def _build_context_predicates(
+    cp_dict: dict | None,
+) -> dict[str, ContextPredicate] | None:
+    """Construct ContextPredicate objects from the validated TOML/JSON dict.
+
+    Caller must have validated `cp_dict` via _validate_context_predicates
+    before calling this. Returns None if input is None.
+    """
+    if cp_dict is None:
+        return None
+    out: dict[str, ContextPredicate] = {}
+    for field_name, predicate_spec in cp_dict.items():
+        op = next(iter(predicate_spec.keys()))
+        value = predicate_spec[op]
+        out[field_name] = ContextPredicate(op=op, value=value)
+    return out
 
 
 def _build_rule(
@@ -327,6 +409,10 @@ def _build_rule(
     if rule_dict.get("scope"):
         scope = Scope[rule_dict["scope"].upper()]
 
+    context_predicates = _build_context_predicates(
+        rule_dict.get("context_predicates"),
+    )
+
     match = RuleMatch(
         signal_id=rule_dict.get("signal_id"),
         analyzer=rule_dict.get("analyzer"),
@@ -334,6 +420,7 @@ def _build_rule(
         scope=scope,
         path_glob=rule_dict.get("path_glob"),
         context_contains=rule_dict.get("context_contains"),
+        context_predicates=context_predicates,
     )
 
     # Build the effect.
@@ -421,7 +508,7 @@ def load_rules_file(
             msg += f"  {err}\n"
         msg += f"\n{len(errors)} validation error"
         msg += "s" if len(errors) != 1 else ""
-        msg += " in {len(rule_dicts)} rules. No rules were loaded."
+        msg += f" in {len(rule_dicts)} rules. No rules were loaded."
         raise GateFileError(msg)
 
     # Build Rule objects with auto-numbered IDs.
