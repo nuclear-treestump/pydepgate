@@ -179,7 +179,7 @@ default; opt in with `--peek`.
 | `--peek-budget BYTES` | `PYDEPGATE_PEEK_BUDGET` | 524288 (512 KB) | Cumulative output cap across all layers. Floor 1024. |
 | `--peek-chain` | `PYDEPGATE_PEEK_CHAIN` | off | Verbose per-layer breakdown with xxd-style hex dump in human output. |
 
-These behave as global flags — accepted before or after the subcommand:
+These behave as global flags accepted before or after the subcommand:
 
 ```bash
 pydepgate --peek scan litellm-1.82.8-py3-none-any.whl
@@ -212,7 +212,7 @@ stating explicitly:
 a Python pickle stream as a terminal layer, it sets
 `pickle_warning: true` in the decoded block and stops.
 `pickle.loads()` on attacker-controlled bytes is code execution by
-design — that is the bug being analyzed, not a tool action. Inspect
+design, that is the bug being analyzed, not a tool action. Inspect
 such payloads with `pickletools.dis()` (which walks the opcode stream
 without executing it) in an isolated environment.
 
@@ -221,12 +221,12 @@ unwrap layers is capped by `--peek-budget`. A 2 KB zlib stream that
 would expand to 2 GB trips the cap at 512 KB (default), records
 `unwrap_status: exhausted_budget`, and stops. The cap is enforced
 in-flight via incremental `decompressobj.decompress(data, max_length=N)`
-calls — bytes that exceed the budget are never materialized.
+calls, bytes that exceed the budget are never materialized.
 
 **ENC002 fires on nested chains.** When the unwrap chain reaches
 depth 2 or exhausts `--peek-depth` with more transformations still
 possible, the enricher emits an `ENC002` signal carrying the decoded
-block plus a chain summary. A single base64 layer is unremarkable —
+block plus a chain summary. A single base64 layer is unremarkable,
 it's the lingua franca of certificates, tokens, and config blobs.
 Stacked layers (`base64 → zlib → python_source`) are intent. Default
 severities for ENC002 vary by file kind and unwrap status; see
@@ -262,7 +262,7 @@ All flags can be set via environment variables. Explicit flags override environm
 
 The current analyzer set covers five major classes of suspicious behavior in startup vectors:
 
-**Encoding abuse (ENC001, ENC002).** Patterns where encoded content is decoded and executed in a single chain, e.g. `exec(base64.b64decode(payload))`. Catches base64, hex, codec-based, zlib, bz2, lzma, and gzip variants. With `--peek` enabled, ENC002 also fires when the partial-decoder unwrap loop reaches 2+ chain layers or exhausts its configured depth — strong evidence that a literal is intentionally obfuscated rather than a benign encoded blob.
+**Encoding abuse (ENC001, ENC002).** Patterns where encoded content is decoded and executed in a single chain, e.g. `exec(base64.b64decode(payload))`. Catches base64, hex, codec-based, zlib, bz2, lzma, and gzip variants. With `--peek` enabled, ENC002 also fires when the partial-decoder unwrap loop reaches 2+ chain layers or exhausts its configured depth, strong evidence that a literal is intentionally obfuscated rather than a benign encoded blob.
 
 **Dynamic execution (DYN001-007).** Direct calls to `exec`, `eval`, `compile`, or `__import__`; access to exec primitives via `getattr`, `globals()`, `locals()`, `vars()`, or `__builtins__` subscripts; compile-then-exec across the file; and aliased call shapes that catch `e = exec; e(...)` evasions.
 
