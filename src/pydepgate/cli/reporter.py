@@ -284,6 +284,7 @@ def render_json(result: ScanResult, stream: TextIO) -> None:
             "files_failed_to_parse": result.statistics.files_failed_to_parse,
             "signals_emitted": result.statistics.signals_emitted,
             "analyzers_run": result.statistics.analyzers_run,
+            "enrichers_run": result.statistics.enrichers_run,
             "duration_seconds": result.statistics.duration_seconds,
         },
         "diagnostics": list(result.diagnostics),
