@@ -103,6 +103,23 @@ class Analyzer(ABC):
     and discard them on return.
 
     """
+    safe_for_library_scan: bool = False
+    """Whether this analyzer is appropriate to run on FileKind.LIBRARY_PY
+    files (ordinary library code outside startup vectors). The engine
+    filters analyzers using this attribute when scanning in deep mode.
+
+    Default False. Subclasses opt in by setting True. The criterion
+    is calibration: an analyzer is safe for library scanning when its
+    signals carry meaningful information without rule-layer promotion.
+    Most pydepgate analyzers fail this test because their signals are
+    designed to be elevated by file-kind-specific rules; in library
+    code they would produce many false positives.
+
+    The density analyzer overrides this to True because its signals
+    (entropy, Unicode anomalies, structural patterns) are equally
+    meaningful regardless of file context, even though severity
+    calibration differs across file kinds via the rule layer.
+    """
 
     @property
     @abstractmethod

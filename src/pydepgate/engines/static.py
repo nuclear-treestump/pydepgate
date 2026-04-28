@@ -25,12 +25,14 @@ artifact-level scan methods drive the pipeline in three phases:
   Phase 3: Aggregate the per-file FileScanOutputs into a single
            ScanResult.
 
-The pipeline is shaped this way so that adding parallelism is a
-mechanical change to Phase 2 only. Phases 1 and 3 are unchanged
-between serial and parallel execution. See:
-  - FileScanInput / FileScanOutput in engines.base (pickle-safe).
-  - The Analyzer ABC docstring (statelessness contract).
-  - tests/engines/test_pipeline_picklability.py (contract tests).
+Deep mode (deep_mode=True at construction):
+
+  Triage classifies ordinary library .py files as `FileKind.LIBRARY_PY`
+  instead of skipping them. For LIBRARY_PY files, the engine filters
+  analyzers via the `Analyzer.safe_for_library_scan` class attribute,
+  running only those analyzers whose signals are calibrated to be
+  meaningful outside startup-vector context. Currently this is just
+  the density analyzer.
 """
 
 from __future__ import annotations
@@ -63,8 +65,8 @@ class StaticEngine:
     """Static analysis engine for pydepgate artifacts.
 
     The engine is stateless across scans: a single instance can serve
-    many scan calls. Analyzers and rules are passed in at construction
-    time and never mutated afterward.
+    many scan calls. Analyzers, rules, and the deep_mode flag are
+    set at construction time and never mutated afterward.
 
     The per-file pipeline (`_scan_one_file`) does not touch instance
     state. This is a load-bearing property: when the engine is
@@ -77,6 +79,7 @@ class StaticEngine:
         self,
         analyzers: list[Analyzer],
         rules: list | None = None,
+        deep_mode: bool = False,
     ) -> None:
         self._analyzers: tuple[Analyzer, ...] = tuple(analyzers)
         # Default to bundled rules if none provided. Allows tests to
@@ -86,6 +89,7 @@ class StaticEngine:
             from pydepgate.rules.defaults import DEFAULT_RULES
             rules = list(DEFAULT_RULES)
         self._rules = list(rules)
+        self._deep_mode = deep_mode
 
     @property
     def rules(self) -> list:
@@ -96,6 +100,11 @@ class StaticEngine:
     def analyzers(self) -> tuple[Analyzer, ...]:
         """The analyzers configured for this engine, in registration order."""
         return self._analyzers
+
+    @property
+    def deep_mode(self) -> bool:
+        """Whether deep-mode triage is enabled for this engine."""
+        return self._deep_mode
 
     # ========================================================================
     # Public per-target entry points
@@ -188,7 +197,7 @@ class StaticEngine:
             raise ValueError(
                 "scan_loose_file_as cannot be called with FileKind.SKIP; "
                 "pass an in-scope kind (PTH, SETUP_PY, INIT_PY, "
-                "SITECUSTOMIZE, USERCUSTOMIZE)."
+                "SITECUSTOMIZE, USERCUSTOMIZE, LIBRARY_PY)."
             )
 
         try:
@@ -299,8 +308,8 @@ class StaticEngine:
         """Run the per-file scan pipeline. Pure function in call shape.
 
         Contract (load-bearing for future parallelism):
-          1. Does not mutate self. Reads `self._analyzers` and
-             `self._rules` only.
+          1. Does not mutate self. Reads `self._analyzers`,
+             `self._rules`, and `self._deep_mode` only.
           2. Inputs and outputs are pickle-safe by construction
              (FileScanInput and FileScanOutput hold only primitives,
              enums, and tuples of frozen dataclasses).
@@ -390,7 +399,7 @@ class StaticEngine:
                 files_total=1,
                 files_scanned=1,
                 signals_emitted=len(signals),
-                analyzers_run=len(self._analyzers),
+                analyzers_run=len(self._select_analyzers_for_kind(decided_kind)),
                 duration_seconds=duration,
             ),
         )
@@ -403,10 +412,10 @@ class StaticEngine:
 
         Returns a triple (kind, internal_path, reason). If
         forced_file_kind is set on the input, that wins; otherwise
-        triage decides. Defensive: if a caller manages to pass
-        FileKind.SKIP as forced_file_kind, this is treated as a
-        SKIP decision and the per-file pipeline returns a skip
-        output, rather than crashing.
+        triage decides (using deep_mode if the engine is so configured).
+        Defensive: if a caller manages to pass FileKind.SKIP as
+        forced_file_kind, this is treated as a SKIP decision and the
+        per-file pipeline returns a skip output, rather than crashing.
         """
         if inp.forced_file_kind is not None:
             return (
@@ -414,8 +423,34 @@ class StaticEngine:
                 inp.internal_path,
                 f"single-file mode: forced kind={inp.forced_file_kind.value}",
             )
-        decision = triage(inp.internal_path)
+        decision = triage(inp.internal_path, deep_mode=self._deep_mode)
         return (decision.kind, decision.internal_path, decision.reason)
+
+    # ========================================================================
+    # Analyzer selection
+    # ========================================================================
+
+    def _select_analyzers_for_kind(
+        self,
+        file_kind: FileKind,
+    ) -> tuple[Analyzer, ...]:
+        """Return the analyzers that should run on a file of the given kind.
+
+        Currently this only filters in one case: LIBRARY_PY files
+        (encountered in deep mode) run only analyzers that opt in via
+        the `safe_for_library_scan` class attribute. Every other kind
+        runs the full analyzer set.
+
+        This is the policy point where "deep mode is density-only" is
+        enforced. Future versions may add per-kind analyzer scoping
+        for other contexts; the structure here makes that additive.
+        """
+        if file_kind is FileKind.LIBRARY_PY:
+            return tuple(
+                a for a in self._analyzers
+                if getattr(a, "safe_for_library_scan", False)
+            )
+        return self._analyzers
 
     # ========================================================================
     # Per-file dispatch (parsers + analyzers)
@@ -433,11 +468,19 @@ class StaticEngine:
         Returns the flat list of signals across all analyzers for this
         file. Parser or analyzer failures are recorded in diagnostics
         but do not abort the scan.
+
+        For LIBRARY_PY files, the analyzer set is filtered down to
+        analyzers that have opted in via `safe_for_library_scan`.
         """
+        analyzers = self._select_analyzers_for_kind(file_kind)
+        if not analyzers:
+            # Possible if all analyzers opt out of LIBRARY_PY scanning.
+            # Not an error; the file simply produces no signals.
+            return []
         if file_kind is FileKind.PTH:
-            return self._analyze_pth(content, context, diagnostics)
+            return self._analyze_pth(content, context, diagnostics, analyzers)
         # All other in-scope kinds are Python source files:
-        # SETUP_PY, INIT_PY, SITECUSTOMIZE, USERCUSTOMIZE.
+        # SETUP_PY, INIT_PY, SITECUSTOMIZE, USERCUSTOMIZE, LIBRARY_PY.
         # ENTRY_POINTS is a separate format and not handled in v0.1.
         if file_kind is FileKind.ENTRY_POINTS:
             diagnostics.append(
@@ -445,18 +488,21 @@ class StaticEngine:
                 f"{context.internal_path}"
             )
             return []
-        return self._analyze_python_source(content, context, diagnostics)
+        return self._analyze_python_source(
+            content, context, diagnostics, analyzers,
+        )
 
     def _analyze_python_source(
         self,
         content: bytes,
         context: ScanContext,
         diagnostics: list[str],
+        analyzers: tuple[Analyzer, ...],
     ) -> list[Signal]:
-        """Parse content as Python source and run all analyzers on it."""
+        """Parse content as Python source and run the given analyzers on it."""
         parsed = parse_python_source(content, context.internal_path)
         signals: list[Signal] = []
-        for analyzer in self._analyzers:
+        for analyzer in analyzers:
             try:
                 signals.extend(analyzer.analyze_python(parsed))
             except Exception as exc:
@@ -471,6 +517,7 @@ class StaticEngine:
         content: bytes,
         context: ScanContext,
         diagnostics: list[str],
+        analyzers: tuple[Analyzer, ...],
     ) -> list[Signal]:
         """Parse content as a .pth file and run analyzers on its exec lines.
 
@@ -497,7 +544,7 @@ class StaticEngine:
                     f"{context.internal_path} as Python"
                 )
                 continue
-            for analyzer in self._analyzers:
+            for analyzer in analyzers:
                 try:
                     for signal in analyzer.analyze_python(parsed_snippet):
                         signals.append(_remap_signal_location(
