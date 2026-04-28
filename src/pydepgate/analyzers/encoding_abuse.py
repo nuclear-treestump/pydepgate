@@ -35,6 +35,7 @@ from pydepgate.analyzers.base import (
 )
 from pydepgate.analyzers._visitor import _ScopeTracker, get_qualified_name
 from pydepgate.parsers.pysource import ParsedPySource, SourceLocation
+from pydepgate.analyzers._enrichment import stash_value
 
 
 # Functions that decode encoded content. The tuple format is
@@ -156,7 +157,33 @@ class _Visitor(_ScopeTracker):
                     and first_arg.args
                     and _string_looks_like_payload(first_arg.args[0])
                 )
-                confidence = Confidence.DEFINITE if has_payload_literal else Confidence.HIGH
+                confidence = (
+                    Confidence.DEFINITE if has_payload_literal
+                    else Confidence.HIGH
+                )
+
+                # Build context. Base keys are unconditional; the
+                # _full_value stash is set only when a literal payload
+                # is present at the call site, so payload_peek has
+                # something to consume. _string_looks_like_payload
+                # guarantees the inner arg is an ast.Constant with a
+                # str-or-bytes value when has_payload_literal is True;
+                # the isinstance guard below is defensive belt-and-
+                # suspenders, not strictly required.
+                enc001_context = {
+                    "exec_function": exec_name,
+                    "decode_module": module,
+                    "decode_function": attr,
+                    "has_payload_literal": has_payload_literal,
+                }
+                if has_payload_literal:
+                    raw_value = first_arg.args[0].value
+                    if isinstance(raw_value, (str, bytes)):
+                        stashed, truncated = stash_value(raw_value)
+                        enc001_context["_full_value"] = stashed
+                        if truncated:
+                            enc001_context["_full_value_truncated"] = True
+
                 self.signals.append(Signal(
                     analyzer="encoding_abuse",
                     signal_id="ENC001",
@@ -167,15 +194,12 @@ class _Visitor(_ScopeTracker):
                         column=node.col_offset,
                     ),
                     description=(
-                        f"{exec_name}() called with result of {module}.{attr}() - "
+                        f"{exec_name}() called with result of "
+                        f"{module}.{attr}() - "
                         f"classic decode-then-execute pattern"
                     ),
-                    context={
-                        "exec_function": exec_name,
-                        "decode_module": module,
-                        "decode_function": attr,
-                        "has_payload_literal": has_payload_literal,
-                    },
+                    context=enc001_context,
+                    enrichment_hints=frozenset({"payload_peek"}),
                 ))
 
         self.generic_visit(node)

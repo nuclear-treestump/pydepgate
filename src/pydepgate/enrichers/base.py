@@ -32,6 +32,29 @@ parallelized for free when the engine adopts a process pool: the
 same picklability and statelessness contracts that protect the
 analyzer pass apply equally to enrichment.
 
+The hint-driven dispatch
+------------------------
+Enrichers do not maintain a hardcoded allow-list of signal IDs they
+care about. Instead, the analyzer that produced a signal *flags* it
+for enrichment by populating `Signal.enrichment_hints` with one or
+more enricher names. The enricher checks each incoming signal for
+its own name in that set; signals without the matching hint are
+passed through untouched.
+
+Why this shape: the analyzer is the only component that actually
+saw the data when it fired. It knows the literal length, alphabet,
+location, file kind, and surrounding scope. The decision of
+"is this signal worth enriching" lives most naturally with the
+analyzer, where the relevant facts are local. Putting the request
+on the signal also means a new analyzer added later can opt into
+enrichment by tagging its signals; no change to the enricher needed.
+
+The enricher retains its own threshold logic (size limits, budget
+constraints, format predicates) and applies those in addition to
+the hint check. The hint says "the analyzer thinks this is worth
+looking at"; the enricher decides "and yes, it meets my criteria
+to actually do the work."
+
 Statelessness contract
 ----------------------
 Implementations MUST NOT retain mutable state across `enrich`
@@ -48,9 +71,9 @@ invocations. Two reasons:
    on scans 1..N-1, which is the wrong contract.
 
 Enrichers may hold immutable configuration in `__init__` (size
-limits, signal-id filter sets, magic-byte tables); they may not
-accumulate signals, caches, or counters across calls. Construct any
-per-call accumulators inside `enrich` and discard them on return.
+limits, magic-byte tables, depth caps); they may not accumulate
+signals, caches, or counters across calls. Construct any per-call
+accumulators inside `enrich` and discard them on return.
 
 Picklability contract
 ---------------------
@@ -69,8 +92,9 @@ Enrichers may NOT:
     analyzer signal to reach rule evaluation; suppression happens
     in the rules layer, not here)
   - change a signal's signal_id, analyzer, location, scope,
-    confidence, or description (these are analyzer-determined
-    properties and must remain identifiable across the pipeline)
+    confidence, description, or enrichment_hints (these are
+    analyzer-determined properties and must remain identifiable
+    across the pipeline)
 
 Enrichers MAY:
 
@@ -90,11 +114,13 @@ analyzer received it. For Python source files, that is the .py
 bytes. For .pth files, that is the .pth content (mostly path-like
 text with occasional `import` / `exec` lines), and `signal.location`
 refers to a line within the .pth, not within a synthetic Python
-snippet. Enrichers that extract source-level information from
-specific (line, column) positions must be aware of this distinction
-and handle the .pth case appropriately (or filter to file kinds
-they support via `applies_to` and the rule engine's downstream
-file-kind matching).
+snippet.
+
+Enrichers that need direct access to a literal value should prefer
+reading `signal.context['_full_value']` (set by analyzers that
+support enrichment) over re-extracting from `content`. The stashed
+value handles the .pth-vs-.py distinction at the analyzer side, is
+already-resolved at the AST level, and is bounded in size.
 """
 
 from __future__ import annotations
@@ -113,31 +139,23 @@ class Enricher(ABC):
     stream from analyzers and returns a possibly-augmented stream.
     Subclasses implement the `enrich` method.
 
-    See the module docstring for the full statelessness, picklability,
-    and mutation contracts.
+    Enrichers are dispatched per-signal via the `enrichment_hints`
+    field on Signal: an enricher whose `name` appears in a signal's
+    hints is expected to consider that signal for enrichment.
+    Signals without the hint pass through unchanged.
+
+    See the module docstring for the full statelessness,
+    picklability, and mutation contracts.
     """
 
     @property
     @abstractmethod
     def name(self) -> str:
-        """Short identifier for diagnostics. Must be stable across runs."""
+        """Short identifier for diagnostics and hint matching.
 
-    @property
-    def applies_to(self) -> frozenset[str]:
-        """Set of signal_id values this enricher considers.
-
-        An empty frozenset (the default) means the enricher should
-        be invoked for every file regardless of which signals are
-        present. Most enrichers will narrow this to the specific
-        signal IDs they augment, allowing the engine to skip them
-        when no relevant signals were emitted.
-
-        This is an optimization hint, not a security boundary.
-        Enrichers must still tolerate being called with signals
-        outside their declared applies_to set; the engine may
-        relax the filter in future iterations.
+        Must be stable across runs. Analyzers that flag signals for
+        this enricher embed this exact string in `Signal.enrichment_hints`.
         """
-        return frozenset()
 
     @abstractmethod
     def enrich(
@@ -152,11 +170,10 @@ class Enricher(ABC):
             signals: The current signal stream, as produced by
                 analyzers and any earlier enrichers in the chain.
                 Treated as immutable; do not mutate.
-            content: The file's raw bytes. Provided so enrichers can
-                re-extract source-level information (literal values,
-                token spans) at recorded locations without re-running
-                the parser pass. See the module docstring for what
-                this means across file kinds.
+            content: The file's raw bytes. Provided so enrichers
+                can re-extract source-level information at recorded
+                locations when the analyzer-stashed value is not
+                sufficient. See module docstring.
             context: The per-file scan context (file kind, internal
                 path, artifact identity). Read-only.
 
@@ -168,10 +185,16 @@ class Enricher(ABC):
             Order within the result is the enricher's choice; the
             engine treats the stream as a multiset.
 
+        Implementation guidance: iterate the signals, check each
+        for `self.name in sig.enrichment_hints`, and dispatch to a
+        per-signal enrichment method only when the hint matches.
+        Signals without the matching hint should be passed through
+        to the output unchanged.
+
         Raises:
             Implementations may raise to indicate internal failure.
             The engine catches these, records a diagnostic, and
             continues with the un-enriched stream from before this
             enricher was invoked. Subsequent enrichers in the chain
-            still run on the un-enriched stream.
+            still run on that fallback stream.
         """
