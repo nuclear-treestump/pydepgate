@@ -14,7 +14,43 @@ March 2026 LiteLLM supply-chain compromise and catalogued as
 
 ## Recently Added
 
-Tab completion works!
+### Recursive payload decoding with encrypted-archive output
+
+`--decode-payload-depth=N` runs a recursive re-scan over decoded
+payloads. When the peek enricher's unwrap chain produces Python source,
+that source is fed back through the engine, and any payload-bearing
+findings inside it are themselves decoded. This catches the
+multi-layer attack shape used by LiteLLM 1.82.8: a base64 outer
+payload whose decoded source contains a second base64 payload which
+decodes to the actual exfiltration code.
+
+Output goes to a directory chosen with `--decode-location` (default
+`./decoded/`), with files named `{STATUS}_{timestamp}_{target}{ext}`
+where `STATUS` is `FINDINGS` or `NOFINDINGS`, `timestamp` is UTC in
+`YYYY-MM-DD_HH-MM-SS` format, and `target` is the sanitized artifact
+basename. This convention preserves run history and sorts
+chronologically by filename.
+
+`--decode-iocs={off,hashes,full}` controls whether IOC data and
+decoded source are extracted alongside the report. Mode `full`
+produces an encrypted ZIP archive (default password `infected`, the
+malware-research convention) containing the report, decoded source
+dumps, and IOC hash records, plus a plaintext IOC sidecar next to the
+archive for grep-friendly hash extraction.
+
+`--min-severity` flows into the decoded-payload report as a
+presentation filter. The decode pass itself runs over every
+payload-bearing finding regardless of severity, because a low-severity
+outer finding can decode to a critical inner one. The filter then
+prunes the resulting tree, with a "keep for context" rule: a node
+stays if its own severity meets the threshold OR if any of its
+descendants do, so chains aren't broken when only the inner finding
+is severe.
+
+See the Payload Decoding section below for the full flag table,
+output layout, and end-to-end examples.
+
+### Tab completion works!
 
 ```
 usage: pydepgate completions [-h] {bash,zsh,fish}
@@ -212,6 +248,23 @@ Scan an entire library archive:
 pydepgate scan --deep somefile.whl
 ```
 
+Decode payloads recursively into a directory:
+ 
+```bash
+pydepgate scan --deep some-package.whl --peek \
+    --decode-payload-depth=3 \
+    --decode-iocs=full \
+    --decode-location ./forensics \
+    --decode-archive-password investigation
+```
+ 
+This produces an encrypted archive at
+`./forensics/FINDINGS_<timestamp>_some-package.whl.zip` and a
+plaintext IOC sidecar at
+`./forensics/FINDINGS_<timestamp>_some-package.whl.iocs.txt`. The
+archive contents extract into a subdirectory matching the artifact
+name. See the Payload Decoding section for full details.
+
 ### Payload peek
 
 Some malware compresses or base64-encodes its payload to slip past
@@ -291,9 +344,9 @@ severities for ENC002 vary by file kind and unwrap status; see
 These are stable as part of the v0.1+ contract.
 
 ### Environment variables
-
+ 
 All flags can be set via environment variables. Explicit flags override environment values.
-
+ 
 | Variable | Equivalent flag |
 |---|---|
 | `PYDEPGATE_CI` | `--ci` |
@@ -307,6 +360,16 @@ All flags can be set via environment variables. Explicit flags override environm
 | `PYDEPGATE_PEEK_BUDGET` | `--peek-budget` |
 | `PYDEPGATE_PEEK_CHAIN` | `--peek-chain` |
 | `PYDEPGATE_PEEK_MIN_LENGTH` | `--peek-min-length` |
+| `PYDEPGATE_DECODE_PAYLOAD_DEPTH` | `--decode-payload-depth` |
+| `PYDEPGATE_DECODE_LOCATION` | `--decode-location` |
+| `PYDEPGATE_DECODE_FORMAT` | `--decode-format` |
+| `PYDEPGATE_DECODE_IOCS` | `--decode-iocs` |
+| `PYDEPGATE_DECODE_ARCHIVE_PASSWORD` | `--decode-archive-password` |
+ 
+`--decode-archive-stored` deliberately has no environment variable;
+it is a per-investigation choice (use STORED when byte-verifiable
+archive contents matter for that specific investigation) rather than
+a persistent preference.
 
 ## What pydepgate detects
 
@@ -411,6 +474,172 @@ A rule is a small structured object:
 Three actions are supported: `set_severity`, `suppress`, and `set_description`. User rules always take precedence over default rules, regardless of specificity. Suppressed findings are tracked separately so users can see what would have fired and why it didn't.
 
 Run `pydepgate explain --list` to see all default rules and signals, with descriptions of what they catch and how rules promote them.
+
+### Payload decoding
+ 
+Some attacks bury their payload behind multiple decoding stages. Peek
+shows you what the first decoded layer looks like, but if that layer
+is itself Python source containing another encoded blob, peek treats
+it as a terminal and stops. The decode pass picks up where peek leaves
+off: it takes peek's decoded bytes, re-runs the analyzer engine over
+them, and recurses on any payload-bearing findings the inner scan
+turns up. The result is a tree mirroring the discovery path. Each
+node records what was decoded, what was found inside, and where the
+recursion stopped.
+ 
+The pass is opt-in via `--decode-payload-depth=N`. It requires
+`--peek` (the decode driver consumes peek's output, so peek has to be
+running first). All flag values can be set via environment variables
+following the same precedence rules as the existing peek envvars;
+explicit flags override environment values.
+ 
+| Flag | Env var | Default | Notes |
+|---|---|---|---|
+| `--decode-payload-depth N` | `PYDEPGATE_DECODE_PAYLOAD_DEPTH` | 3 | Max recursion depth. Floor 1, ceiling 8. Requires `--peek`. |
+| `--decode-location PATH` | `PYDEPGATE_DECODE_LOCATION` | `./decoded/` | Output DIRECTORY. Files inside follow the `{STATUS}_{timestamp}_{target}{ext}` naming convention; the directory is created if it does not exist. |
+| `--decode-format FMT` | `PYDEPGATE_DECODE_FORMAT` | `text` | `text` for the human-readable tree report; `json` for a structured representation suitable for downstream tooling. |
+| `--decode-iocs MODE` | `PYDEPGATE_DECODE_IOCS` | `off` | `off`, `hashes`, or `full`. See below for the full mode matrix. |
+| `--decode-archive-password PASSWORD` | `PYDEPGATE_DECODE_ARCHIVE_PASSWORD` | `infected` | Password for the encrypted archive produced by `--decode-iocs=full`. The default `infected` is a malware-research convention recognized by AV vendors as a do-not-scan marker. ZipCrypto is cryptographically broken; this is not a confidentiality control. |
+| `--decode-archive-stored` | (none) | off | Use STORED compression for the archive instead of DEFLATE. Produces a slightly larger archive but bypasses zlib entirely. Useful when byte-verifiable archive contents matter. |
+ 
+#### Output filename convention
+ 
+All decode output files use a consistent naming pattern:
+ 
+```
+{STATUS}_{timestamp}_{target}{extension}
+```
+ 
+`STATUS` is `FINDINGS` when the decoded tree contains nodes,
+`NOFINDINGS` when it does not. `timestamp` is UTC, formatted
+`YYYY-MM-DD_HH-MM-SS` with no `Z` suffix; the format is sortable
+lexicographically and unambiguous about timezone. `target` is the
+basename of the artifact identity (e.g. the wheel filename),
+sanitized to `[A-Za-z0-9._-]` with leading separators stripped.
+`extension` is `.txt` for text output, `.json` for JSON output,
+`.zip` for the encrypted archive, or `.iocs.txt` for the plaintext
+IOC sidecar.
+ 
+This convention preserves run history. Re-running the same command
+produces a new file with a new timestamp; the previous file is left
+untouched. Use `ls -t <decode-location>/` to find the most recent
+output.
+ 
+#### IOC mode matrix
+ 
+The three modes of `--decode-iocs` produce different output shapes:
+ 
+**`off` (default).** A single plaintext file containing only the
+tree report. No IOC hashes, no decoded source dumps, no archive.
+When the decoded tree is empty, no file is written; you get a stderr
+note instead. Useful for quick interactive triage.
+ 
+**`hashes`.** Two plaintext files: the tree report (same as off
+mode) and a sidecar with the suffix `.iocs.txt` containing
+SHA256/SHA512 hashes of every decoded payload, along with the
+chain summary and location for each. Hash records use a fixed
+two-token line shape (`decoded_sha256  <hex>`) so a one-liner like
+`grep '^decoded_sha256' iocs.txt | awk '{print $2}'` extracts every
+hash for batch lookup. Skipped on empty trees, same as off mode.
+ 
+**`full`.** An encrypted ZIP archive plus a plaintext IOC sidecar.
+The archive contains three files inside a subdirectory matching the
+sanitized target name:
+ 
+```
+<target>/report.txt    Tree report (same shape as off-mode output)
+<target>/sources.txt   Per-layer decoded source dumps with header
+                       blocks and line-numbered bodies
+<target>/iocs.txt      Hash records (same content as the sidecar)
+```
+ 
+The sidecar lives next to the archive, NOT inside it, so you can
+batch-process IOC hashes without unzipping. Unlike off and hashes,
+full mode ALWAYS produces output: an empty tree results in a
+NOFINDINGS stub archive with the same structure but stub markers
+inside. This consistency lets downstream triage tooling rely on
+archive presence as a signal that the scan completed.
+ 
+The bare form `--decode-iocs` (no value) is accepted as a
+deprecated synonym for `--decode-iocs=hashes` and emits a
+deprecation warning. Use the explicit form to avoid the warning.
+ 
+#### --min-severity interaction
+ 
+`--min-severity` is applied as a presentation filter AFTER decoding
+completes. The decode pass itself is NOT gated by severity, because
+a low-severity outer finding can decode to a critical inner one;
+gating at the input layer would skip the outer and lose the
+critical inner. The filter runs once on the resulting tree and
+applies a "keep for context" rule:
+ 
+- A node is kept if its own severity meets the threshold, OR if any
+  of its descendants do.
+- Leaf child findings (the non-recursive ones) are filtered
+  strictly: dropped if their own severity is below threshold,
+  regardless of parent.
+ 
+So a low-severity outer that decodes to a critical inner stays in
+the report, and the chain showing how you got from the outer to
+the critical inner is preserved. A low-severity outer whose
+descendants are all also low gets dropped.
+ 
+#### Worked example
+ 
+Scanning the LiteLLM 1.82.8 wheel with the full archive treatment:
+ 
+```bash
+pydepgate scan --deep litellm-1.82.8-py3-none-any.whl \
+    --peek --peek-chain \
+    --min-severity high \
+    --decode-payload-depth=4 \
+    --decode-iocs=full \
+    --decode-location ./forensics \
+    --decode-archive-password investigation
+```
+ 
+Produces in `./forensics/`:
+ 
+```
+FINDINGS_2026-04-29_21-57-15_litellm-1.82.8-py3-none-any.whl.zip
+FINDINGS_2026-04-29_21-57-15_litellm-1.82.8-py3-none-any.whl.iocs.txt
+```
+ 
+Verify and inspect:
+ 
+```bash
+unzip -P investigation -l ./forensics/FINDINGS_*.zip
+# Should list: <target>/report.txt, <target>/sources.txt, <target>/iocs.txt
+ 
+unzip -P investigation -d /tmp/extracted ./forensics/FINDINGS_*.zip
+less /tmp/extracted/litellm-1.82.8-py3-none-any.whl/report.txt
+ 
+# Quick hash extraction from the sidecar:
+grep '^decoded_sha256' ./forensics/FINDINGS_*.iocs.txt | awk '{print $2}'
+```
+ 
+#### Safety guarantees
+ 
+The decode pass inherits all the safety properties of the peek
+enricher (pickle detection without deserialization, decompression-bomb
+budgets, in-flight cap enforcement) and adds two more.
+ 
+**The encrypted archive is for AV-friendliness, not
+confidentiality.** ZipCrypto is cryptographically broken (known
+plaintext attacks recover the password in seconds). The default
+password `infected` is the malware-research convention; AV vendors
+recognize archives with that password as do-not-scan and will not
+quarantine them mid-investigation. The encryption protects you from
+your own AV, not from any other adversary. Treat the archive
+contents as you would any malware sample.
+ 
+**The decode pass never executes decoded content.** Re-scanning
+decoded bytes goes through the same engine path as scanning the
+original artifact, and that engine has been the same read-only
+analyzer pipeline since v0.1. Decoded Python source is parsed via
+`ast.parse` (no compile, no exec), and any signal-bearing literals
+inside it are themselves treated as data, not code, regardless of
+how many decode layers deep we are.
 
 ## Writing rules
  
