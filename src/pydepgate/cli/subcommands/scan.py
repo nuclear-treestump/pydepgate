@@ -46,6 +46,12 @@ from pydepgate.engines.base import (
 from pydepgate.engines.static import StaticEngine
 from pydepgate.traffic_control.triage import FileKind
 from pydepgate.cli.peek_args import build_peek_enricher, peek_chain_enabled
+from pydepgate.cli.decode_args import decode_enabled
+from pydepgate.cli.decode_payloads import (
+    decode_payloads,
+    render_json,
+    render_text,
+)
 
 
 _SDIST_SUFFIXES = (".tar.gz", ".tgz", ".tar.bz2", ".tar.xz", ".tar")
@@ -250,7 +256,18 @@ def run(args: argparse.Namespace) -> int:
             # scan raised. Otherwise an exception traceback would
             # render on the same line as the bar.
             finish_progress()
-    return _render_and_exit_code(result, args)
+    exit_code = _render_and_exit_code(result, args)
+
+    # Decoded-payload pass. Runs after the main scan when the user
+    # opted in via --decode-payload-depth. The driver re-invokes the
+    # engine on the decoded form of payload-bearing findings,
+    # recursing up to the requested depth. Output goes to a file at
+    # the user-specified --decode-location (or an auto-generated
+    # path under <cwd>/decoded/).
+    if decode_enabled(args):
+        _run_decode_pass(result, engine, args)
+
+    return exit_code
 
 
 def _dispatch_scan(
@@ -424,3 +441,97 @@ def _compute_exit_code(findings) -> int:
     if has_blocking:
         return exit_codes.FINDINGS_BLOCKING
     return exit_codes.FINDINGS_BELOW_BLOCKING
+
+def _run_decode_pass(
+    result: ScanResult,
+    engine: StaticEngine,
+    args: argparse.Namespace,
+) -> None:
+    """Run the decoded-payload driver and write its output to disk.
+
+    Failures here are non-fatal: the main scan exit code already
+    fired, and a problem in the decode pass should not silently
+    suppress that. We log a stderr diagnostic and move on.
+    """
+    try:
+        tree = decode_payloads(
+            result,
+            engine=engine,
+            max_depth=args.decode_payload_depth,
+            peek_min_length=args.peek_min_length,
+            peek_max_depth=args.peek_depth,
+            peek_max_budget=args.peek_budget,
+            extract_iocs=getattr(args, 'decode_iocs', False),
+        )
+    except Exception as exc:  # noqa: BLE001 — non-fatal post-scan step
+        sys.stderr.write(
+            f"warning: decoded-payload pass failed: "
+            f"{type(exc).__name__}: {exc}\n"
+        )
+        return
+
+    # Skip writing the file when there's nothing meaningful to
+    # report. A file with "(no payload-bearing findings)" is more
+    # confusing than no file at all when the user expected one.
+    if not tree.nodes:
+        sys.stderr.write(
+            "note: no payload-bearing findings; "
+            "no decoded-payload report written.\n"
+        )
+        return
+
+    if args.decode_format == "json":
+        rendered = render_json(tree)
+        ext = ".json"
+    else:
+        include_iocs = getattr(args, 'decode_iocs', False)
+        rendered = render_text(tree, include_iocs=include_iocs)
+        ext = ".txt"
+
+    output_path = _resolve_decode_location(args, ext)
+    try:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(rendered, encoding="utf-8")
+    except OSError as exc:
+        sys.stderr.write(
+            f"warning: could not write decoded-payload report to "
+            f"{output_path}: {exc}\n"
+        )
+        return
+
+    sys.stderr.write(
+        f"note: decoded-payload report written to {output_path}\n"
+    )
+
+
+def _resolve_decode_location(
+    args: argparse.Namespace,
+    ext: str,
+) -> Path:
+    """Compute the output path for the decode-payload report.
+
+    When --decode-location was set, use it verbatim (no extension
+    munging; the user picked the path they want). Otherwise build
+    <cwd>/decoded/decoded_payloads_<targetname><ext>, where
+    <targetname> is derived from the scan target with directory
+    components stripped and unsafe characters squashed.
+    """
+    explicit = getattr(args, "decode_location", None)
+    if explicit:
+        return Path(explicit)
+
+    target = args.target or args.single or "scan"
+    safe = _sanitize_target_for_filename(Path(target).name)
+    return Path.cwd() / "decoded" / f"decoded_payloads_{safe}{ext}"
+
+
+def _sanitize_target_for_filename(raw: str) -> str:
+    """Make a target string safe for use in a filename."""
+    out_chars: list[str] = []
+    for ch in raw:
+        if ch.isalnum() or ch in ("-", "_", "."):
+            out_chars.append(ch)
+        else:
+            out_chars.append("_")
+    sanitized = "".join(out_chars).strip("._-")
+    return sanitized or "scan"
