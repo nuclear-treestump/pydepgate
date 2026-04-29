@@ -312,7 +312,7 @@ def _render_statistics(result: ScanResult, stream: TextIO, color: bool) -> None:
             stream.write(f"{dim_pre}note: {diag}{dim_post}\n")
 
 
-def render_json(result: ScanResult, stream: TextIO) -> None:
+def report_render_json(result: ScanResult, stream: TextIO) -> None:
     """Render a ScanResult as a single JSON object on stdout."""
     payload = {
         "schema_version": 2,

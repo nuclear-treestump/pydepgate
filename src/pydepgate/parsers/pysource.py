@@ -8,6 +8,21 @@ inert data structures.
 
 Used by pydepgate's setup.py parser, __init__.py analyzer, and anywhere
 else Python source needs to be inspected without running it.
+
+SyntaxWarning suppression:
+
+    Python 3.12+ raises SyntaxWarning during ast.parse for things like
+    invalid escape sequences (`\\|` outside a raw string), useless
+    `is` comparisons, and other lint-grade issues. Decoded payloads
+    routinely contain such constructs because the malware author
+    didn't care about lint warnings, and surfacing them as warnings
+    on stderr pollutes the user's output stream during a scan.
+
+    We wrap the ast.parse call in warnings.catch_warnings() and
+    silence SyntaxWarning specifically (not all warnings; we still
+    want DeprecationWarning, RuntimeWarning, etc to surface). The
+    suppression is scoped tightly to the parse call so it cannot
+    affect surrounding code.
 """
 
 from __future__ import annotations
@@ -15,6 +30,7 @@ from __future__ import annotations
 import ast
 import io
 import tokenize
+import warnings
 from dataclasses import dataclass
 from enum import Enum
 
@@ -196,7 +212,7 @@ def _fallback_comment_scan(source_bytes: bytes) -> tuple[Comment, ...]:
 
 def _extract_comments(source_bytes: bytes) -> tuple[tuple[Comment, ...], str]:
     """Tokenize source and extract all comment tokens.
-    
+
     Returns (comments, encoding_used). The encoding is reported by
     tokenize.detect_encoding based on BOM, PEP 263 declaration, or default.
     On tokenization failure, returns whatever comments were successfully
@@ -207,7 +223,7 @@ def _extract_comments(source_bytes: bytes) -> tuple[tuple[Comment, ...], str]:
     # tokenize.tokenize wants a callable returning bytes (the readline
     # interface). We wrap our bytes in a BytesIO.
     buf = io.BytesIO(source_bytes)
-    
+
     # Detect encoding first. This also consumes the BOM if present.
     # We need to rewind and re-tokenize because detect_encoding's position
     # is not at a clean start for tokenize().
@@ -216,7 +232,7 @@ def _extract_comments(source_bytes: bytes) -> tuple[tuple[Comment, ...], str]:
     except (SyntaxError, UnicodeDecodeError):
         encoding = "utf-8"
     buf.seek(0)
-    
+
     comments: list[Comment] = []
     try:
         for tok in tokenize.tokenize(buf.readline):
@@ -236,7 +252,7 @@ def _extract_comments(source_bytes: bytes) -> tuple[tuple[Comment, ...], str]:
         # bytes aren't valid UTF-8). 3.12+ wraps this in TokenError. Fall
         # back to the manual scan, which works on raw bytes.
         comments = list(_fallback_comment_scan(source_bytes))
-    
+
     return tuple(comments), encoding
 
 
@@ -259,6 +275,13 @@ def parse_python_source(
         A ParsedPySource describing what was found. Check the status
         field before using ast_tree or comments. a failed parse may
         have empty or partial data.
+
+    SyntaxWarnings raised during ast.parse (invalid escape sequences,
+    useless `is` comparisons on literals, and similar lint-grade
+    diagnostics) are silenced. Static analysis does not execute the
+    code, so these warnings carry no actionable signal for callers
+    of this function. Other warning categories (DeprecationWarning,
+    RuntimeWarning) pass through unchanged.
     """
     size_bytes = len(source_bytes)
 
@@ -286,9 +309,15 @@ def parse_python_source(
 
     line_count = source_text.count("\n") + (0 if source_text.endswith("\n") else 1 if source_text else 0)
 
-    # Attempt to parse the AST.
+    # Attempt to parse the AST. We suppress SyntaxWarning for the
+    # duration of the parse call; see module docstring for rationale.
+    # The catch_warnings block is scoped tightly so any warnings from
+    # surrounding code (or from the analyzer that called us) are
+    # unaffected.
     try:
-        tree = ast.parse(source_bytes, filename=source_path)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", SyntaxWarning)
+            tree = ast.parse(source_bytes, filename=source_path)
     except SyntaxError as exc:
         return ParsedPySource(
             source_path=source_path,
