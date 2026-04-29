@@ -76,12 +76,12 @@ class ParsedPth:
     @property
     def exec_lines(self) -> tuple[PthLine, ...]:
         """All lines site.py would pass to exec()."""
-        return tuple(l for l in self.lines if l.kind is LineKind.EXEC)
+        return tuple(line for line in self.lines if line.kind is LineKind.EXEC)
 
     @property
     def path_lines(self) -> tuple[PthLine, ...]:
         """All lines site.py would append to sys.path."""
-        return tuple(l for l in self.lines if l.kind is LineKind.PATH)
+        return tuple(line for line in self.lines if line.kind is LineKind.PATH)
 
 
 # These prefixes exactly match the check in CPython's site.addpackage().

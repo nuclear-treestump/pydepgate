@@ -26,41 +26,59 @@ identifier patterns.
 What works today:
 
 - Static analysis of `.whl` files, sdists (`.tar.gz`/`.tgz`/etc.),
-  installed packages by name, and individual loose files via `--single`.
+installed packages by name, and individual loose files via `--single`.
 - Five production analyzers: `encoding_abuse`, `dynamic_execution`,
-  `string_ops`, `suspicious_stdlib`, and `code_density`.
+`string_ops`, `suspicious_stdlib`, and `code_density`.
 - Defense in depth on real attack shapes. The LiteLLM 1.82.8 `.pth`
-  payload, for example, fires across four analyzers simultaneously
-  (ENC001, DYN002, DENS010, DENS011) so an attacker has to evade every
-  layer to get past the scanner.
+payload, for example, fires across four analyzers simultaneously
+(ENC001, DYN002, DENS010, DENS011) so an attacker has to evade every
+layer to get past the scanner.
 - A rules engine that promotes severity based on file kind and signal
-  context, fully data-driven via TOML or JSON. The default rule set
-  includes 32 rules dedicated to density-layer signals alone.
+context, fully data-driven via TOML or JSON. The default rule set
+includes 32 rules dedicated to density-layer signals alone.
 - A safe partial evaluator that resolves obfuscated string expressions
-  without executing user code.
+without executing user code.
+- An optional payload-peek enricher (`--peek`) that safely partial-decodes
+large encoded literals so you can see what's inside without executing
+anything. Handles base64, hex, zlib, gzip, bzip2, and lzma chains up to
+a configurable depth, classifies the terminal payload, scans for
+high-signal indicator strings, and emits ENC002 when the unwrap chain
+is nested. Pickle data is detected but never deserialized;
+decompression bombs are bounded by an in-flight byte budget. Tunable
+via `--peek-depth`, `--peek-budget`, `--peek-min-length`, and
+`--peek-chain` (verbose per-layer hex dumps).
 - An SSH-randomart-style finding-distribution map rendered inline with
-  human-readable scan output, showing where in a file the findings
-  cluster and at what severity.
+human-readable scan output, showing where in a file the findings
+cluster and at what severity.
 - Command-line interface with `scan` (including `--single` for
-  iteration on individual files) and `explain` subcommands, environment
-  variable support, configurable severity thresholds, and CI-friendly
-  output modes.
-- Three output formats: human-readable terminal, JSON, and a stub for
-  SARIF (planned for v0.5).
-- An optional payload-peek enricher (`--peek`) that safely
-  partial-decodes large encoded literals so you can see what's inside
-  without executing anything. Handles base64, hex, zlib, gzip, bzip2,
-  and lzma chains up to a configurable depth, classifies the terminal
-  payload (Python source, pickle, PE/ELF, archive, image), and emits
-  ENC002 when the unwrap chain is nested. Pickle data is detected
-  but never deserialized; decompression bombs are bounded by an
-  in-flight byte budget.
+iteration on individual files) and explain subcommands, environment
+variable support, configurable severity thresholds, and CI-friendly
+output modes.
+- Three output formats: human-readable terminal, JSON (schema v2), and
+a stub for SARIF (planned for v0.4).
+- Explicit color control via `--color={auto,always,never}` (or
+`PYDEPGATE_COLOR`), with `--no-color` preserved as an alias.
+`--color=always` forces ANSI codes through pipes for `less -R` and
+terminal-aware log viewers.
+- Pre-commit hook integration. Drop pydepgate into any Python project's
+`.pre-commit-config.yaml` to catch startup-vector patterns at commit
+time. Two hook ids: `pydepgate` for `.py` files (defaults to
+`--min-severity high` so informational findings don't block commits)
+and `pydepgate-pth` for `.pth` files (no severity filter; .pth files
+have no legitimate use for the patterns pydepgate detects).
+- Official Docker image at `ghcr.io/nuclear-treestump/pydepgate`.
+Multi-stage Alpine build under 50 MB, runs as non-root (uid 1000),
+published for `linux/amd64` and `linux/arm64`, tagged per release.
+Composes with any Python build pipeline that produces a wheel.
 
 What is in active development:
 
-- The `comment_analysis` analyzer.
+- The comment_analysis analyzer.
 - Runtime interdiction (`exec` mode).
 - Environment auditing (`preflight` mode).
+- Aliased import resolution (`from subprocess import Popen as P`).
+- A pip-wrapper / transitive-dependency `audit` subcommand.
+- SARIF 2.1.0 output for GitHub code scanning and similar consumers.
 
 [Available on PyPI as pydepgate](https://pypi.org/project/pydepgate/).
 
@@ -178,6 +196,7 @@ default; opt in with `--peek`.
 | `--peek-depth N` | `PYDEPGATE_PEEK_DEPTH` | 3 | Max unwrap layers. Floor 1, ceiling 10. |
 | `--peek-budget BYTES` | `PYDEPGATE_PEEK_BUDGET` | 524288 (512 KB) | Cumulative output cap across all layers. Floor 1024. |
 | `--peek-chain` | `PYDEPGATE_PEEK_CHAIN` | off | Verbose per-layer breakdown with xxd-style hex dump in human output. |
+| `--peek-min-length BYTES` | `PYDEPGATE_PEEK_MIN_LENGTH` | 1024 | Minimum literal size before unwrap is attempted. Floor 16. |
 
 These behave as global flags accepted before or after the subcommand:
 
@@ -257,6 +276,7 @@ All flags can be set via environment variables. Explicit flags override environm
 | `PYDEPGATE_PEEK_DEPTH` | `--peek-depth` |
 | `PYDEPGATE_PEEK_BUDGET` | `--peek-budget` |
 | `PYDEPGATE_PEEK_CHAIN` | `--peek-chain` |
+| `PYDEPGATE_PEEK_MIN_LENGTH` | `--peek-min-length` |
 
 ## What pydepgate detects
 

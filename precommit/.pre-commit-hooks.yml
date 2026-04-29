@@ -1,0 +1,59 @@
+# pre-commit hooks for pydepgate.
+#
+# Users add this repo as a hook source in their .pre-commit-config.yaml:
+#
+#   repos:
+#     - repo: https://github.com/nuclear-treestump/pydep-vector-runner
+#       rev: v0.2.0
+#       hooks:
+#         - id: pydepgate
+#         - id: pydepgate-pth
+#
+# Two hook ids are exposed:
+#
+#   pydepgate
+#     Runs against staged .py files via `pydepgate scan --single`. Defaults
+#     to --min-severity high so that purely-informational signals (DENS021
+#     confusable identifiers, DENS020 low-vowel identifiers, etc.) don't
+#     block commits. Users who want stricter or looser thresholds can
+#     override via the `args` field in their hook config.
+#
+#   pydepgate-pth
+#     Runs only against staged .pth files. No severity filter here. Anything
+#     pydepgate fires on a .pth is worth a human looking at, since .pth
+#     files have no legitimate use cases for the patterns pydepgate
+#     detects.
+#
+# Both hooks honor PYDEPGATE_* environment variables, so users can
+# configure peek behavior, rules-file discovery, etc., via their CI
+# environment without changing the hook config.
+
+- id: pydepgate
+  name: pydepgate (Python source)
+  description: Static analysis for Python supply-chain malware patterns.
+  entry: pydepgate scan --single
+  language: python
+  types: [python]
+  args: [--min-severity, high, --no-color]
+  # Pre-commit invokes the entry once per file. Each invocation is a
+  # full scan of one source file, which takes well under a second.
+  pass_filenames: true
+  # Don't run on merge commits. They re-introduce already-reviewed
+  # code, and we don't want to block merges on findings the team has
+  # already triaged on the source branch.
+  stages: [pre-commit, manual]
+
+- id: pydepgate-pth
+  name: pydepgate (.pth files)
+  description: |
+    Static analysis for Python startup-vector .pth files. Catches
+    decode-and-execute patterns at the strictest severity threshold;
+    .pth files have no legitimate use case for the patterns pydepgate
+    detects, so any finding warrants review.
+  entry: pydepgate scan --single
+  language: python
+  files: \.pth$
+  types_or: [file]
+  args: [--no-color]
+  pass_filenames: true
+  stages: [pre-commit, manual]
