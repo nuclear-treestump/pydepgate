@@ -33,7 +33,7 @@ FROM python:3.12-alpine AS builder
 # build-base or libffi-dev or any of the usual Alpine compile packages.
 # The pure-Python install completes against the standard library only.
 
-ARG PYDEPGATE_VERSION=0.2.1
+ARG PYDEPGATE_VERSION=0.2.2
 
 RUN python -m venv /opt/pydepgate-venv \
     && /opt/pydepgate-venv/bin/pip install --no-cache-dir --upgrade pip \
@@ -57,7 +57,7 @@ FROM python:3.12-alpine
 # Standard OCI labels so registries and tooling can extract metadata
 # without parsing the README. Version label is filled in by the build
 # arg so it stays in sync with the installed pydepgate.
-ARG PYDEPGATE_VERSION=0.2.0
+ARG PYDEPGATE_VERSION=0.2.2
 
 LABEL org.opencontainers.image.title="pydepgate" \
       org.opencontainers.image.description="Static analyzer for Python supply-chain malware patterns" \
