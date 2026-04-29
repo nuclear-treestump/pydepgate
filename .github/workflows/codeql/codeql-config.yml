@@ -2,10 +2,10 @@ name: 'CodeQL Config File'
 
 paths:
  - src 
+ - .github/workflows/**
 paths-ignore:
  - test_files/**
  - tests/**
  - docker/**
  - precommit/**
  - scripts/**
- - .github/**
