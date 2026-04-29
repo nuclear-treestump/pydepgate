@@ -6,7 +6,7 @@ import argparse
 import sys
 
 
-_VERSION = "0.0.4"
+__version__ = "0.2.1"
 
 
 def register(subparsers) -> None:
@@ -18,10 +18,10 @@ def register(subparsers) -> None:
 
 
 def run(args: argparse.Namespace) -> int:
-    sys.stdout.write(f"pydepgate {_VERSION}\n")
+    sys.stdout.write(f"pydepgate {__version__}\n")
     return 0
 
 
 def get_version() -> str:
     """Programmatic version access for the --version flag."""
-    return _VERSION
+    return __version__
