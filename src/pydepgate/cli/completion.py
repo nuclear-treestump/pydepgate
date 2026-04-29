@@ -263,6 +263,8 @@ def _explain_topic_candidates() -> list[str]:
     try:
         candidates.extend(list_all_signal_ids())
     except Exception:
+        # If built-in signal discovery fails, continue with whatever
+        # other candidates we can still compute.
         pass
 
     user_rules: list = []
@@ -278,6 +280,8 @@ def _explain_topic_candidates() -> list[str]:
     try:
         candidates.extend(list_all_rule_ids(user_rules))
     except Exception:
+        # If rule ID enumeration fails for any reason, keep any
+        # previously collected candidates so shell completion still works.
         pass
 
     # De-dup while preserving sort order; signal IDs and rule IDs
