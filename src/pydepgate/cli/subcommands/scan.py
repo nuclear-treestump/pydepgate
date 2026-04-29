@@ -374,7 +374,7 @@ def _render_and_exit_code(result: ScanResult, args: argparse.Namespace) -> int:
         render_sarif_stub(sys.stdout)
         return exit_codes.TOOL_ERROR
     else:
-        render_human(filtered, sys.stdout, no_color=args.no_color, ci_mode=args.ci, peek_chain=peek_chain)
+        render_human(filtered, sys.stdout, color=args.color, ci_mode=args.ci, peek_chain=peek_chain)
 
     # Compute exit code from the appropriate finding set.
     findings_for_exit = (

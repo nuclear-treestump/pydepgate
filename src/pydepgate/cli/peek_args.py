@@ -8,7 +8,7 @@ subsystem. It exposes four functions intended to be called from
 is built):
 
     add_peek_arguments(parser)
-        Add the four peek-related flags to an argparse parser.
+        Add the peek-related flags to an argparse parser.
 
     validate_peek_args(args, *, stderr)
         Emit warnings for tuning flags passed without `--peek`,
@@ -71,6 +71,7 @@ ENV_PEEK = "PYDEPGATE_PEEK"
 ENV_PEEK_DEPTH = "PYDEPGATE_PEEK_DEPTH"
 ENV_PEEK_BUDGET = "PYDEPGATE_PEEK_BUDGET"
 ENV_PEEK_CHAIN = "PYDEPGATE_PEEK_CHAIN"
+ENV_PEEK_MIN_LENGTH = "PYDEPGATE_PEEK_MIN_LENGTH"
 
 
 # ---------------------------------------------------------------------------
@@ -128,7 +129,7 @@ def add_peek_arguments(
     is_subparser: bool = False,
     stderr: TextIO | None = None,
 ) -> None:
-    """Add the four `--peek*` flags to `parser`.
+    """Add the `--peek*` flags to `parser`.
 
     Defaults for each flag are computed from the corresponding
     environment variable, falling back to the built-in default.
@@ -145,11 +146,15 @@ def add_peek_arguments(
         default_depth = argparse.SUPPRESS
         default_budget = argparse.SUPPRESS
         default_chain = argparse.SUPPRESS
+        default_min_length = argparse.SUPPRESS
     else:
         default_peek = _env_bool(ENV_PEEK, False)
         default_depth = _env_int(ENV_PEEK_DEPTH, DEFAULT_MAX_DEPTH, stderr=stderr)
         default_budget = _env_int(ENV_PEEK_BUDGET, DEFAULT_MAX_BUDGET, stderr=stderr)
         default_chain = _env_bool(ENV_PEEK_CHAIN, False)
+        default_min_length = _env_int(
+            ENV_PEEK_MIN_LENGTH, DEFAULT_MIN_LENGTH, stderr=stderr,
+        )
 
     group = parser.add_argument_group(
         "payload peek",
@@ -201,6 +206,23 @@ def add_peek_arguments(
     )
 
     group.add_argument(
+        "--peek-min-length",
+        type=int,
+        default=default_min_length,
+        metavar="BYTES",
+        help=(
+            f"Minimum literal size, in bytes, before the enricher "
+            f"will attempt to unwrap. Smaller literals are skipped "
+            f"because the cost of decoding tiny strings is rarely "
+            f"worth the result, and many short high-entropy strings "
+            f"are benign (UUIDs, hashes, color codes). "
+            f"Default {DEFAULT_MIN_LENGTH}, floor {MIN_LENGTH_FLOOR}. "
+            f"Lower this if you want to inspect smaller blobs; raise "
+            f"it to skip more noise. (env: PYDEPGATE_PEEK_MIN_LENGTH)"
+        ),
+    )
+
+    group.add_argument(
         "--peek-chain",
         action="store_true",
         default=default_chain,
@@ -230,6 +252,7 @@ def validate_peek_args(
     Hard errors (raise SystemExit):
       - `--peek-depth` outside [1, PEEK_DEPTH_CEILING].
       - `--peek-budget` below MIN_BUDGET_FLOOR.
+      - `--peek-min-length` below MIN_LENGTH_FLOOR.
 
     Hard errors only fire when `--peek` is enabled; if the flag
     is off, the values are ignored so out-of-range settings are
@@ -245,6 +268,8 @@ def validate_peek_args(
             ignored.append("--peek-depth")
         if args.peek_budget != DEFAULT_MAX_BUDGET:
             ignored.append("--peek-budget")
+        if args.peek_min_length != DEFAULT_MIN_LENGTH:
+            ignored.append("--peek-min-length")
         if args.peek_chain:
             ignored.append("--peek-chain")
         if ignored:
@@ -273,6 +298,12 @@ def validate_peek_args(
             f"--peek-budget floor is {MIN_BUDGET_FLOOR} bytes; "
             f"got {args.peek_budget}",
         )
+    if args.peek_min_length < MIN_LENGTH_FLOOR:
+        _exit_with_error(
+            stderr,
+            f"--peek-min-length floor is {MIN_LENGTH_FLOOR} bytes; "
+            f"got {args.peek_min_length}",
+        )
 
 
 def _exit_with_error(stderr: TextIO, message: str) -> None:
@@ -299,7 +330,7 @@ def build_peek_enricher(args: argparse.Namespace) -> PayloadPeek | None:
     if not args.peek:
         return None
     return PayloadPeek(
-        min_length=DEFAULT_MIN_LENGTH,
+        min_length=args.peek_min_length,
         max_depth=args.peek_depth,
         max_budget=args.peek_budget,
     )

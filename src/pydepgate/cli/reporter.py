@@ -46,17 +46,39 @@ class _Color:
     CYAN = "\033[36m"
 
 
-def _color_enabled(no_color_flag: bool) -> bool:
+# Color mode constants. Mirror the ones in pydepgate.cli.main; kept
+# here as local strings so the reporter has no upward import on the
+# CLI module. The CLI sets args.color to one of these values; the
+# reporter receives the string and decides what to do with it.
+COLOR_AUTO = "auto"
+COLOR_ALWAYS = "always"
+COLOR_NEVER = "never"
+
+
+def _color_enabled(color_mode: str) -> bool:
     """Decide whether ANSI color codes should be emitted.
 
-    Disabled if:
-      - The user passed --no-color (no_color_flag is True)
-      - The NO_COLOR environment variable is set (any value)
-      - The PYDEPGATE_NO_COLOR environment variable is set
-      - stdout is not a terminal (output is being piped or redirected)
+    Three modes:
+      always  Always emit color, even when stdout is not a TTY and
+              even when NO_COLOR is set in the environment. The user
+              explicitly asked for color; respect that.
+      never   Never emit color.
+      auto    Defer to environment and TTY detection. Color is
+              disabled if NO_COLOR or PYDEPGATE_NO_COLOR is set in
+              the environment, or if stdout is not a terminal
+              (output is being piped or redirected).
+
+    The auto branch is the historical default behavior; always and
+    never are the new escape hatches.
     """
-    if no_color_flag:
+    if color_mode == COLOR_ALWAYS:
+        return True
+    if color_mode == COLOR_NEVER:
         return False
+
+    # auto (or any unrecognized value, defensively): the historical
+    # rules. NO_COLOR per the no-color.org standard takes precedence
+    # over auto-detection but not over an explicit "always".
     if os.environ.get("NO_COLOR"):
         return False
     if os.environ.get("PYDEPGATE_NO_COLOR"):
@@ -95,12 +117,20 @@ def _group_findings_by_path(
 def render_human(
     result: ScanResult,
     stream: TextIO,
-    no_color: bool = False,
+    color: str = COLOR_AUTO,
     ci_mode: bool = False,
     peek_chain: bool = False,
 ) -> None:
-    """Render a ScanResult as colored, human-readable terminal output."""
-    color = _color_enabled(no_color)
+    """Render a ScanResult as colored, human-readable terminal output.
+
+    `color` is one of "auto", "always", or "never". The auto branch
+    is the historical default behavior (color when stdout is a TTY
+    and no NO_COLOR-style env var is set). Callers passing a legacy
+    boolean should map True -> "never" and False -> "auto" at the
+    call site; this signature is intentionally string-only so the
+    tristate semantics are explicit.
+    """
+    color_on = _color_enabled(color)
     findings = result.findings
     suppressed = result.suppressed_findings
 
@@ -109,13 +139,13 @@ def render_human(
             stream.write(f"pydepgate: clean ({result.artifact_identity})\n")
         else:
             green_pre, green_post = (
-                (_Color.GREEN, _Color.RESET) if color else ("", "")
+                (_Color.GREEN, _Color.RESET) if color_on else ("", "")
             )
             stream.write(
                 f"{green_pre}No findings{green_post} in "
                 f"{result.artifact_identity}\n"
             )
-            _render_statistics(result, stream, color)
+            _render_statistics(result, stream, color_on)
         return
 
     if findings:
@@ -123,7 +153,7 @@ def render_human(
         for path, file_findings in groups.items():
             # Render all findings for this file.
             for finding in file_findings:
-                _render_finding(finding, stream, color, ci_mode, peek_chain)
+                _render_finding(finding, stream, color_on, ci_mode, peek_chain)
 
             # Render the density map for this file (no-op if color off or CI).
             if not ci_mode:
@@ -131,7 +161,7 @@ def render_human(
                     filename=path,
                     findings=file_findings,
                     total_lines=None,   # approximate from max finding line
-                    color=color,
+                    color=color_on,
                 )
                 if map_str:
                     stream.write("\n" + map_str + "\n")
@@ -139,9 +169,11 @@ def render_human(
     # Suppressed findings section.
     if suppressed:
         if not ci_mode:
-            dim_pre, dim_post = (_Color.DIM, _Color.RESET) if color else ("", "")
+            dim_pre, dim_post = (
+                (_Color.DIM, _Color.RESET) if color_on else ("", "")
+            )
             yellow_pre, yellow_post = (
-                (_Color.YELLOW, _Color.RESET) if color else ("", "")
+                (_Color.YELLOW, _Color.RESET) if color_on else ("", "")
             )
             stream.write(
                 f"\n{yellow_pre}{len(suppressed)} suppressed finding"
@@ -154,10 +186,10 @@ def render_human(
             )
 
         for sup in suppressed:
-            _render_suppressed_finding(sup, stream, color, ci_mode)
+            _render_suppressed_finding(sup, stream, color_on, ci_mode)
 
     if not ci_mode:
-        _render_statistics(result, stream, color)
+        _render_statistics(result, stream, color_on)
 
 
 def _render_suppressed_finding(
