@@ -1,0 +1,139 @@
+# Build and publish the pydepgate Docker image to GitHub Container
+# Registry (ghcr.io). Triggered on:
+#
+#   - Push of a tag matching v*.*.*  (e.g. v0.2.0, v0.2.1)
+#       -> publishes :MAJOR.MINOR.PATCH, :MAJOR.MINOR, :latest
+#   - Manual workflow_dispatch
+#       -> publishes the version specified in the input
+#
+# Pull requests build but do not push, so PRs that touch the
+# Dockerfile get validated without polluting the registry.
+#
+# The image is built for both linux/amd64 and linux/arm64 so it
+# works on Intel CI runners and Apple Silicon developer machines.
+#
+# Required repository configuration:
+#
+#   - The default GITHUB_TOKEN already has write access to ghcr.io
+#     for the repo's owner; no extra secret needed.
+#   - The package visibility (public vs private) is set on first
+#     push via the package settings on github.com.
+
+name: docker-publish
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  pull_request:
+    paths:
+      - "docker/**"
+      - ".github/workflows/docker-publish.yml"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "pydepgate version to package (must already be on PyPI)"
+        required: true
+        default: "0.2.1"
+
+# Single concurrency group per ref so a rapid double-push doesn't
+# end up with two builds racing to publish overlapping tags.
+concurrency:
+  group: docker-publish-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+      # id-token write is here for future cosign signing; harmless to
+      # request even if no signing step uses it yet.
+      id-token: write
+
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      # Resolve the pydepgate version we're packaging. For tag
+      # pushes, strip the leading "v" off the tag. For manual
+      # dispatches, take the input. For PRs, default to 0.2.1 so
+      # the validation build has something to install.
+      - name: Determine pydepgate version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "push" ] && [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            echo "value=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "value=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=0.2.1" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up QEMU for cross-arch builds
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Skip the registry login on PR runs since we're not pushing.
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Compute image tags. For a tag push of v0.2.1, this produces:
+      #   ghcr.io/<owner>/pydepgate:0.2.1
+      #   ghcr.io/<owner>/pydepgate:0.2
+      #   ghcr.io/<owner>/pydepgate:latest
+      #
+      # For workflow_dispatch with version=0.2.1, same tags. For PRs,
+      # produces a pr-NNN tag that we don't actually push.
+      - name: Compute image tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/pydepgate
+          tags: |
+            type=semver,pattern={{version}},value=v${{ steps.version.outputs.value }}
+            type=semver,pattern={{major}}.{{minor}},value=v${{ steps.version.outputs.value }}
+            type=raw,value=latest,enable=${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
+            type=ref,event=pr
+          labels: |
+            org.opencontainers.image.title=pydepgate
+            org.opencontainers.image.description=Static analyzer for Python supply-chain malware patterns
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.licenses=Apache-2.0
+            org.opencontainers.image.version=${{ steps.version.outputs.value }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./docker
+          file: ./docker/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            PYDEPGATE_VERSION=${{ steps.version.outputs.value }}
+          # Cache layers across runs to keep build times short.
+          # GitHub Actions cache backend is the standard choice
+          # for ephemeral runners.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Smoke-test the image we just built (or would have built, on
+      # PRs) by running --version. Catches busted images before
+      # anyone pulls them.
+      - name: Smoke-test the image
+        if: github.event_name != 'pull_request'
+        run: |
+          docker run --rm \
+            ghcr.io/${{ github.repository_owner }}/pydepgate:${{ steps.version.outputs.value }} \
+            --version
