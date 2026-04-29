@@ -1,0 +1,11 @@
+name: 'CodeQL Config File'
+
+paths:
+ - src 
+paths-ignore:
+ - test_files/**
+ - tests/**
+ - docker/**
+ - precommit/**
+ - scripts/**
+ - .github/**
