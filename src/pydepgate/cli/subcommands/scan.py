@@ -28,6 +28,8 @@ from __future__ import annotations
 
 import argparse
 import sys
+import os
+import datetime
 from pathlib import Path
 
 from pydepgate.analyzers.encoding_abuse import EncodingAbuseAnalyzer
@@ -38,7 +40,7 @@ from pydepgate.analyzers.density_analyzer import CodeDensityAnalyzer
 from pydepgate.cli import exit_codes
 from pydepgate.cli.progress import make_progress_callback
 from pydepgate.cli.reporter import (
-    render_human, render_json, render_sarif_stub,
+    render_human, report_render_json, render_sarif_stub,
 )
 from pydepgate.engines.base import (
     ArtifactKind, ScanResult, ScanStatistics, Severity,
@@ -46,7 +48,25 @@ from pydepgate.engines.base import (
 from pydepgate.engines.static import StaticEngine
 from pydepgate.traffic_control.triage import FileKind
 from pydepgate.cli.peek_args import build_peek_enricher, peek_chain_enabled
-
+from pydepgate.cli.decode_args import (
+    DECODE_IOCS_FULL,
+    DECODE_IOCS_HASHES,
+    DECODE_IOCS_OFF,
+    decode_archive_compression,
+    decode_archive_password,
+    decode_enabled,
+    decode_extract_iocs,
+    decode_iocs_mode,
+)
+from pydepgate.cli.decode_payloads import (
+    decode_payloads,
+    filter_tree_by_severity,
+    render_iocs,
+    render_json,
+    render_sources,
+    render_text,
+)
+from pydepgate.cli._archive import write_encrypted_zip
 
 _SDIST_SUFFIXES = (".tar.gz", ".tgz", ".tar.bz2", ".tar.xz", ".tar")
 
@@ -250,7 +270,18 @@ def run(args: argparse.Namespace) -> int:
             # scan raised. Otherwise an exception traceback would
             # render on the same line as the bar.
             finish_progress()
-    return _render_and_exit_code(result, args)
+    exit_code = _render_and_exit_code(result, args)
+
+    # Decoded-payload pass. Runs after the main scan when the user
+    # opted in via --decode-payload-depth. The driver re-invokes the
+    # engine on the decoded form of payload-bearing findings,
+    # recursing up to the requested depth. Output goes to a file at
+    # the user-specified --decode-location (or an auto-generated
+    # path under <cwd>/decoded/).
+    if decode_enabled(args):
+        _run_decode_pass(result, engine, args)
+
+    return exit_code
 
 
 def _dispatch_scan(
@@ -369,7 +400,7 @@ def _render_and_exit_code(result: ScanResult, args: argparse.Namespace) -> int:
     
     # Render in the requested format.
     if args.format == "json":
-        render_json(filtered, sys.stdout)
+        report_render_json(filtered, sys.stdout)
     elif args.format == "sarif":
         render_sarif_stub(sys.stdout)
         return exit_codes.TOOL_ERROR
@@ -424,3 +455,307 @@ def _compute_exit_code(findings) -> int:
     if has_blocking:
         return exit_codes.FINDINGS_BLOCKING
     return exit_codes.FINDINGS_BELOW_BLOCKING
+
+
+def _sanitize_target_for_filename(raw: str) -> str:
+    """Make a target string safe for use in a filename.
+
+    Allowed character set: [A-Za-z0-9._-]. Anything else is replaced
+    with a single underscore. Leading dots/underscores/hyphens are
+    stripped (a leading dot would make the file hidden on Unix and
+    rejected on Windows; the others are aesthetic). An empty result
+    falls back to 'unknown_target' so we never produce a path with
+    no visible filename component.
+    """
+    out_chars: list[str] = []
+    for ch in raw:
+        if ch.isalnum() or ch in ("-", "_", "."):
+            out_chars.append(ch)
+        else:
+            out_chars.append("_")
+    sanitized = "".join(out_chars).strip("._-")
+    return sanitized or "unknown_target"
+
+
+def _build_decode_filename(
+    *,
+    status: str,
+    target: str,
+    ext: str,
+    timestamp: datetime.datetime | None = None,
+) -> str:
+    """Build the filename for a decoded-payload output file.
+
+    Pattern: {STATUS}_{timestamp}_{target}{ext}, where:
+      STATUS is 'FINDINGS' or 'NOFINDINGS'.
+      timestamp is UTC, formatted '%Y-%m-%d_%H-%M-%S' (no Z suffix;
+        the format is sortable lexicographically and unambiguous).
+      target is a sanitized identifier from artifact_identity.
+      ext is the file extension including the leading dot.
+
+    The timestamp parameter is for tests; production callers pass
+    None to use the current UTC time.
+    """
+    if timestamp is None:
+        timestamp = datetime.datetime.now(datetime.timezone.utc)
+    ts = timestamp.strftime("%Y-%m-%d_%H-%M-%S")
+    return f"{status}_{ts}_{target}{ext}"
+
+
+def _resolve_decode_location(
+    args: argparse.Namespace,
+    result: ScanResult,
+    tree: DecodedTree,
+    ext: str,
+) -> Path:
+    """Compute the output path for the decoded-payload report.
+
+    --decode-location, when set, is treated as a DIRECTORY (not a
+    file). The file inside follows the convention
+        {STATUS}_{timestamp}_{target}{ext}
+    See _build_decode_filename for the field meanings.
+
+    When --decode-location is not set, the directory defaults to
+    <cwd>/decoded/.
+
+    The directory is not created here; the caller is responsible
+    for mkdir on output_path.parent and for handling the case
+    where the parent path exists as a non-directory.
+    """
+    explicit = getattr(args, "decode_location", None)
+    if explicit:
+        directory = Path(explicit)
+    else:
+        directory = Path.cwd() / "decoded"
+
+    status = "FINDINGS" if tree.nodes else "NOFINDINGS"
+    target_basename = os.path.basename(result.artifact_identity)
+    target = _sanitize_target_for_filename(target_basename)
+
+    filename = _build_decode_filename(
+        status=status,
+        target=target,
+        ext=ext,
+    )
+    return directory / filename
+
+
+def _run_decode_pass(
+    result: ScanResult,
+    engine: StaticEngine,
+    args: argparse.Namespace,
+) -> None:
+    """Run the decoded-payload driver and write its output to disk.
+
+    Branching on --decode-iocs mode:
+      off    : single plaintext report file. Skip on empty tree.
+      hashes : plaintext report + plaintext .iocs.txt sidecar.
+               Skip on empty tree.
+      full   : encrypted ZIP containing report.txt, sources.txt,
+               and iocs.txt, plus a plaintext .iocs.txt sidecar
+               next to the archive. ALWAYS produces output, even
+               when the tree is empty (NOFINDINGS stub archive),
+               so downstream tooling can rely on archive presence.
+
+    The --min-severity flag is applied as a presentation filter
+    AFTER decoding completes. Decoding itself runs over every
+    payload-bearing finding regardless of severity, because a
+    low-severity outer finding can decode to a critical inner one.
+
+    Failures are non-fatal: the main scan exit code already fired,
+    so a problem here just gets a stderr diagnostic.
+    """
+    extract_iocs = decode_extract_iocs(args)
+
+    try:
+        tree = decode_payloads(
+            result,
+            engine=engine,
+            max_depth=args.decode_payload_depth,
+            peek_min_length=args.peek_min_length,
+            peek_max_depth=args.peek_depth,
+            peek_max_budget=args.peek_budget,
+            extract_iocs=extract_iocs,
+        )
+    except Exception as exc:  # noqa: BLE001 - non-fatal post-scan step
+        sys.stderr.write(
+            f"warning: decoded-payload pass failed: "
+            f"{type(exc).__name__}: {exc}\n"
+        )
+        return
+
+    # Apply --min-severity as a post-decode presentation filter.
+    # Decoding was NOT gated by this; the engine ran over every
+    # payload-bearing finding so a low-severity outer that decodes
+    # to a critical inner is still captured. The filter here just
+    # cleans the tree up before rendering.
+    min_sev = getattr(args, "min_severity", None)
+    if min_sev:
+        tree = filter_tree_by_severity(tree, min_sev)
+
+    mode = decode_iocs_mode(args)
+
+    # JSON format short-circuits the mode logic. The JSON output
+    # carries ioc_data inline when extract_iocs is True, so a
+    # single .json file is sufficient regardless of mode.
+    if args.decode_format == "json":
+        if not tree.nodes and mode != DECODE_IOCS_FULL:
+            sys.stderr.write(_no_findings_msg(min_sev))
+            return
+        rendered = report_render_json(tree)
+        output_path = _resolve_decode_location(args, result, tree, ".json")
+        if not _write_decode_text_file(output_path, rendered):
+            return
+        sys.stderr.write(
+            f"note: decoded-payload report written to {output_path}\n"
+        )
+        return
+
+    # Text format. Branch on mode.
+    if mode == DECODE_IOCS_OFF:
+        if not tree.nodes:
+            sys.stderr.write(_no_findings_msg(min_sev))
+            return
+        rendered = render_text(tree, include_iocs=False)
+        output_path = _resolve_decode_location(args, result, tree, ".txt")
+        if not _write_decode_text_file(output_path, rendered):
+            return
+        sys.stderr.write(
+            f"note: decoded-payload report written to {output_path}\n"
+        )
+        return
+
+    if mode == DECODE_IOCS_HASHES:
+        if not tree.nodes:
+            sys.stderr.write(_no_findings_msg(min_sev))
+            return
+        report_text = render_text(tree, include_iocs=False)
+        iocs_text = render_iocs(tree)
+        main_path = _resolve_decode_location(args, result, tree, ".txt")
+        sidecar_path = _sidecar_iocs_path(main_path)
+        if not _write_decode_text_file(main_path, report_text):
+            return
+        if not _write_decode_text_file(sidecar_path, iocs_text):
+            return
+        sys.stderr.write(
+            f"note: decoded-payload report written to {main_path}\n"
+            f"note: IOC hash sidecar written to {sidecar_path}\n"
+        )
+        return
+
+    # mode == DECODE_IOCS_FULL: always write, even on empty.
+    report_text = render_text(tree, include_iocs=False)
+    sources_text = render_sources(tree)
+    iocs_text = render_iocs(tree)
+
+    archive_path = _resolve_decode_location(args, result, tree, ".zip")
+    sidecar_path = _sidecar_iocs_path(archive_path)
+
+    # Inner subdirectory inside the archive; keeps unzip from
+    # dropping loose files into the user's cwd.
+    target_safe = _sanitize_target_for_filename(
+        os.path.basename(result.artifact_identity)
+    )
+    inner_dir = target_safe or "decoded"
+
+    entries = [
+        (f"{inner_dir}/report.txt", report_text.encode("utf-8")),
+        (f"{inner_dir}/sources.txt", sources_text.encode("utf-8")),
+        (f"{inner_dir}/iocs.txt", iocs_text.encode("utf-8")),
+    ]
+
+    password = decode_archive_password(args)
+    compression = decode_archive_compression(args)
+
+    parent = archive_path.parent
+    if parent.exists() and not parent.is_dir():
+        sys.stderr.write(
+            f"error: --decode-location target {parent} exists but "
+            f"is not a directory. Pass a directory path, or remove "
+            f"the existing file.\n"
+        )
+        return
+
+    try:
+        parent.mkdir(parents=True, exist_ok=True)
+        # Atomic archive write: temp file + replace, so a partial
+        # write never leaves a corrupt archive at the final path.
+        tmp_archive = archive_path.with_name(archive_path.name + ".tmp")
+        write_encrypted_zip(
+            tmp_archive,
+            entries,
+            password=password,
+            compression=compression,
+        )
+        tmp_archive.replace(archive_path)
+        # Sidecar: direct write, since a partial sidecar is
+        # recoverable from the archive's inner iocs.txt anyway.
+        sidecar_path.write_text(iocs_text, encoding="utf-8")
+    except OSError as exc:
+        sys.stderr.write(
+            f"warning: could not write decoded-payload archive to "
+            f"{archive_path}: {exc}\n"
+        )
+        return
+
+    if tree.nodes:
+        sys.stderr.write(
+            f"note: decoded-payload archive written to {archive_path}\n"
+            f"note: IOC hash sidecar written to {sidecar_path}\n"
+        )
+    else:
+        sys.stderr.write(
+            f"note: no payload-bearing findings"
+            f"{f' at or above --min-severity={min_sev}' if min_sev else ''}"
+            f"; NOFINDINGS stub archive written to {archive_path}\n"
+        )
+
+
+def _no_findings_msg(min_sev) -> str:
+    """Standard 'nothing decoded' note for the off/hashes skip path."""
+    if min_sev:
+        return (
+            f"note: no payload-bearing findings at or above "
+            f"--min-severity={min_sev}; no decoded-payload "
+            f"report written.\n"
+        )
+    return (
+        "note: no payload-bearing findings; no decoded-payload "
+        "report written.\n"
+    )
+
+
+def _write_decode_text_file(output_path: Path, rendered: str) -> bool:
+    """Write a single text file, with the same parent pre-check as the archive path.
+
+    Returns True on success, False on failure (with a stderr
+    diagnostic already emitted).
+    """
+    parent = output_path.parent
+    if parent.exists() and not parent.is_dir():
+        sys.stderr.write(
+            f"error: --decode-location target {parent} exists but "
+            f"is not a directory. Pass a directory path, or remove "
+            f"the existing file.\n"
+        )
+        return False
+    try:
+        parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(rendered, encoding="utf-8")
+    except OSError as exc:
+        sys.stderr.write(
+            f"warning: could not write decoded-payload output to "
+            f"{output_path}: {exc}\n"
+        )
+        return False
+    return True
+
+
+def _sidecar_iocs_path(main_path: Path) -> Path:
+    """Compute the IOC sidecar path next to the main output.
+
+    Replaces the file's last suffix with '.iocs.txt'. So
+    'FINDINGS_<ts>_litellm.whl.zip' becomes
+    'FINDINGS_<ts>_litellm.whl.iocs.txt' in the same directory.
+    """
+    return main_path.with_name(main_path.stem + ".iocs.txt")

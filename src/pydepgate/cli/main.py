@@ -29,6 +29,11 @@ from pydepgate.cli.peek_args import (
     peek_chain_enabled,
     validate_peek_args,
 )
+from pydepgate.cli.decode_args import (
+    add_decode_arguments,
+    decode_enabled,
+    validate_decode_args,
+)
 
 
 # Color mode constants. Used as the values of args.color and as the
@@ -205,6 +210,7 @@ def _add_global_flags(
             ),
         )
     add_peek_arguments(parser, is_subparser=is_subparser)
+    add_decode_arguments(parser, is_subparser=is_subparser)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -312,6 +318,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     validate_peek_args(args)
+    validate_decode_args(args)
 
     if not args.subcommand:
         parser.print_help()
