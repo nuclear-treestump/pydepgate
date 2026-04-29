@@ -1,7 +1,7 @@
 
 # pydepgate
 
-[![PyPI](https://img.shields.io/pypi/v/pydepgate.svg)](https://pypi.org/project/pydepgate/)[![Downloads](https://pepy.tech/badge/pydepgate)](https://pepy.tech/project/pydepgate)[![Unit tests](https://github.com/nuclear-treestump/pydep-vector-runner/actions/workflows/do_unittests.yml/badge.svg)](https://github.com/nuclear-treestump/pydep-vector-runner/actions/workflows/do_unittests.yml)
+[![PyPI](https://img.shields.io/pypi/v/pydepgate.svg)](https://pypi.org/project/pydepgate/)[![Downloads](https://pepy.tech/badge/pydepgate)](https://pepy.tech/project/pydepgate)[![Unit tests](https://github.com/nuclear-treestump/pydep-vector-runner/actions/workflows/do_unittests.yml/badge.svg)](https://github.com/nuclear-treestump/pydep-vector-runner/actions/workflows/do_unittests.yml)[![CodeQL Advanced](https://github.com/nuclear-treestump/pydep-vector-runner/actions/workflows/codeql.yml/badge.svg)](https://github.com/nuclear-treestump/pydep-vector-runner/actions/workflows/codeql.yml)[![docker-publish](https://github.com/nuclear-treestump/pydep-vector-runner/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/nuclear-treestump/pydep-vector-runner/actions/workflows/docker-publish.yml)[![CodeQL](https://github.com/nuclear-treestump/pydep-vector-runner/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/nuclear-treestump/pydep-vector-runner/actions/workflows/github-code-scanning/codeql)
 
 **A lightweight Python runner that interdicts suspicious startup behavior.**
 
