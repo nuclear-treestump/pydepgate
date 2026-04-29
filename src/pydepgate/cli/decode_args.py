@@ -292,7 +292,7 @@ def add_decode_arguments(
         metavar="PATH",
         help=(
             "Output path for the decoded-payload report. Default: "
-            "<cwd>/decoded/decoded_payloads_<targetname>.<ext> where "
+            "<cwd>/decoded/{STATUS}_{timestamp}_{target}{ext} where "
             "<ext> matches the chosen format. The 'decoded/' parent "
             "directory is created if it does not exist. "
             f"(env: {ENV_DECODE_LOCATION})"
