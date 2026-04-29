@@ -6,7 +6,7 @@ import argparse
 import sys
 
 
-_VERSION = "0.0.4"
+_VERSION = "0.2.0"
 
 
 def register(subparsers) -> None:

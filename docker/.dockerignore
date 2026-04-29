@@ -1,0 +1,9 @@
+# Everything not needed by the Dockerfile build context.
+# The Dockerfile installs pydepgate from PyPI, not from source, so
+# we don't actually need any of the repo content for the image
+# build. Keeping the context small speeds up the BuildKit transfer
+# and avoids accidentally shipping local artifacts into the image.
+
+*
+!Dockerfile
+!.dockerignore

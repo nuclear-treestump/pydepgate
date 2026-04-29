@@ -30,6 +30,15 @@ from pydepgate.cli.peek_args import (
 )
 
 
+# Color mode constants. Used as the values of args.color and as the
+# argparse choices. Exposed at module level so tests and the reporter
+# can refer to them without retyping string literals.
+COLOR_AUTO = "auto"
+COLOR_ALWAYS = "always"
+COLOR_NEVER = "never"
+COLOR_CHOICES = (COLOR_AUTO, COLOR_ALWAYS, COLOR_NEVER)
+
+
 def _env_bool(name: str) -> bool:
     """Read a boolean environment variable.
 
@@ -43,6 +52,33 @@ def _env_bool(name: str) -> bool:
 def _env_str(name: str, default: str | None = None) -> str | None:
     """Read a string environment variable, returning default if unset."""
     return os.environ.get(name, default)
+
+
+def _color_default_from_env() -> str:
+    """Compute the default value for --color from the environment.
+
+    Precedence:
+      1. PYDEPGATE_COLOR if set to one of auto/always/never.
+      2. NO_COLOR or PYDEPGATE_NO_COLOR env vars (any value) map
+         to "never" per the no-color.org convention.
+      3. Otherwise "auto", which defers to TTY detection at render
+         time.
+
+    A bogus PYDEPGATE_COLOR value (e.g. "PYDEPGATE_COLOR=foo") is
+    ignored and treated as if unset, falling through to the
+    NO_COLOR check. We deliberately do not warn about this here
+    because argparse runs before stderr-routing decisions are made;
+    a typo'd env var falling back to a sane default is the least
+    surprising behavior.
+    """
+    explicit = os.environ.get("PYDEPGATE_COLOR", "").strip().lower()
+    if explicit in COLOR_CHOICES:
+        return explicit
+
+    if os.environ.get("NO_COLOR") or os.environ.get("PYDEPGATE_NO_COLOR"):
+        return COLOR_NEVER
+
+    return COLOR_AUTO
 
 
 def _add_global_flags(
@@ -62,15 +98,13 @@ def _add_global_flags(
     if is_subparser:
         ci_default = argparse.SUPPRESS
         format_default = argparse.SUPPRESS
-        no_color_default = argparse.SUPPRESS
+        color_default = argparse.SUPPRESS
         min_severity_default = argparse.SUPPRESS
         strict_exit_default = argparse.SUPPRESS
     else:
         ci_default = _env_bool("PYDEPGATE_CI")
         format_default = _env_str("PYDEPGATE_FORMAT")
-        no_color_default = (
-            _env_bool("PYDEPGATE_NO_COLOR") or _env_bool("NO_COLOR")
-        )
+        color_default = _color_default_from_env()
         min_severity_default = _env_str("PYDEPGATE_MIN_SEVERITY")
         strict_exit_default = _env_bool("PYDEPGATE_STRICT_EXIT")
 
@@ -92,12 +126,44 @@ def _add_global_flags(
             "Env: PYDEPGATE_FORMAT"
         ),
     )
+
+    # --color is the canonical control. It takes one of three values:
+    #   auto    Use color when stdout is a TTY and no NO_COLOR-style
+    #           env var is set (the historical default behavior).
+    #   always  Force color, even when stdout is not a TTY. Useful for
+    #           piping to less -R or capturing colored output to a file
+    #           that will later be rendered by a terminal-aware viewer.
+    #   never   Disable color unconditionally.
+    #
+    # --no-color is kept as a backwards-compatible alias for
+    # --color=never. Both write to args.color so the rest of the CLI
+    # only has one attribute to consult. Old invocations and old CI
+    # configs that pass --no-color continue to work without changes.
+    parser.add_argument(
+        "--color",
+        choices=COLOR_CHOICES,
+        default=color_default,
+        metavar="WHEN",
+        help=(
+            "Control ANSI color output. 'auto' (default) emits color "
+            "when stdout is a TTY; 'always' forces color even when "
+            "piped or redirected; 'never' disables color entirely. "
+            "Env: PYDEPGATE_COLOR. NO_COLOR and PYDEPGATE_NO_COLOR "
+            "env vars (any value) imply --color=never."
+        ),
+    )
     parser.add_argument(
         "--no-color",
-        action="store_true",
-        default=no_color_default,
-        help="Disable ANSI color codes. Env: PYDEPGATE_NO_COLOR or NO_COLOR",
+        action="store_const",
+        const=COLOR_NEVER,
+        dest="color",
+        default=argparse.SUPPRESS,
+        help=(
+            "Alias for --color=never. Kept for backwards compatibility. "
+            "Env: PYDEPGATE_NO_COLOR or NO_COLOR"
+        ),
     )
+
     parser.add_argument(
         "--min-severity",
         choices=("info", "low", "medium", "high", "critical"),
@@ -216,12 +282,22 @@ def _run_help(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
 
 
 def _apply_ci_defaults(args: argparse.Namespace) -> None:
-    """Apply --ci behavioral cluster: implies several other flags."""
+    """Apply --ci behavioral cluster: implies several other flags.
+
+    CI mode forces JSON format (unless explicitly set) and disables
+    color (unless the user explicitly opted in via --color=always).
+    The latter is unusual but legitimate: a CI runner with a colored
+    log viewer wants the escape codes preserved even under --ci.
+    """
     if not args.ci:
         return
     if not args.format:
         args.format = "json"
-    args.no_color = True
+    # Only auto-flip color to "never" when the user hasn't explicitly
+    # asked for "always". An explicit --color=always paired with --ci
+    # is a deliberate choice and we respect it.
+    if args.color == COLOR_AUTO:
+        args.color = COLOR_NEVER
 
 
 def main(argv: list[str] | None = None) -> int:
