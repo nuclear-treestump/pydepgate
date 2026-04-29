@@ -14,6 +14,7 @@ import sys
 
 from pydepgate.cli import exit_codes
 from pydepgate.cli.subcommands import (
+    completion,
     exec_stub,
     preflight,
     scan,
@@ -259,6 +260,12 @@ def build_parser() -> argparse.ArgumentParser:
     # Add global flags to every subcommand parser.
     for subparser_name in subparsers.choices:
         _add_global_flags(subparsers.choices[subparser_name], is_subparser=True)
+
+    # Completion subcommands. Registered after the global-flags loop
+    # so the hidden _complete subcommand does not get the global
+    # flags applied: its `words` REMAINDER positional must accept
+    # tokens like `--format` as data, not interpret them as flags.
+    completion.register(subparsers)
 
     return parser
 
