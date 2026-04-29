@@ -12,6 +12,36 @@ March 2026 LiteLLM supply-chain compromise and catalogued as
 
 <img width="1086" height="720" alt="Screen Recording 2026-04-28 091139" src="https://github.com/user-attachments/assets/28a737fd-4ba0-4401-b49e-5d84703cad25" />
 
+## Recently Added
+
+Tab completion works!
+
+```
+usage: pydepgate completions [-h] {bash,zsh,fish}
+
+Print a shell completion script to stdout. Running this command alone does NOT install completion; you have to do something with the output.
+
+Quickest install (bash, current shell only):
+  eval "$(pydepgate completions bash)"
+
+Persistent install (bash, all future shells):
+  pydepgate completions bash >> ~/.bashrc
+
+Persistent install (zsh):
+  pydepgate completions zsh >> ~/.zshrc
+
+Persistent install (fish):
+  pydepgate completions fish > ~/.config/fish/completions/pydepgate.fish
+
+After installing, open a new shell or re-source your rc file, then test with:
+  pydepgate <TAB><TAB>
+
+When run interactively (output to a terminal rather than redirected), this command also prints install instructions to stderr.
+
+positional arguments:
+  {bash,zsh,fish}  Target shell. Supported: bash, zsh, fish.
+```
+
 ## Status
 
 **Static analysis is functional end-to-end.**
