@@ -58,7 +58,7 @@ from pydepgate.cli.decode_args import (
     decode_extract_iocs,
     decode_iocs_mode,
 )
-from pydepgate.cli.decode_payloads import (
+from pydepgate.enrichers.decode_payloads import (
     decode_payloads,
     filter_tree_by_severity,
     render_iocs,
@@ -602,7 +602,7 @@ def _run_decode_pass(
         if not tree.nodes and mode != DECODE_IOCS_FULL:
             sys.stderr.write(_no_findings_msg(min_sev))
             return
-        rendered = report_render_json(tree)
+        rendered = render_json(tree)
         output_path = _resolve_decode_location(args, result, tree, ".json")
         if not _write_decode_text_file(output_path, rendered):
             return
@@ -657,7 +657,8 @@ def _run_decode_pass(
         os.path.basename(result.artifact_identity)
     )
     inner_dir = target_safe or "decoded"
-
+    inner_dir = inner_dir.replace(".", "_")  # avoid confusion with file extensions
+    inner_dir = inner_dir[:50]  # keep the path short to avoid zipfile limits
     entries = [
         (f"{inner_dir}/report.txt", report_text.encode("utf-8")),
         (f"{inner_dir}/sources.txt", sources_text.encode("utf-8")),

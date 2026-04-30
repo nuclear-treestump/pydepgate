@@ -58,13 +58,21 @@ class ScanContext:
         file_kind: What the triage module decided this file is.
         triage_reason: The human-readable triage decision, useful for
             downstream debugging.
+        file_sha256: SHA256 hex digest of the file's bytes, if
+            computed by the enumerator. None when the scan path
+            did not compute hashes (decode-driver synthetic inputs,
+            tests). Analyzers MAY read this for forensic context
+            but should not rely on it being populated.
+        file_sha512: SHA512 hex digest of the file's bytes. Same
+            semantics as file_sha256.
     """
     artifact_kind: ArtifactKind
     artifact_identity: str
     internal_path: str
     file_kind: FileKind
     triage_reason: str
-
+    file_sha256: str | None = None
+    file_sha512: str | None = None
 
 @dataclass(frozen=True)
 class Finding:
@@ -155,6 +163,8 @@ class ScanResult:
     scans (scan_file, scan_bytes, scan_loose_file_as), populated
     for artifact scans (scan_wheel, scan_sdist, scan_installed).
     """
+    artifact_sha256: str | None = None
+    artifact_sha512: str | None = None
 
 @dataclass(frozen=True)
 class FileScanInput:
@@ -186,6 +196,8 @@ class FileScanInput:
     artifact_kind: ArtifactKind
     artifact_identity: str
     forced_file_kind: FileKind | None = None
+    file_sha256: str | None = None
+    file_sha512: str | None = None
 
 @dataclass(frozen=True)
 class FileScanOutput:
@@ -219,6 +231,8 @@ class FileScanOutput:
     diagnostics: tuple[str, ...]
     suppressed_findings: tuple[SuppressedFinding, ...]
     statistics: ScanStatistics
+    file_sha256: str | None = None
+    file_sha512: str | None = None
 
 @dataclass(frozen=True)
 class FileStatsEntry:
