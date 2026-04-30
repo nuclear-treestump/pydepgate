@@ -315,10 +315,13 @@ def _render_statistics(result: ScanResult, stream: TextIO, color: bool) -> None:
 def report_render_json(result: ScanResult, stream: TextIO) -> None:
     """Render a ScanResult as a single JSON object on stdout."""
     payload = {
-        "schema_version": 2,
+        "report_type": "pydepgate_scan_result",
+        "schema_version": 3,
         "artifact": {
             "identity": result.artifact_identity,
             "kind": result.artifact_kind.value,
+            "sha256": result.artifact_sha256,
+            "sha512": result.artifact_sha512,
         },
         "findings": [_finding_to_dict(f) for f in result.findings],
         "suppressed_findings": [
@@ -371,6 +374,8 @@ def _finding_to_dict(finding: Finding) -> dict:
             "line": sig.location.line,
             "column": sig.location.column,
         },
+        "file_sha256": finding.context.file_sha256,
+        "file_sha512": finding.context.file_sha512,
         "context": _serialize_context(sig.context),
     }
 
