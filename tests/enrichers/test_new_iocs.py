@@ -21,7 +21,7 @@ from pydepgate.enrichers.decode_payloads import (
     STOP_LEAF_TERMINAL,
     filter_tree_by_severity,
     render_iocs,
-    render_json,
+    render_decode_json,
     render_sources,
     render_text,
 )
@@ -305,7 +305,7 @@ class DecodeJsonSchemaTests(unittest.TestCase):
 
     def test_schema_version_emitted(self):
         tree = DecodedTree(target="x", max_depth=3, nodes=())
-        out = render_json(tree)
+        out = render_decode_json(tree)
         data = json.loads(out)
         self.assertEqual(data["schema_version"], 1)
 
@@ -317,7 +317,7 @@ class DecodeJsonSchemaTests(unittest.TestCase):
             artifact_sha256="a" * 64,
             artifact_sha512="A" * 128,
         )
-        data = json.loads(render_json(tree))
+        data = json.loads(render_decode_json(tree))
         self.assertEqual(data["artifact_sha256"], "a" * 64)
         self.assertEqual(data["artifact_sha512"], "A" * 128)
 
@@ -330,7 +330,7 @@ class DecodeJsonSchemaTests(unittest.TestCase):
             max_depth=3,
             nodes=(node,),
         )
-        data = json.loads(render_json(tree))
+        data = json.loads(render_decode_json(tree))
         self.assertEqual(
             data["nodes"][0]["containing_file_sha256"], "b" * 64,
         )

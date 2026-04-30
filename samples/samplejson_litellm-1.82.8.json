@@ -1,0 +1,124 @@
+{
+  "report_type": "pydepgate_decoded_tree",
+  "schema_version": 1,
+  "target": "litellm-1.82.8-py3-none-any.whl",
+  "max_depth": 5,
+  "artifact_sha256": "d2a0d5f564628773b6af7b9c11f6b86531a875bd2d186d7081ab62748a800ebb",
+  "artifact_sha512": "4d3b3ea1b93b8714d9a900b9d63d965774b481117ccb44fc0dc8b3eed2a0591a3f4983b5a4697947340818baa8e68872609da965606dd14a61346b452064a362",
+  "nodes": [
+    {
+      "outer_signal_id": "DENS010",
+      "outer_severity": "critical",
+      "outer_location": "litellm/proxy/proxy_server.py:130:14",
+      "outer_length": 34460,
+      "triggered_by": [
+        "DENS010",
+        "DENS011"
+      ],
+      "chain": [
+        "base64"
+      ],
+      "unwrap_status": "completed",
+      "final_kind": "python_source",
+      "final_size": 25844,
+      "indicators": [
+        "subprocess",
+        "base64.b64decode"
+      ],
+      "pickle_warning": false,
+      "depth": 0,
+      "stop_reason": "leaf_terminal",
+      "containing_file_sha256": "a0d229be8efcb2f9135e2ad55ba275b76ddcfeb55fa4370e0a522a5bdee0120b",
+      "containing_file_sha512": "a9ada4f30822abf267cc55f57e6a0705b8f950a6f5835b55dec0d3716c3ba7a7d07c072a3c04f28452b73e4085ecf441c8e177808bcd49eeafc6a024ed6be033",
+      "child_findings": [],
+      "children": [
+        {
+          "outer_signal_id": "DENS010",
+          "outer_severity": "critical",
+          "outer_location": "litellm/proxy/proxy_server.py<decoded:layer1@line130>:22:13",
+          "outer_length": 23044,
+          "triggered_by": [
+            "DENS010",
+            "DENS011"
+          ],
+          "chain": [
+            "base64"
+          ],
+          "unwrap_status": "completed",
+          "final_kind": "python_source",
+          "final_size": 17281,
+          "indicators": [
+            "subprocess",
+            "urllib",
+            "base64.b64decode",
+            "/etc/passwd",
+            "/etc/shadow",
+            ".ssh/id_rsa",
+            "AWS_SECRET",
+            "AWS_ACCESS_KEY",
+            "curl "
+          ],
+          "pickle_warning": false,
+          "depth": 1,
+          "stop_reason": "leaf_terminal",
+          "containing_file_sha256": null,
+          "containing_file_sha512": null,
+          "child_findings": [],
+          "children": [
+            {
+              "outer_signal_id": "DENS010",
+              "outer_severity": "high",
+              "outer_location": "litellm/proxy/proxy_server.py<decoded:layer1@line130><decoded:layer2@line22>:278:16",
+              "outer_length": 1500,
+              "triggered_by": [
+                "DENS010",
+                "DENS011"
+              ],
+              "chain": [
+                "base64"
+              ],
+              "unwrap_status": "completed",
+              "final_kind": "python_source",
+              "final_size": 1125,
+              "indicators": [
+                "subprocess",
+                "urllib"
+              ],
+              "pickle_warning": false,
+              "depth": 2,
+              "stop_reason": "leaf_terminal",
+              "containing_file_sha256": null,
+              "containing_file_sha512": null,
+              "child_findings": [],
+              "children": [],
+              "ioc_data": {
+                "original_sha256": "eaa27048776b0ee3139c66b0454ab98fc1b030a0604d372b13ff1d7f87fb6494",
+                "original_sha512": "ba78e867199a2f7b3a1ca0aa2aabd626e4862bb28a784574dd4d169951f75251ef7abac98debabf85674a82bac10751cb285bac6840c5c6b9e5076a5e4b906d7",
+                "decoded_sha256": "6cf223aea68b0e8031ff68251e30b6017a0513fe152e235c26f248ba1e15c92a",
+                "decoded_sha512": "4e3647b15bb92a2623d331768c8e5193e54f370366b7da62a7db720780d0d50a75057d977bca8cbb83c245eaf1f7921e12bf5163bc84c74194a2d4abc58fdf4d",
+                "decoded_source": null,
+                "extract_timestamp": "2026-04-30T15:04:25.338229+00:00"
+              }
+            }
+          ],
+          "ioc_data": {
+            "original_sha256": "c48a899976a8b3cede7d66085cacd52a0fadbda621f58836eaf35c3ab5144bb9",
+            "original_sha512": "85be43de42f6f089851111fd26f53437027308dc2a990352f592004dcae682b448b4c2e34bfd6221f639e9c3ec5d883b1506a259a0fcbb077dfd57756bcd5ab4",
+            "decoded_sha256": "ce681356c8870af8583ed753fff330e2897f4629c45677f8065649a47b20a111",
+            "decoded_sha512": "eeb0d8f021fee9c3c18112fad8279f48223684dd7cb47194fa828a5fdf3f8a007371b240ba3392bcf3561cbca1f3ddd75dc5112edce7c7f89d490bb070766a3c",
+            "decoded_source": null,
+            "extract_timestamp": "2026-04-30T15:04:25.338316+00:00"
+          }
+        }
+      ],
+      "ioc_data": {
+        "original_sha256": "8a7c64171775a25a73da5b6fd11ee3dae425741ca929645d8a7b1c0bbbe19706",
+        "original_sha512": "c4683e444d086c824dc54e38efddbc2a8060735e19507c85fe529ab3dde27a1ec615b36f9b109460b255b39aa8fd62ac7f3eeae5103ab1dbfad4e9c913b90c74",
+        "decoded_sha256": "d6fc0ff06978742a2ef789304bcdbe69a731693ad066a457db0878279830d6a9",
+        "decoded_sha512": "6a0bbd6ed3914a3123bb83c54360cf99ff808bd9f574b092ecb64ca12ca9abe9d6e1003af06e02202ce0ad319f0e3156ee42c3a5828518144250b38625b27492",
+        "decoded_source": null,
+        "extract_timestamp": "2026-04-30T15:04:25.338519+00:00"
+      }
+    }
+  ]
+}

@@ -62,7 +62,7 @@ from pydepgate.enrichers.decode_payloads import (
     decode_payloads,
     filter_tree_by_severity,
     render_iocs,
-    render_json,
+    render_decode_json,
     render_sources,
     render_text,
 )
@@ -602,7 +602,7 @@ def _run_decode_pass(
         if not tree.nodes and mode != DECODE_IOCS_FULL:
             sys.stderr.write(_no_findings_msg(min_sev))
             return
-        rendered = render_json(tree)
+        rendered = render_decode_json(tree, include_source=(decode_iocs_mode(args) == DECODE_IOCS_FULL))
         output_path = _resolve_decode_location(args, result, tree, ".json")
         if not _write_decode_text_file(output_path, rendered):
             return
