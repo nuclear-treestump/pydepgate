@@ -1,0 +1,15 @@
+decoded payload report for litellm-1.82.8-py3-none-any.whl
+max recursion depth: 4
+=================================================================
+
+litellm/proxy/proxy_server.py:130:14 (DENS010+DENS011, length 34460)
+    chain: base64 -> python_source (25844 bytes)
+    indicators: subprocess, base64.b64decode
+    inner findings:
+      `-- DENS010+DENS011 critical at line 22:13
+          chain: base64 -> python_source (17281 bytes)
+          indicators: subprocess, urllib, base64.b64decode, /etc/passwd, /etc/shadow, .ssh/id_rsa, AWS_SECRET, AWS_ACCESS_KEY, curl 
+          inner findings:
+            `-- DENS010+DENS011 high at line 278:16
+                chain: base64 -> python_source (1125 bytes)
+                indicators: subprocess, urllib
