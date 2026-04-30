@@ -34,7 +34,7 @@ from pydepgate.cli.decode_args import (
     DECODE_IOCS_HASHES,
     DECODE_IOCS_OFF,
 )
-from pydepgate.cli.decode_payloads import (
+from pydepgate.enrichers.decode_payloads import (
     ChildFinding,
     DecodedNode,
     DecodedTree,
@@ -221,7 +221,7 @@ def _tree_with_one_node(target: str = "x") -> DecodedTree:
     # Construct a minimal DecodedTree with one node so the FINDINGS
     # branch is exercised. We don't care about the node's contents
     # for these tests; only that nodes is non-empty.
-    from pydepgate.cli.decode_payloads import DecodedNode, STOP_NO_INNER_FINDINGS
+    from pydepgate.enrichers.decode_payloads import DecodedNode, STOP_NO_INNER_FINDINGS
     node = DecodedNode(
         outer_signal_id="DENS010",
         outer_severity="high",

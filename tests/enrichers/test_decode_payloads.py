@@ -1,5 +1,5 @@
 """
-Tests for pydepgate.cli.decode_payloads.
+Tests for pydepgate.enrichers.decode_payloads.
 
 Covers:
   - Helpers: _is_payload_bearing, _format_location, _to_child_finding,
@@ -30,7 +30,7 @@ from unittest.mock import patch
 
 from pydepgate.engines.base import Severity
 
-from pydepgate.cli.decode_payloads import (
+from pydepgate.enrichers.decode_payloads import (
     ChildFinding,
     DecodedNode,
     DecodedTree,
@@ -61,7 +61,7 @@ from pydepgate.cli.decode_payloads import (
     render_iocs,
     render_sources,
 )
-from pydepgate.cli.decode_payloads import (
+from pydepgate.enrichers.decode_payloads import (
     decode_payloads,
     filter_tree_by_severity,
     render_iocs,
@@ -114,6 +114,8 @@ def _fake_finding(
         context=SimpleNamespace(
             internal_path=internal_path,
             file_kind=file_kind,
+            file_sha256=None,
+            file_sha512=None,
         ),
     )
 
@@ -136,48 +138,14 @@ def _fake_finding_no_payload(
             description=description,
         ),
         severity=severity,
-        context=SimpleNamespace(internal_path=internal_path, file_kind=None),
+        context=SimpleNamespace(
+            internal_path=internal_path,
+            file_kind=None,
+            file_sha256=None,
+            file_sha512=None,
+        ),
     )
 
-
-def _make_node(
-    *,
-    outer_signal_id: str = "DENS010",
-    triggered_by: tuple[str, ...] = ("DENS010",),
-    outer_location: str = "foo.py:10:5",
-    chain: tuple[str, ...] = ("base64",),
-    final_kind: str = "python_source",
-    final_size: int = 0,
-    children: tuple[DecodedNode, ...] = (),
-    child_findings: tuple[ChildFinding, ...] = (),
-    stop_reason: str = STOP_LEAF_TERMINAL,
-    indicators: tuple[str, ...] = (),
-    pickle_warning: bool = False,
-    depth: int = 0,
-    ioc_data: IOCData | None = None,
-    outer_severity: str = "high",
-    outer_length: int = 100,
-    unwrap_status: str = "completed",
-) -> DecodedNode:
-    """Build a DecodedNode for renderer tests. All fields have defaults."""
-    return DecodedNode(
-        outer_signal_id=outer_signal_id,
-        outer_severity=outer_severity,
-        outer_location=outer_location,
-        outer_length=outer_length,
-        chain=chain,
-        unwrap_status=unwrap_status,
-        final_kind=final_kind,
-        final_size=final_size,
-        indicators=indicators,
-        pickle_warning=pickle_warning,
-        depth=depth,
-        stop_reason=stop_reason,
-        triggered_by=triggered_by,
-        child_findings=child_findings,
-        children=children,
-        ioc_data=ioc_data,
-    )
 
 
 def _fake_unwrap_result(
@@ -1001,7 +969,7 @@ class DecodePayloadsDriverTests(unittest.TestCase):
         # Engine never called (no payload-bearing findings).
         self.assertEqual(engine.calls, [])
 
-    @patch("pydepgate.cli.decode_payloads.unwrap")
+    @patch("pydepgate.enrichers.decode_payloads.unwrap")
     def test_single_payload_finding_produces_one_node(self, mock_unwrap):
         # unwrap returns python_source with no inner findings.
         decoded_bytes = b"x = 1\n"
@@ -1035,7 +1003,7 @@ class DecodePayloadsDriverTests(unittest.TestCase):
         # No inner findings -> stop reason is no_inner_findings
         self.assertEqual(node.stop_reason, STOP_NO_INNER_FINDINGS)
 
-    @patch("pydepgate.cli.decode_payloads.unwrap")
+    @patch("pydepgate.enrichers.decode_payloads.unwrap")
     def test_two_findings_same_payload_dedupe_at_top_level(self, mock_unwrap):
         # DENS010 and DENS011 both fire on the same _full_value at the
         # same location. The driver should produce ONE node, not two,
@@ -1066,7 +1034,7 @@ class DecodePayloadsDriverTests(unittest.TestCase):
         # not twice.
         self.assertEqual(len(engine.calls), 1)
 
-    @patch("pydepgate.cli.decode_payloads.unwrap")
+    @patch("pydepgate.enrichers.decode_payloads.unwrap")
     def test_depth_limit_stops_recursion(self, mock_unwrap):
         # max_depth=0 means we never call the engine; the outer
         # finding is recorded as a depth_limit leaf.
@@ -1093,7 +1061,7 @@ class DecodePayloadsDriverTests(unittest.TestCase):
         # Engine never invoked when depth limit hit at top level.
         self.assertEqual(engine.calls, [])
 
-    @patch("pydepgate.cli.decode_payloads.unwrap")
+    @patch("pydepgate.enrichers.decode_payloads.unwrap")
     def test_non_python_terminal_stops_recursion(self, mock_unwrap):
         mock_unwrap.return_value = _fake_unwrap_result(
             chain=(_fake_layer("base64"),),
@@ -1119,7 +1087,7 @@ class DecodePayloadsDriverTests(unittest.TestCase):
         # Engine not called for non-Python terminals.
         self.assertEqual(engine.calls, [])
 
-    @patch("pydepgate.cli.decode_payloads.unwrap")
+    @patch("pydepgate.enrichers.decode_payloads.unwrap")
     def test_decode_failed_stops_recursion(self, mock_unwrap):
         mock_unwrap.return_value = _fake_unwrap_result(
             chain=(),
@@ -1143,7 +1111,7 @@ class DecodePayloadsDriverTests(unittest.TestCase):
         self.assertEqual(tree.nodes[0].stop_reason, STOP_DECODE_FAILED)
         self.assertEqual(engine.calls, [])
 
-    @patch("pydepgate.cli.decode_payloads.unwrap")
+    @patch("pydepgate.enrichers.decode_payloads.unwrap")
     def test_recursive_dedup_at_inner_layer(self, mock_unwrap):
         # Outer payload decodes to inner Python source. The inner
         # scan returns two findings firing on the same inner payload
@@ -1230,7 +1198,7 @@ class DecodePayloadsDriverTests(unittest.TestCase):
         # once for inner_decoded.
         self.assertEqual(len(engine.calls), 2)
 
-    @patch("pydepgate.cli.decode_payloads.unwrap")
+    @patch("pydepgate.enrichers.decode_payloads.unwrap")
     def test_inner_leaf_findings_collected_as_child_findings(self, mock_unwrap):
         outer_decoded = b"import subprocess\n"
         mock_unwrap.return_value = _fake_unwrap_result(
@@ -1263,7 +1231,7 @@ class DecodePayloadsDriverTests(unittest.TestCase):
             {"STDLIB001", "DYN002"},
         )
 
-    @patch("pydepgate.cli.decode_payloads.unwrap")
+    @patch("pydepgate.enrichers.decode_payloads.unwrap")
     def test_extract_iocs_populates_ioc_data(self, mock_unwrap):
         decoded_bytes = b"x = 1\n"
         mock_unwrap.return_value = _fake_unwrap_result(
@@ -1295,7 +1263,7 @@ class DecodePayloadsDriverTests(unittest.TestCase):
             hashlib.sha256(decoded_bytes).hexdigest(),
         )
 
-    @patch("pydepgate.cli.decode_payloads.unwrap")
+    @patch("pydepgate.enrichers.decode_payloads.unwrap")
     def test_extract_iocs_false_leaves_ioc_data_none(self, mock_unwrap):
         decoded_bytes = b"x = 1\n"
         mock_unwrap.return_value = _fake_unwrap_result(

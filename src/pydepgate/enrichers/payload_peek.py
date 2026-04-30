@@ -161,15 +161,7 @@ class PayloadPeek(Enricher):
         self,
         sig: Signal,
     ) -> tuple[Signal, Signal | None] | None:
-        """Decide what to do with one hint-bearing signal.
 
-        Returns:
-          - None if the signal should be passed through unchanged.
-          - (enriched_sig, None) if the signal should be replaced with
-            an enriched version, with no derivative signal.
-          - (enriched_sig, enc002_sig) if the signal should be replaced
-            and accompanied by an ENC002 derivative.
-        """
         length = sig.context.get("length", 0)
         if length < self._min_length:
             return None

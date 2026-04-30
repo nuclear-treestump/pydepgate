@@ -173,7 +173,17 @@ class ChildFinding:
 
 @dataclass(frozen=True)
 class DecodedNode:
-    """One node in the decoded-payload tree."""
+    """One node in the decoded-payload tree.
+
+    The new containing_file_sha256/sha512 fields are sourced from
+    `finding.context.file_sha256/sha512` at decode time. They are
+    None when:
+      - The original scan path did not compute file hashes (older
+        scans, decode driver's synthetic re-scan inputs).
+      - The node is from an inner recursive scan (the bytes have
+        no meaningful containing file in the original artifact).
+    Renderers handle the None case gracefully.
+    """
     outer_signal_id: str
     outer_severity: str
     outer_location: str
@@ -190,7 +200,8 @@ class DecodedNode:
     child_findings: tuple[ChildFinding, ...] = ()
     children: tuple["DecodedNode", ...] = ()
     ioc_data: IOCData | None = None
-
+    containing_file_sha256: str | None = None
+    containing_file_sha512: str | None = None
 
 @dataclass(frozen=True)
 class DecodedTree:
@@ -198,6 +209,8 @@ class DecodedTree:
     target: str
     max_depth: int
     nodes: tuple[DecodedNode, ...]
+    artifact_sha256: str | None = None
+    artifact_sha512: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -235,15 +248,39 @@ def decode_payloads(
         target=result.artifact_identity,
         max_depth=max_depth,
         nodes=tuple(nodes),
+        artifact_sha256=getattr(result, "artifact_sha256", None),
+        artifact_sha512=getattr(result, "artifact_sha512", None),
     )
+
+def _node_file_hash_equals_artifact(
+    tree: DecodedTree,
+    node: DecodedNode,
+) -> bool:
+    """True when a node's containing-file hash equals the artifact hash.
+
+    Used by renderers to suppress redundant lines in human output.
+    For a loose-file scan (--single mode), the artifact and the
+    containing file are the same bytes, so artifact_sha256 ==
+    containing_file_sha256. Printing both lines is noise.
+    Returns False when either hash is None (no dedup possible).
+    """
+    if tree.artifact_sha256 is None:
+        return False
+    if node.containing_file_sha256 is None:
+        return False
+    return tree.artifact_sha256 == node.containing_file_sha256
 
 
 def _is_payload_bearing(finding: Finding) -> bool:
     """True iff the finding has a decoded payload we could recurse into."""
+    import sys
     ctx = finding.signal.context
-    if "_full_value" not in ctx:
+    sig_id = finding.signal.signal_id
+    has_full = "_full_value" in ctx
+    has_decoded = "decoded" in ctx
+    if not has_full:
         return False
-    if "decoded" not in ctx:
+    if not has_decoded:
         return False
     return True
 
@@ -465,6 +502,8 @@ def _decode_one(
         child_findings=tuple(leaf_children),
         children=tuple(children),
         ioc_data=ioc_data,
+        containing_file_sha256=finding.context.file_sha256,
+        containing_file_sha512=finding.context.file_sha512,
     )
 
 
@@ -544,6 +583,8 @@ def _make_leaf_node(
         child_findings=(),
         children=(),
         ioc_data=ioc_data,
+        containing_file_sha256=finding.context.file_sha256,
+        containing_file_sha512=finding.context.file_sha512,
     )
 
 
@@ -629,6 +670,8 @@ def filter_tree_by_severity(
         target=tree.target,
         max_depth=tree.max_depth,
         nodes=filtered_nodes,
+        artifact_sha256=tree.artifact_sha256,
+        artifact_sha512=tree.artifact_sha512,
     )
 
 
@@ -691,6 +734,8 @@ def _filter_node_by_severity(
         child_findings=kept_child_findings,
         children=kept_children,
         ioc_data=node.ioc_data,
+        containing_file_sha256=node.containing_file_sha256,
+        containing_file_sha512=node.containing_file_sha512,
     )
 
 
@@ -717,6 +762,10 @@ def render_text(tree: DecodedTree, *, include_iocs: bool = False) -> str:
     lines: list[str] = []
     lines.append(f"decoded payload report for {tree.target}")
     lines.append(f"max recursion depth: {tree.max_depth}")
+    if tree.artifact_sha256:
+        lines.append(f"artifact SHA256: {tree.artifact_sha256}")
+    if tree.artifact_sha512:
+        lines.append(f"artifact SHA512: {tree.artifact_sha512}")
     lines.append("=" * 65)
     lines.append("")
 
@@ -913,11 +962,15 @@ def render_sources(tree: DecodedTree) -> str:
 
     For each node that has ioc_data.decoded_source AND final_kind
     == 'python_source', emit a header block (location, chain,
-    hashes) followed by the source body, line-numbered.
+    containing-file context, hashes) followed by the source body,
+    line-numbered.
 
     Empty tree or tree with no python_source nodes produces a
     short stub explaining why; this is intentional so the file
     always exists with a defined shape inside the archive.
+
+    The artifact-identity header is emitted at the top whenever
+    artifact hashes are populated, matching render_iocs.
     """
     nodes_with_source: list[DecodedNode] = []
 
@@ -937,6 +990,15 @@ def render_sources(tree: DecodedTree) -> str:
     lines: list[str] = []
     lines.append(f"# decoded source dumps for {tree.target}")
     lines.append("# " + "=" * 63)
+
+    # Artifact-identity header.
+    if tree.artifact_sha256 or tree.artifact_sha512:
+        lines.append(f"# artifact: {tree.target}")
+        if tree.artifact_sha256:
+            lines.append(f"# artifact SHA256: {tree.artifact_sha256}")
+        if tree.artifact_sha512:
+            lines.append(f"# artifact SHA512: {tree.artifact_sha512}")
+        lines.append("# " + "-" * 63)
     lines.append("")
 
     if not nodes_with_source:
@@ -954,6 +1016,16 @@ def render_sources(tree: DecodedTree) -> str:
         if node.chain:
             chain_repr = " -> ".join(node.chain) + f" -> {node.final_kind}"
             lines.append(f"# chain: {chain_repr} ({node.final_size} bytes)")
+
+        # Containing-file context, when meaningfully different.
+        if (
+            node.containing_file_sha256
+            and not _node_file_hash_equals_artifact(tree, node)
+        ):
+            lines.append(
+                f"# containing file SHA256: {node.containing_file_sha256}"
+            )
+
         if ioc.original_sha256:
             lines.append(f"# original SHA256: {ioc.original_sha256}")
         if ioc.decoded_sha256:
@@ -976,14 +1048,25 @@ def render_sources(tree: DecodedTree) -> str:
 def render_iocs(tree: DecodedTree) -> str:
     """Render hash records for forensic correlation.
 
-    Emits one block per node with ioc_data, containing the
-    location, signal IDs, chain summary, and all available hashes.
-    Output is plain text suitable for grep/awk consumption: hash
-    lines have a fixed two-token shape so a simple
-        grep '^decoded_sha256' iocs.txt | awk '{print $2}'
-    extracts every decoded-payload hash in the tree.
+    Output structure:
 
-    Empty tree or tree with no ioc_data produces a stub.
+      Header block (always emitted when artifact hashes are
+      populated):
+        artifact identity, SHA256, SHA512, scan timestamp.
+
+      Per-IOC blocks (one per node with ioc_data):
+        location, signal IDs, chain summary, containing-file hash
+        (when meaningfully different from artifact hash), and the
+        original/decoded payload hashes from IOCData.
+
+    Hash lines have a fixed two-token shape so a one-liner like
+        grep '^decoded_sha256' iocs.txt | awk '{print $2}'
+    extracts every decoded-payload hash.
+
+    Empty tree or tree with no ioc_data still emits the header
+    block when artifact hashes are populated, then a stub. Phase 1
+    work guarantees that DecodedTree always has artifact hashes if
+    the originating ScanResult had them.
     """
     nodes_with_iocs: list[DecodedNode] = []
 
@@ -1002,6 +1085,16 @@ def render_iocs(tree: DecodedTree) -> str:
     lines.append("# " + "=" * 63)
     lines.append("")
 
+    # Artifact-identity header. Emitted when artifact hashes are
+    # populated, regardless of whether nodes were found.
+    if tree.artifact_sha256 or tree.artifact_sha512:
+        lines.append(f"# artifact: {tree.target}")
+        if tree.artifact_sha256:
+            lines.append(f"artifact_sha256 {tree.artifact_sha256}")
+        if tree.artifact_sha512:
+            lines.append(f"artifact_sha512 {tree.artifact_sha512}")
+        lines.append("")
+
     if not nodes_with_iocs:
         lines.append("# (no IOC data extracted; nothing to record)")
         lines.append("")
@@ -1019,6 +1112,25 @@ def render_iocs(tree: DecodedTree) -> str:
             )
         if ioc.extract_timestamp:
             lines.append(f"#   extracted: {ioc.extract_timestamp}")
+
+        # Containing-file hash, when present AND different from
+        # the artifact hash. For a --single loose-file scan, the
+        # two are identical and emitting both is noise.
+        if (
+            node.containing_file_sha256
+            and not _node_file_hash_equals_artifact(tree, node)
+        ):
+            lines.append(
+                f"file_sha256 {node.containing_file_sha256}"
+            )
+        if (
+            node.containing_file_sha512
+            and not _node_file_hash_equals_artifact(tree, node)
+        ):
+            lines.append(
+                f"file_sha512 {node.containing_file_sha512}"
+            )
+
         if ioc.original_sha256:
             lines.append(f"original_sha256 {ioc.original_sha256}")
         if ioc.original_sha512:
@@ -1037,14 +1149,29 @@ def render_iocs(tree: DecodedTree) -> str:
 # ---------------------------------------------------------------------------
 
 def render_json(tree: DecodedTree) -> str:
-    """Render the tree as JSON suitable for downstream tooling."""
+    """Render the tree as JSON suitable for downstream tooling.
+
+    Schema version 1: includes top-level artifact_sha256 and
+    artifact_sha512, plus per-node containing_file_sha256 and
+    containing_file_sha512, plus the existing IOC data block.
+
+    The schema_version field is new in this release. Earlier
+    versions of pydepgate emitted this same shape WITHOUT the
+    schema_version field. Consumers built against the
+    schema-versionless output continue to work because the new
+    field is additive and existing keys are unchanged.
+    """
     return json.dumps(_tree_to_dict(tree), indent=2) + "\n"
 
 
 def _tree_to_dict(tree: DecodedTree) -> dict:
     return {
+        "report_type": "pydepgate_decoded_tree",
+        "schema_version": 1,
         "target": tree.target,
         "max_depth": tree.max_depth,
+        "artifact_sha256": tree.artifact_sha256,
+        "artifact_sha512": tree.artifact_sha512,
         "nodes": [_node_to_dict(n) for n in tree.nodes],
     }
 
@@ -1064,6 +1191,8 @@ def _node_to_dict(node: DecodedNode) -> dict:
         "pickle_warning": node.pickle_warning,
         "depth": node.depth,
         "stop_reason": node.stop_reason,
+        "containing_file_sha256": node.containing_file_sha256,
+        "containing_file_sha512": node.containing_file_sha512,
         "child_findings": [
             {
                 "signal_id": cf.signal_id,
