@@ -1148,7 +1148,8 @@ def render_iocs(tree: DecodedTree) -> str:
 # JSON formatter
 # ---------------------------------------------------------------------------
 
-def render_json(tree: DecodedTree) -> str:
+def render_decode_json(tree: DecodedTree, *, include_source: bool = True) -> str:
+
     """Render the tree as JSON suitable for downstream tooling.
 
     Schema version 1: includes top-level artifact_sha256 and
@@ -1161,10 +1162,10 @@ def render_json(tree: DecodedTree) -> str:
     schema-versionless output continue to work because the new
     field is additive and existing keys are unchanged.
     """
-    return json.dumps(_tree_to_dict(tree), indent=2) + "\n"
+    return json.dumps(_tree_to_dict(tree, include_source=include_source), indent=2) + "\n"
 
 
-def _tree_to_dict(tree: DecodedTree) -> dict:
+def _tree_to_dict(tree: DecodedTree, include_source: bool = True) -> dict:
     return {
         "report_type": "pydepgate_decoded_tree",
         "schema_version": 1,
@@ -1172,11 +1173,11 @@ def _tree_to_dict(tree: DecodedTree) -> dict:
         "max_depth": tree.max_depth,
         "artifact_sha256": tree.artifact_sha256,
         "artifact_sha512": tree.artifact_sha512,
-        "nodes": [_node_to_dict(n) for n in tree.nodes],
+        "nodes": [_node_to_dict(n, include_source=include_source) for n in tree.nodes],
     }
 
 
-def _node_to_dict(node: DecodedNode) -> dict:
+def _node_to_dict(node: DecodedNode, *, include_source: bool = True) -> dict:
     result = {
         "outer_signal_id": node.outer_signal_id,
         "outer_severity": node.outer_severity,
@@ -1203,7 +1204,7 @@ def _node_to_dict(node: DecodedNode) -> dict:
             }
             for cf in node.child_findings
         ],
-        "children": [_node_to_dict(c) for c in node.children],
+        "children": [_node_to_dict(c, include_source=include_source) for c in node.children],
     }
 
     if node.ioc_data is not None:
@@ -1212,7 +1213,7 @@ def _node_to_dict(node: DecodedNode) -> dict:
             "original_sha512": node.ioc_data.original_sha512,
             "decoded_sha256": node.ioc_data.decoded_sha256,
             "decoded_sha512": node.ioc_data.decoded_sha512,
-            "decoded_source": node.ioc_data.decoded_source,
+            "decoded_source": node.ioc_data.decoded_source if include_source else None,
             "extract_timestamp": node.ioc_data.extract_timestamp,
         }
 

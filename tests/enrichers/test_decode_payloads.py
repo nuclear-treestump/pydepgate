@@ -49,7 +49,7 @@ from pydepgate.enrichers.decode_payloads import (
     _signal_repr,
     _to_child_finding,
     decode_payloads,
-    render_json,
+    render_decode_json,
     render_text,
     ChildFinding,
     DecodedNode,
@@ -60,14 +60,6 @@ from pydepgate.enrichers.decode_payloads import (
     filter_tree_by_severity,
     render_iocs,
     render_sources,
-)
-from pydepgate.enrichers.decode_payloads import (
-    decode_payloads,
-    filter_tree_by_severity,
-    render_iocs,
-    render_json,
-    render_sources,
-    render_text,
 )
 
 
@@ -827,7 +819,7 @@ class RenderJSONTests(unittest.TestCase):
 
     def test_empty_tree_produces_valid_json(self):
         tree = DecodedTree(target="foo", max_depth=3, nodes=())
-        out = render_json(tree)
+        out = render_decode_json(tree)
         parsed = json.loads(out)
         self.assertEqual(parsed["target"], "foo")
         self.assertEqual(parsed["max_depth"], 3)
@@ -836,7 +828,7 @@ class RenderJSONTests(unittest.TestCase):
     def test_node_includes_triggered_by(self):
         node = _make_node(triggered_by=("DENS010", "DENS011"))
         tree = DecodedTree(target="x", max_depth=3, nodes=(node,))
-        parsed = json.loads(render_json(tree))
+        parsed = json.loads(render_decode_json(tree))
         self.assertEqual(
             parsed["nodes"][0]["triggered_by"],
             ["DENS010", "DENS011"],
@@ -845,7 +837,7 @@ class RenderJSONTests(unittest.TestCase):
     def test_node_includes_outer_signal_id(self):
         node = _make_node(outer_signal_id="DENS010")
         tree = DecodedTree(target="x", max_depth=3, nodes=(node,))
-        parsed = json.loads(render_json(tree))
+        parsed = json.loads(render_decode_json(tree))
         self.assertEqual(parsed["nodes"][0]["outer_signal_id"], "DENS010")
 
     def test_node_serializes_all_basic_fields(self):
@@ -863,7 +855,7 @@ class RenderJSONTests(unittest.TestCase):
             stop_reason=STOP_LEAF_TERMINAL,
         )
         tree = DecodedTree(target="t", max_depth=3, nodes=(node,))
-        parsed = json.loads(render_json(tree))
+        parsed = json.loads(render_decode_json(tree))
         n = parsed["nodes"][0]
         self.assertEqual(n["outer_signal_id"], "DENS010")
         self.assertEqual(n["triggered_by"], ["DENS010"])
@@ -886,7 +878,7 @@ class RenderJSONTests(unittest.TestCase):
         )
         node = _make_node(ioc_data=ioc)
         tree = DecodedTree(target="x", max_depth=3, nodes=(node,))
-        parsed = json.loads(render_json(tree))
+        parsed = json.loads(render_decode_json(tree))
         self.assertIn("ioc_data", parsed["nodes"][0])
         self.assertEqual(
             parsed["nodes"][0]["ioc_data"]["original_sha256"], "abc",
@@ -898,14 +890,14 @@ class RenderJSONTests(unittest.TestCase):
     def test_ioc_data_omitted_when_none(self):
         node = _make_node(ioc_data=None)
         tree = DecodedTree(target="x", max_depth=3, nodes=(node,))
-        parsed = json.loads(render_json(tree))
+        parsed = json.loads(render_decode_json(tree))
         self.assertNotIn("ioc_data", parsed["nodes"][0])
 
     def test_recursive_children_serialize(self):
         inner = _make_node(outer_signal_id="DENS011", depth=1)
         outer = _make_node(outer_signal_id="DENS010", children=(inner,))
         tree = DecodedTree(target="x", max_depth=3, nodes=(outer,))
-        parsed = json.loads(render_json(tree))
+        parsed = json.loads(render_decode_json(tree))
         self.assertEqual(len(parsed["nodes"][0]["children"]), 1)
         self.assertEqual(
             parsed["nodes"][0]["children"][0]["outer_signal_id"],
@@ -922,7 +914,7 @@ class RenderJSONTests(unittest.TestCase):
         )
         node = _make_node(child_findings=(cf,))
         tree = DecodedTree(target="x", max_depth=3, nodes=(node,))
-        parsed = json.loads(render_json(tree))
+        parsed = json.loads(render_decode_json(tree))
         cfs = parsed["nodes"][0]["child_findings"]
         self.assertEqual(len(cfs), 1)
         self.assertEqual(cfs[0]["signal_id"], "DYN002")
