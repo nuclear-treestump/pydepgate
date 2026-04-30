@@ -57,7 +57,7 @@ from pydepgate.engines.base import (
     confidence_to_severity_v01,
 )
 from pydepgate.parsers.pth import parse_pth, LineKind
-from pydepgate.parsers.pysource import SourceLocation, parse_python_source
+from pydepgate.parsers.pysource import SourceLocation, parse_python_source, ParsedPySource
 from pydepgate.rules.base import evaluate_signal
 from pydepgate.traffic_control.triage import FileKind, triage
 from pydepgate.enrichers.base import Enricher
@@ -154,24 +154,34 @@ class StaticEngine:
     ) -> ScanResult:
         """Scan a single file's bytes, treated as part of an artifact.
 
-        Triage decides the file kind based on `internal_path`. Used
-        internally by the artifact-level scan methods (scan_wheel,
-        scan_sdist, scan_installed) and exposed for callers that
-        already have content in memory.
+        For single-file scans (loose files, --single mode, or direct
+        callers), the artifact and the file are the same bytes, so
+        artifact_sha256 == file_sha256. The hashes are computed once
+        at this entry point and threaded through both FileScanInput
+        (which carries file_sha256/file_sha512) and the resulting
+        ScanResult (which carries artifact_sha256/artifact_sha512).
         """
+        from pydepgate.engines._hashes import hash_pair
+
         identity = artifact_identity or internal_path
+        sha256, sha512 = hash_pair(content)
+
         inp = FileScanInput(
             content=content,
             internal_path=internal_path,
             artifact_kind=artifact_kind,
             artifact_identity=identity,
             forced_file_kind=None,
+            file_sha256=sha256,
+            file_sha512=sha512,
         )
         output = self._scan_one_file(inp)
         return self._wrap_single_output_as_result(
             identity=identity,
             artifact_kind=artifact_kind,
             output=output,
+            artifact_sha256=sha256,
+            artifact_sha512=sha512,
         )
 
     def scan_loose_file_as(
@@ -181,27 +191,12 @@ class StaticEngine:
     ) -> ScanResult:
         """Scan a single loose file on disk, treating it as the given kind.
 
-        Bypasses triage entirely. The file's real path is preserved
-        verbatim in the resulting ScanContext, so downstream reports
-        reference the actual filename rather than a synthetic
-        stand-in. Used by 'pydepgate scan --single' to allow
-        iteration testing on arbitrary files without renaming them
-        or restructuring directories.
-
-        Args:
-            path: Filesystem path to the file. Used both as the
-                content source and as the internal_path/
-                artifact_identity in the resulting context.
-            file_kind: Forced FileKind. Must not be FileKind.SKIP.
-
-        Returns:
-            A ScanResult with findings (possibly empty). On read
-            failure, returns a ScanResult with an empty finding set
-            and a diagnostic explaining the failure.
-
-        Raises:
-            ValueError: if file_kind is FileKind.SKIP.
+        See scan_bytes for hash computation semantics. Loose-file scans
+        have artifact_sha256 == file_sha256 because the artifact IS
+        the file.
         """
+        from pydepgate.engines._hashes import hash_pair
+
         if file_kind is FileKind.SKIP:
             raise ValueError(
                 "scan_loose_file_as cannot be called with FileKind.SKIP; "
@@ -221,125 +216,165 @@ class StaticEngine:
                 diagnostics=(f"failed to read {path}: {exc}",),
             )
 
+        sha256, sha512 = hash_pair(content)
+
         inp = FileScanInput(
             content=content,
             internal_path=str(path),
             artifact_kind=ArtifactKind.LOOSE_FILE,
             artifact_identity=str(path),
             forced_file_kind=file_kind,
+            file_sha256=sha256,
+            file_sha512=sha512,
         )
         output = self._scan_one_file(inp)
         return self._wrap_single_output_as_result(
             identity=str(path),
             artifact_kind=ArtifactKind.LOOSE_FILE,
             output=output,
+            artifact_sha256=sha256,
+            artifact_sha512=sha512,
         )
 
     def scan_wheel(
-            self,
-            path: Path,
-            *,
-            progress_callback: Callable[[int, int], None] | None = None,
-        ) -> ScanResult:
-            """Scan a wheel file by enumerating its entries and analyzing each.
+        self,
+        path: Path,
+        *,
+        progress_callback: Callable[[int, int], None] | None = None,
+    ) -> ScanResult:
+        """Scan a wheel file by enumerating its entries and analyzing each.
 
-            Args:
-                path: Path to the .whl file.
-                progress_callback: Optional callable invoked once per file
-                    during Phase 2 of the scan, with (completed, total)
-                    where total is the number of in-scope files. Used by
-                    the CLI to render a progress bar; pass None to scan
-                    silently.
-            """
-            from pydepgate.parsers.wheel import (
-                iter_wheel_files_with_diagnostics,
-                SkippedEntry as WheelSkippedEntry,
-                WheelEntry,
-            )
-            return self._scan_artifact_with_enumerator(
-                identity=str(path),
-                artifact_kind=ArtifactKind.WHEEL,
-                enumerate_fn=lambda: iter_wheel_files_with_diagnostics(path),
-                extract_entry=lambda item: (
-                    (item[0].internal_path, item[0].content)
-                    if isinstance(item[0], WheelEntry)
-                    else None
-                ),
-                extract_skipped=lambda item: (
-                    SkippedFile(
-                        internal_path=item[0].raw_name,
-                        reason=item[0].reason,
-                    )
-                    if isinstance(item[0], WheelSkippedEntry)
-                    else None
-                ),
-                progress_callback=progress_callback,
-            )
+        Computes artifact-level hashes once from the wheel's bytes on
+        disk. The enumerator-driven path computes per-file hashes from
+        each yielded entry's content.
+        """
+        from pydepgate.engines._hashes import hash_pair
+        from pydepgate.parsers.wheel import (
+            iter_wheel_files_with_diagnostics,
+            SkippedEntry as WheelSkippedEntry,
+            WheelEntry,
+        )
 
-    def scan_sdist(
-            self,
-            path: Path,
-            *,
-            progress_callback: Callable[[int, int], None] | None = None,
-        ) -> ScanResult:
-            """Scan an sdist file by enumerating its entries.
+        # Hash the artifact-as-a-whole first. Failure to read here is
+        # the same failure mode that the parser would hit, so we let
+        # the parser produce the error diagnostic; we just leave the
+        # artifact hashes as None in that case.
+        artifact_sha256: str | None = None
+        artifact_sha512: str | None = None
+        try:
+            artifact_bytes = path.read_bytes()
+            artifact_sha256, artifact_sha512 = hash_pair(artifact_bytes)
+        except OSError:
+            # Parser will report the read failure; we just don't have
+            # hashes for this artifact.
+            pass
 
-            See scan_wheel for the progress_callback contract.
-            """
-            from pydepgate.parsers.sdist import (
-                iter_sdist_files_with_diagnostics,
-                SkippedEntry as SdistSkippedEntry,
-                SdistEntry,
-            )
-            return self._scan_artifact_with_enumerator(
-                identity=str(path),
-                artifact_kind=ArtifactKind.SDIST,
-                enumerate_fn=lambda: iter_sdist_files_with_diagnostics(path),
-                extract_entry=lambda item: (
-                    (item.internal_path, item.content)
-                    if isinstance(item, SdistEntry)
-                    else None
-                ),
-                extract_skipped=lambda item: (
-                    SkippedFile(internal_path=item.raw_name, reason=item.reason)
-                    if isinstance(item, SdistSkippedEntry)
-                    else None
-                ),
-                progress_callback=progress_callback,
-            )
-    def scan_installed(
-            self,
-            package_name: str,
-            *,
-            progress_callback: Callable[[int, int], None] | None = None,
-        ) -> ScanResult:
-            """Scan the files of an installed package by name.
-
-            See scan_wheel for the progress_callback contract.
-            """
-            from pydepgate.introspection.installed import (
-                iter_installed_package_files,
-                InstalledPackageNotFound,
-            )
-            try:
-                files_iter = iter_installed_package_files(package_name)
-            except InstalledPackageNotFound:
-                return ScanResult(
-                    artifact_identity=package_name,
-                    artifact_kind=ArtifactKind.INSTALLED_ENV,
-                    findings=(),
-                    skipped=(),
-                    statistics=ScanStatistics(),
-                    diagnostics=(f"package not installed: {package_name}",),
+        return self._scan_artifact_with_enumerator(
+            identity=str(path),
+            artifact_kind=ArtifactKind.WHEEL,
+            enumerate_fn=lambda: iter_wheel_files_with_diagnostics(path),
+            extract_entry=lambda item: (
+                (item[0].internal_path, item[0].content)
+                if isinstance(item[0], WheelEntry)
+                else None
+            ),
+            extract_skipped=lambda item: (
+                SkippedFile(
+                    internal_path=item[0].raw_name,
+                    reason=item[0].reason,
                 )
-            return self._scan_artifact_with_enumerator(
-                identity=package_name,
+                if isinstance(item[0], WheelSkippedEntry)
+                else None
+            ),
+            progress_callback=progress_callback,
+            artifact_sha256=artifact_sha256,
+            artifact_sha512=artifact_sha512,
+        )
+    def scan_sdist(
+        self,
+        path: Path,
+        *,
+        progress_callback: Callable[[int, int], None] | None = None,
+    ) -> ScanResult:
+        """Scan an sdist file by enumerating its entries.
+
+        See scan_wheel for the progress_callback contract and hash
+        semantics.
+        """
+        from pydepgate.engines._hashes import hash_pair
+        from pydepgate.parsers.sdist import (
+            iter_sdist_files_with_diagnostics,
+            SkippedEntry as SdistSkippedEntry,
+            SdistEntry,
+        )
+
+        artifact_sha256: str | None = None
+        artifact_sha512: str | None = None
+        try:
+            artifact_bytes = path.read_bytes()
+            artifact_sha256, artifact_sha512 = hash_pair(artifact_bytes)
+        except OSError:
+            pass
+
+        return self._scan_artifact_with_enumerator(
+            identity=str(path),
+            artifact_kind=ArtifactKind.SDIST,
+            enumerate_fn=lambda: iter_sdist_files_with_diagnostics(path),
+            extract_entry=lambda item: (
+                (item.internal_path, item.content)
+                if isinstance(item, SdistEntry)
+                else None
+            ),
+            extract_skipped=lambda item: (
+                SkippedFile(internal_path=item.raw_name, reason=item.reason)
+                if isinstance(item, SdistSkippedEntry)
+                else None
+            ),
+            progress_callback=progress_callback,
+            artifact_sha256=artifact_sha256,
+            artifact_sha512=artifact_sha512,
+        )
+    def scan_installed(
+        self,
+        package_name: str,
+        *,
+        progress_callback: Callable[[int, int], None] | None = None,
+    ) -> ScanResult:
+        """Scan the files of an installed package by name.
+
+        Artifact-level hashes are None for installed-package scans
+        because the artifact is a directory tree, not a single file.
+        Per-file hashes are still populated for each file in the
+        package.
+
+        See scan_wheel for the progress_callback contract.
+        """
+        from pydepgate.introspection.installed import (
+            iter_installed_package_files,
+            InstalledPackageNotFound,
+        )
+        try:
+            files_iter = iter_installed_package_files(package_name)
+        except InstalledPackageNotFound:
+            return ScanResult(
+                artifact_identity=package_name,
                 artifact_kind=ArtifactKind.INSTALLED_ENV,
-                enumerate_fn=lambda: ((f, None) for f in files_iter),
-                extract_entry=lambda item: (item[0].internal_path, item[0].content),
-                extract_skipped=lambda item: None,
-                progress_callback=progress_callback,
+                findings=(),
+                skipped=(),
+                statistics=ScanStatistics(),
+                diagnostics=(f"package not installed: {package_name}",),
             )
+        return self._scan_artifact_with_enumerator(
+            identity=package_name,
+            artifact_kind=ArtifactKind.INSTALLED_ENV,
+            enumerate_fn=lambda: ((f, None) for f in files_iter),
+            extract_entry=lambda item: (item[0].internal_path, item[0].content),
+            extract_skipped=lambda item: None,
+            progress_callback=progress_callback,
+            # NEW kwargs default to None below; explicit here for clarity:
+            artifact_sha256=None,
+            artifact_sha512=None,
+        )
 
     # ========================================================================
     # The per-file pipeline (pure-function spine)
@@ -398,6 +433,8 @@ class StaticEngine:
                     files_skipped=1,
                     duration_seconds=duration,
                 ),
+                file_sha256=inp.file_sha256,
+                file_sha512=inp.file_sha512,
             )
 
     # Step 3: Build the context and run the analyzer/rule pipeline.
@@ -407,6 +444,8 @@ class StaticEngine:
             internal_path=decided_path,
             file_kind=decided_kind,
             triage_reason=decided_reason,
+            file_sha256=inp.file_sha256,
+            file_sha512=inp.file_sha512,
         )
         diagnostics: list[str] = []
         signals = self._analyze_file(
@@ -452,6 +491,8 @@ class StaticEngine:
             findings=tuple(findings),
             skipped=(),
             diagnostics=tuple(diagnostics),
+            file_sha256=inp.file_sha256,
+            file_sha512=inp.file_sha512,
             suppressed_findings=tuple(suppressed),
             statistics=ScanStatistics(
                 files_total=1,
@@ -530,23 +571,52 @@ class StaticEngine:
 
         For LIBRARY_PY files, the analyzer set is filtered down to
         analyzers that have opted in via `safe_for_library_scan`.
+
+        For PTH files, the dispatch is two-tier. Python's parser
+        accepts most malicious .pth files as-is because they're valid
+        Python (a typical exec-and-decode payload IS valid Python on
+        one line). When Python parsing succeeds, we route through the
+        Python source path so signals get full enricher integration
+        (peek, decode, etc). When Python parsing fails (the file
+        contains path-addition lines or other .pth-only syntax), we
+        fall back to _analyze_pth's per-EXEC-line handling, which
+        parses each exec line as its own snippet. The slow path
+        correctly handles mixed content but does NOT integrate with
+        the enricher pass; signals from this path won't have peek
+        decoded blocks attached. This is acceptable because the slow
+        path only fires for legitimately .pth-format-only files,
+        which are rare in malicious shapes.
         """
         analyzers = self._select_analyzers_for_kind(file_kind)
         if not analyzers:
             # Possible if all analyzers opt out of LIBRARY_PY scanning.
             # Not an error; the file simply produces no signals.
             return []
-        if file_kind is FileKind.PTH:
-            return self._analyze_pth(content, context, diagnostics, analyzers)
-        # All other in-scope kinds are Python source files:
-        # SETUP_PY, INIT_PY, SITECUSTOMIZE, USERCUSTOMIZE, LIBRARY_PY.
-        # ENTRY_POINTS is a separate format and not handled in v0.1.
+
         if file_kind is FileKind.ENTRY_POINTS:
             diagnostics.append(
                 "entry_points.txt analysis not implemented in v0.1: "
                 f"{context.internal_path}"
             )
             return []
+
+        if file_kind is FileKind.PTH:
+            # Fast path: try Python parsing first. Single-line .pth
+            # files (the common case for malicious payloads) parse
+            # cleanly here and get full enricher integration via the
+            # standard Python source pipeline.
+            parsed = parse_python_source(content, context.internal_path)
+            if parsed.is_parseable:
+                return self._run_python_analyzers(
+                    parsed, context, diagnostics, analyzers,
+                )
+            # Slow path: Python parsing failed (typically a path-
+            # addition line). Fall back to per-EXEC-line analysis,
+            # which parses each `import...` line as its own snippet.
+            return self._analyze_pth(content, context, diagnostics, analyzers)
+
+        # All other in-scope kinds are Python source files:
+        # SETUP_PY, INIT_PY, SITECUSTOMIZE, USERCUSTOMIZE, LIBRARY_PY.
         return self._analyze_python_source(
             content, context, diagnostics, analyzers,
         )
@@ -599,8 +669,37 @@ class StaticEngine:
         diagnostics: list[str],
         analyzers: tuple[Analyzer, ...],
     ) -> list[Signal]:
-        """Parse content as Python source and run the given analyzers on it."""
+        """Parse content as Python source and run the given analyzers on it.
+
+        Public shape unchanged from previous versions: parses then runs.
+        For paths that have already parsed (the .pth fast-path
+        integration in _analyze_file), call _run_python_analyzers
+        directly with the pre-parsed result to avoid double-parsing.
+        """
         parsed = parse_python_source(content, context.internal_path)
+        return self._run_python_analyzers(
+            parsed, context, diagnostics, analyzers,
+        )
+
+
+    def _run_python_analyzers(
+        self,
+        parsed: ParsedPySource,
+        context: ScanContext,
+        diagnostics: list[str],
+        analyzers: tuple[Analyzer, ...],
+    ) -> list[Signal]:
+        """Run analyzers against an already-parsed Python source.
+
+        Factored out so callers that have already parsed the source
+        (the .pth fast-path in _analyze_file) can run analyzers
+        without re-parsing. The parse-and-analyze combination remains
+        available via _analyze_python_source.
+
+        Analyzer failures are recorded in diagnostics but do not abort
+        the scan, matching the existing behavior of
+        _analyze_python_source.
+        """
         signals: list[Signal] = []
         for analyzer in analyzers:
             try:
@@ -662,89 +761,92 @@ class StaticEngine:
     # ========================================================================
 
     def _scan_artifact_with_enumerator(
-            self,
-            identity: str,
-            artifact_kind: ArtifactKind,
-            enumerate_fn,
-            extract_entry,
-            extract_skipped,
-            progress_callback: Callable[[int, int], None] | None = None,
-        ) -> ScanResult:
-            """Run the full pipeline over the output of an entry enumerator.
+        self,
+        identity: str,
+        artifact_kind: ArtifactKind,
+        enumerate_fn,
+        extract_entry,
+        extract_skipped,
+        progress_callback: Callable[[int, int], None] | None = None,
+        artifact_sha256: str | None = None,
+        artifact_sha512: str | None = None,
+    ) -> ScanResult:
+        """Run the full pipeline over the output of an entry enumerator.
 
-            Three phases:
-            1. Enumerate the artifact and build FileScanInputs.
-            2. Run _scan_one_file over each input. (Today serial; this
-                is the line that becomes a process pool later.)
-            3. Aggregate per-file outputs into a single ScanResult.
+        Three phases:
+        1. Enumerate the artifact and build FileScanInputs (with per-file
+        hashes computed from each yielded entry's content).
+        2. Run _scan_one_file over each input. (Today serial; this is
+        the line that becomes a process pool later.)
+        3. Aggregate per-file outputs into a single ScanResult, with
+        artifact-level hashes threaded through from the caller.
+        """
+        from pydepgate.engines._hashes import hash_pair
 
-            Each caller provides:
-            - enumerate_fn: returns an iterable of items.
-            - extract_entry: given an item, return (path, bytes) or None.
-            - extract_skipped: given an item, return a SkippedFile or None.
-            - progress_callback: optional callable invoked once per file
-                in Phase 2, with (completed, total). Receives `total =
-                len(inputs)`, i.e. only files that survived Phase 1
-                triage. Failures inside the callback are swallowed so a
-                broken progress bar can never abort a scan.
-            """
-            started_at = time.perf_counter()
+        started_at = time.perf_counter()
 
-            # ---- Phase 1: enumerate -------------------------------------------
-            try:
-                items = list(enumerate_fn())
-            except Exception as exc:
-                return ScanResult(
-                    artifact_identity=identity,
-                    artifact_kind=artifact_kind,
-                    findings=(),
-                    skipped=(),
-                    statistics=ScanStatistics(
-                        duration_seconds=time.perf_counter() - started_at,
-                    ),
-                    diagnostics=(f"failed to enumerate {identity}: {exc}",),
-                )
-
-            pre_skipped: list[SkippedFile] = []
-            inputs: list[FileScanInput] = []
-            for item in items:
-                skipped = extract_skipped(item)
-                if skipped is not None:
-                    pre_skipped.append(skipped)
-                    continue
-                entry = extract_entry(item)
-                if entry is None:
-                    continue
-                internal_path, content = entry
-                inputs.append(FileScanInput(
-                    content=content,
-                    internal_path=internal_path,
-                    artifact_kind=artifact_kind,
-                    artifact_identity=identity,
-                    forced_file_kind=None,
-                ))
-
-            # ---- Phase 2: per-file scans --------------------------------------
-            # When parallelism lands, the loop body becomes:
-            #   futures = [executor.submit(self._scan_one_file, inp) for inp in inputs]
-            #   for i, future in enumerate(as_completed(futures), start=1):
-            #       outputs.append(future.result())
-            #       _safe_progress(progress_callback, i, total)
-            # The progress_callback contract still works under that shape.
-            total = len(inputs)
-            outputs: list[FileScanOutput] = []
-            for i, inp in enumerate(inputs, start=1):
-                outputs.append(self._scan_one_file(inp))
-                _safe_progress(progress_callback, i, total)
-
-            # ---- Phase 3: aggregate -------------------------------------------
-            return self._aggregate_outputs(
-                identity=identity,
+        # ---- Phase 1: enumerate -------------------------------------------
+        try:
+            items = list(enumerate_fn())
+        except Exception as exc:
+            return ScanResult(
+                artifact_identity=identity,
                 artifact_kind=artifact_kind,
-                outputs=outputs,
-                pre_skipped=tuple(pre_skipped),
-                started_at=started_at,
+                findings=(),
+                skipped=(),
+                statistics=ScanStatistics(
+                    duration_seconds=time.perf_counter() - started_at,
+                ),
+                diagnostics=(f"failed to enumerate {identity}: {exc}",),
+                artifact_sha256=artifact_sha256,
+                artifact_sha512=artifact_sha512,
             )
+
+        pre_skipped: list[SkippedFile] = []
+        inputs: list[FileScanInput] = []
+        for item in items:
+            skipped = extract_skipped(item)
+            if skipped is not None:
+                pre_skipped.append(skipped)
+                continue
+            entry = extract_entry(item)
+            if entry is None:
+                continue
+            internal_path, content = entry
+
+            # NEW: hash this file's content. The cost is one pass through
+            # the content per hash algorithm; for a typical wheel with
+            # 100-1000 files at 1-50KB each, total hashing cost is
+            # under 100ms.
+            file_sha256, file_sha512 = hash_pair(content)
+
+            inputs.append(FileScanInput(
+                content=content,
+                internal_path=internal_path,
+                artifact_kind=artifact_kind,
+                artifact_identity=identity,
+                forced_file_kind=None,
+                file_sha256=file_sha256,
+                file_sha512=file_sha512,
+            ))
+
+        # ---- Phase 2: per-file scans (unchanged) --------------------------
+        total = len(inputs)
+        outputs: list[FileScanOutput] = []
+        for i, inp in enumerate(inputs, start=1):
+            outputs.append(self._scan_one_file(inp))
+            _safe_progress(progress_callback, i, total)
+
+        # ---- Phase 3: aggregate -------------------------------------------
+        return self._aggregate_outputs(
+            identity=identity,
+            artifact_kind=artifact_kind,
+            outputs=outputs,
+            pre_skipped=tuple(pre_skipped),
+            started_at=started_at,
+            artifact_sha256=artifact_sha256,
+            artifact_sha512=artifact_sha512,
+        )
 
     def _aggregate_outputs(
         self,
@@ -753,22 +855,16 @@ class StaticEngine:
         outputs: list[FileScanOutput],
         pre_skipped: tuple[SkippedFile, ...],
         started_at: float,
+        artifact_sha256: str | None = None,
+        artifact_sha512: str | None = None,
     ) -> ScanResult:
-        """Combine per-file outputs into an artifact-level ScanResult.
-
-        Pre-enumeration skips (e.g. unsafe paths in a wheel that the
-        wheel parser refused to extract) are passed in separately
-        because they never went through `_scan_one_file`.
-        """
+        """Combine per-file outputs into an artifact-level ScanResult."""
         all_findings: list[Finding] = []
         all_skipped: list[SkippedFile] = list(pre_skipped)
         all_diagnostics: list[str] = []
         all_suppressed: list[SuppressedFinding] = []
         per_file_stats: list[FileStatsEntry] = []
 
-        # Pre-enumeration skips contribute to total and skipped counts
-        # but never produced FileScanOutputs, so they need explicit
-        # accounting.
         combined = ScanStatistics(
             files_total=len(pre_skipped),
             files_skipped=len(pre_skipped),
@@ -804,6 +900,8 @@ class StaticEngine:
             diagnostics=tuple(all_diagnostics),
             suppressed_findings=tuple(all_suppressed),
             per_file_statistics=tuple(per_file_stats),
+            artifact_sha256=artifact_sha256,
+            artifact_sha512=artifact_sha512,
         )
 
     def _wrap_single_output_as_result(
@@ -811,6 +909,8 @@ class StaticEngine:
         identity: str,
         artifact_kind: ArtifactKind,
         output: FileScanOutput,
+        artifact_sha256: str | None = None,
+        artifact_sha512: str | None = None,
     ) -> ScanResult:
         """Wrap a single FileScanOutput as a ScanResult.
 
@@ -827,6 +927,8 @@ class StaticEngine:
             statistics=output.statistics,
             diagnostics=output.diagnostics,
             suppressed_findings=output.suppressed_findings,
+            artifact_sha256=artifact_sha256,
+            artifact_sha512=artifact_sha512,
         )
 
 
