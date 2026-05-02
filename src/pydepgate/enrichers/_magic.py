@@ -54,6 +54,11 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from pydepgate.enrichers._asn1 import (
+    FormatContext,
+    classify,
+    looks_like_der,
+)
 
 
 # How many initial bytes/chars we examine for terminal classification
@@ -94,6 +99,16 @@ _PICKLE_PROTO_BYTE = b"\x80"
 # ---------------------------------------------------------------------------
 # Text-encoding alphabets and shapes
 # ---------------------------------------------------------------------------
+
+# PEM armor markers per RFC 7468. The label may include uppercase
+# letters, digits, and spaces ("RSA PRIVATE KEY", "EC PRIVATE KEY",
+# "PGP MESSAGE", etc.). The full regex requires both BEGIN and END
+# with matching labels via a backreference; this avoids classifying
+# half-armored inputs as PEM.
+_PEM_FULL_RE = re.compile(
+    r"-----BEGIN ([A-Z0-9 ]+)-----\s*(.*?)\s*-----END \1-----",
+    re.DOTALL,
+)
 
 # Standard + URL-safe base64. Padding char included.
 _BASE64_ALPHABET = frozenset(
@@ -165,15 +180,25 @@ class FormatDetection:
 
     Attributes:
         kind: A short identifier. For non-terminal cases this names
-            the transformation to apply ("base64", "zlib", etc.).
-            For terminal cases this names the final classification
-            ("python_source", "pickle_data", "binary_unknown", etc.).
+            the transformation to apply ("base64", "pem", "zlib",
+            etc.). For terminal cases this names the final
+            classification ("python_source", "pickle_data",
+            "binary_unknown", etc.).
         is_terminal: True when no further unwrap should be attempted
             on this input. Terminal inputs may still be inspected
             for indicator strings, but no decode/decompress runs.
+        details: Structured per-format detail object. Currently
+            populated only for binary_unknown inputs that pass the
+            DER pre-check, in which case it carries a
+            DERClassification describing what the bytes are
+            (X.509 cert, RSA SPKI, etc.). None otherwise. The
+            field type is FormatContext (the marker base class)
+            so future format classifiers (JWT, etc.) can use the
+            same slot without changing this dataclass.
     """
     kind: str
     is_terminal: bool
+    details: FormatContext | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -290,6 +315,38 @@ def is_hex_0x_list(s: str) -> bool:
         return False
     return all(_HEX_0X_TOKEN_RE.match(t) for t in tokens)
 
+def is_pem(text: str) -> bool:
+    """Detect PEM-armored content per RFC 7468.
+
+    Strict: the input must start with `-----BEGIN <label>-----`
+    and end with the matching END marker, modulo leading and
+    trailing whitespace. Embedded PEM inside non-PEM content
+    (Python source containing a cert literal, prose with example
+    certs, etc.) is rejected.
+
+    The strict semantics matter because is_pem gates the PEM
+    transform in the unwrap loop. A loose match on Python source
+    that happens to contain a cert literal would cause the loop
+    to discard the surrounding Python context and only surface
+    the cert. The Python context is typically more interesting
+    (imports, exec calls, shell-outs) than the embedded cert.
+
+    PEM body chars overlap with the URL-safe base64 alphabet
+    (the dashes in the markers are in the URL-safe alphabet),
+    so this predicate MUST run ahead of is_base64 in the
+    dispatch chain regardless of strictness.
+    """
+    stripped = text.strip()
+    if not stripped.startswith("-----BEGIN "):
+        return False
+    if not stripped.endswith("-----"):
+        return False
+    # Confirm a matching BEGIN/END pair anchored at the start.
+    # `match` (vs `search`) requires the regex to match from
+    # position 0; combined with the startswith and endswith
+    # checks this gives us "the whole input is one or more
+    # PEM blocks with only whitespace around them."
+    return _PEM_FULL_RE.match(stripped) is not None
 
 # ---------------------------------------------------------------------------
 # ASCII-Python heuristic
@@ -362,10 +419,16 @@ def detect_format(data: str | bytes) -> FormatDetection:
     """
     if isinstance(data, str):
         return _detect_str(data)
+    print("DEBUG: detecting bytes input of length", len(data), "with contents" + (f" {data[:100]!r} (truncated to 100 chars for debug)" if len(data) > 100 else " " + repr(data)))
     return _detect_bytes(data)
 
 
 def _detect_str(s: str) -> FormatDetection:
+    # PEM goes first: PEM markers (-----BEGIN X-----) are within
+    # the URL-safe base64 alphabet, so is_base64 would also match
+    # PEM-armored content. PEM-first prevents misclassification.
+    if is_pem(s):
+        return FormatDetection(kind="pem", is_terminal=False)
     if is_base64(s):
         return FormatDetection(kind="base64", is_terminal=False)
     if is_pure_hex(s):
@@ -408,6 +471,8 @@ def _detect_bytes(data: bytes) -> FormatDetection:
         # If the text-form classification was a recognized text
         # encoding, surface that. Otherwise the bytes-form gets the
         # final say (more conservative for opaque content).
+        print(f"DEBUG: ASCII-decoded bytes to text of length {len(text)}. Text detection result: kind={result.kind}, is_terminal={result.is_terminal}.")
+        print(f"DEBUG: Sample text: {text[:100]!r} (truncated to 100 chars for debug)")
         if not result.is_terminal:
             return result
         if result.kind == "python_source":
@@ -415,8 +480,17 @@ def _detect_bytes(data: bytes) -> FormatDetection:
         # Plain ASCII text that isn't an encoding and isn't Python.
         return FormatDetection(kind="ascii_text", is_terminal=True)
 
-    # Pure binary, nothing recognized.
-    return FormatDetection(kind="binary_unknown", is_terminal=True)
+    # Pure binary, nothing recognized at the magic-byte level.
+    # Run the cheap looks_like_der pre-check; if it passes, walk
+    # the DER and attach the classification as details.
+    der_details: FormatContext | None = None
+    if looks_like_der(data):
+        der_details = classify(data)
+    return FormatDetection(
+        kind="binary_unknown",
+        is_terminal=True,
+        details=der_details,
+    )
 
 
 # ---------------------------------------------------------------------------
