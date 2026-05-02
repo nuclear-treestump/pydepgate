@@ -62,6 +62,7 @@ from pydepgate.enrichers._unwrap import (
     UnwrapResult,
     unwrap,
 )
+from pydepgate.enrichers._asn1 import DERClassification
 
 
 # Public constants. Exposed so CLI argument parsing in PR 3 can
@@ -168,8 +169,10 @@ class PayloadPeek(Enricher):
 
         full_value = sig.context.get("_full_value")
         if full_value is None:
+            print(f"DEBUG: signal {sig.signal_id} missing _full_value in context; skipping enrichment.")
             return None
         if not isinstance(full_value, (str, bytes)):
+            print(f"DEBUG: signal {sig.signal_id} has _full_value of type {type(full_value).__name__}, expected str or bytes; skipping enrichment.")
             return None
 
         result = unwrap(
@@ -180,7 +183,13 @@ class PayloadPeek(Enricher):
 
         # If unwrap couldn't even produce a useful chain (no transforms,
         # input was already terminal), there's nothing to add. Skip.
-        if not result.chain and result.status == STATUS_COMPLETED:
+        if (
+            not result.chain
+            and result.status == STATUS_COMPLETED
+            and result.details is None
+        ):
+            print(f"DEBUG: unwrap produced no chain and completed immediately for signal {sig.signal_id}. Skipping enrichment.")
+            print(f"DEBUG: full value peek: {full_value[:100]!r} (truncated to 100 chars for debug)")
             return None
 
         decoded_block = self._build_decoded_block(result)
@@ -217,6 +226,18 @@ class PayloadPeek(Enricher):
         }
         if result.continues_as is not None:
             block["continues_as"] = result.continues_as
+        # When the terminal carries structured details (DER cert,
+        # public key, etc.), surface a compact summary plus the
+        # full lossless serialization. Two keys so consumers can
+        # CLI-gate whether to include the full form in output.
+        if isinstance(result.details, DERClassification):
+            print(f"DEBUG: Terminal is recognized DER with kind {result.details.kind}. Adding DER details to decoded block.")
+            print("=== DEBUG: DER details summary dict ===")
+            print(f"DEBUG: DER details summary: {result.details.summary_dict()}")
+            print(f"DEBUG: DER details full dict: {result.details.full_dict()}")
+            print("=== END DEBUG ===")
+            block["der"] = result.details.summary_dict()
+            block["der_full"] = result.details.full_dict()
         return block
 
     # -- ENC002 derivative ---------------------------------------------
@@ -227,7 +248,16 @@ class PayloadPeek(Enricher):
         result: UnwrapResult,
         decoded_block: dict,
     ) -> Signal | None:
-        """Return an ENC002 signal if the chain warrants one, else None."""
+        """Return an ENC002 signal if the chain warrants one, else None.
+
+        Confidence step-down: when the terminal classification is
+        recognized DER (a cert, a public key, etc.), step the
+        confidence down by one tier. Nested-cert is structurally
+        the same shape as nested-payload, but semantically more
+        often legitimate (PKI material gets layered through
+        encoding routinely). The rules layer can override per
+        file_kind if desired.
+        """
         depth = len(result.chain)
         is_exhausted = result.status == STATUS_EXHAUSTED_DEPTH
 
@@ -242,9 +272,23 @@ class PayloadPeek(Enricher):
             # depth == 2, completed
             confidence = Confidence.AMBIGUOUS
 
+        # DER step-down. Applies on top of the depth/exhaustion
+        # tiers above; happens once.
+        if _is_recognized_der_terminal(result):
+            confidence = _step_down_confidence(confidence)
+
         chain_summary = " -> ".join(layer.kind for layer in result.chain)
         if is_exhausted and result.continues_as:
             chain_summary += f" -> {result.continues_as} [DEPTH LIMIT REACHED]"
+
+        # When the terminal carries a recognized DER classification,
+        # surface that in the description so the reader sees both
+        # the chain shape and what the terminal actually was.
+        final_form_str = result.final_kind
+        if _is_recognized_der_terminal(result):
+            final_form_str = (
+                f"{result.final_kind} <{result.details.kind}>"
+            )
 
         # ENC002 carries its own context block (with the decoded data
         # plus a depth-summary string). It does NOT carry an
@@ -268,7 +312,7 @@ class PayloadPeek(Enricher):
             description=(
                 f"deeply-nested encoded payload at line {original.location.line}: "
                 f"{chain_summary} ({depth} transforms, "
-                f"final form {result.final_kind})"
+                f"final form {final_form_str})"
             ),
             context=enc002_context,
             # No enrichment_hints: ENC002 is itself a derivative; we
