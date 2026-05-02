@@ -169,10 +169,8 @@ class PayloadPeek(Enricher):
 
         full_value = sig.context.get("_full_value")
         if full_value is None:
-            print(f"DEBUG: signal {sig.signal_id} missing _full_value in context; skipping enrichment.")
             return None
         if not isinstance(full_value, (str, bytes)):
-            print(f"DEBUG: signal {sig.signal_id} has _full_value of type {type(full_value).__name__}, expected str or bytes; skipping enrichment.")
             return None
 
         result = unwrap(
@@ -188,8 +186,6 @@ class PayloadPeek(Enricher):
             and result.status == STATUS_COMPLETED
             and result.details is None
         ):
-            print(f"DEBUG: unwrap produced no chain and completed immediately for signal {sig.signal_id}. Skipping enrichment.")
-            print(f"DEBUG: full value peek: {full_value[:100]!r} (truncated to 100 chars for debug)")
             return None
 
         decoded_block = self._build_decoded_block(result)
@@ -231,11 +227,6 @@ class PayloadPeek(Enricher):
         # full lossless serialization. Two keys so consumers can
         # CLI-gate whether to include the full form in output.
         if isinstance(result.details, DERClassification):
-            print(f"DEBUG: Terminal is recognized DER with kind {result.details.kind}. Adding DER details to decoded block.")
-            print("=== DEBUG: DER details summary dict ===")
-            print(f"DEBUG: DER details summary: {result.details.summary_dict()}")
-            print(f"DEBUG: DER details full dict: {result.details.full_dict()}")
-            print("=== END DEBUG ===")
             block["der"] = result.details.summary_dict()
             block["der_full"] = result.details.full_dict()
         return block
