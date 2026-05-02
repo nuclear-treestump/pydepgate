@@ -419,7 +419,6 @@ def detect_format(data: str | bytes) -> FormatDetection:
     """
     if isinstance(data, str):
         return _detect_str(data)
-    print("DEBUG: detecting bytes input of length", len(data), "with contents" + (f" {data[:100]!r} (truncated to 100 chars for debug)" if len(data) > 100 else " " + repr(data)))
     return _detect_bytes(data)
 
 
@@ -471,8 +470,6 @@ def _detect_bytes(data: bytes) -> FormatDetection:
         # If the text-form classification was a recognized text
         # encoding, surface that. Otherwise the bytes-form gets the
         # final say (more conservative for opaque content).
-        print(f"DEBUG: ASCII-decoded bytes to text of length {len(text)}. Text detection result: kind={result.kind}, is_terminal={result.is_terminal}.")
-        print(f"DEBUG: Sample text: {text[:100]!r} (truncated to 100 chars for debug)")
         if not result.is_terminal:
             return result
         if result.kind == "python_source":

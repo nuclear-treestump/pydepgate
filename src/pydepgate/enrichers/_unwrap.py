@@ -420,11 +420,7 @@ def unwrap(
     for _ in range(max_depth):
         det = detect_format(detection_input)
         if det.is_terminal:
-            print(f"DEBUG: detected terminal format {det.kind} with input of length {len(current)}. Parsing stopped.")
-            print(f"DEBUG: Sample terminal bytes: {current[:100]!r} (truncated to 100 bytes for debug)")
             return _terminal_result(chain, current, det.kind, det.details)
-        print(f"DEBUG: detected non-terminal format {det.kind} with input of length {len(current)}. Attempting transform.")
-        print(f"DEBUG: Sample input bytes: {current[:100]!r} (truncated to 100 bytes for debug)")
         try:
             new_bytes = _apply_transform(
                 det.kind, detection_input, budget_remaining,

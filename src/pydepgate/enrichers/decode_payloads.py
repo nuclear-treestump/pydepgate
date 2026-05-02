@@ -512,11 +512,6 @@ def _decode_one(
     details_summary: dict | None = None
     details_full: dict | None = None
     if isinstance(unwrap_result.details, DERClassification):
-        print(f"DEBUG: Call Site: _decode_one at depth {depth} for signal {finding.signal.signal_id} with terminal DER classification. Adding DER details to decoded block.")
-        print("=== DEBUG: DER details summary dict ===")
-        print(f"DEBUG: DER details summary: {unwrap_result.details.summary_dict()}")
-        print(f"DEBUG: DER details full dict: {unwrap_result.details.full_dict()}")
-        print("=== END DEBUG ===")
         details_summary = unwrap_result.details.summary_dict()
         details_full = unwrap_result.details.full_dict()
 
@@ -616,11 +611,6 @@ def _make_leaf_node(
     details_summary: dict | None = None
     details_full: dict | None = None
     if isinstance(details, DERClassification):
-        print(f"DEBUG: Terminal is recognized DER with kind {details.kind}. Adding DER details to decoded block.")
-        print("=== DEBUG: DER details summary dict ===")
-        print(f"DEBUG: DER details summary: {details.summary_dict()}")
-        print(f"DEBUG: DER details full dict: {details.full_dict()}")
-        print("=== END DEBUG ===")
         details_summary = details.summary_dict()
         details_full = details.full_dict()
 
@@ -778,9 +768,6 @@ def _filter_node_by_severity(
         return None
     
     if node.details_summary is not None or node.details_full is not None:
-        print(f"DEBUG: Node {node.outer_signal_id} at depth {node.depth} has details. Preserving details in filtered node.")
-        print(f"DEBUG: details_summary: {node.details_summary}")
-        print(f"DEBUG: details_full: {node.details_full}")
 
     return DecodedNode(
         outer_signal_id=node.outer_signal_id,
@@ -1040,11 +1027,9 @@ def _render_node_text(
             f"{body_prefix}WARNING: payload is a Python pickle "
             "stream (NOT deserialized)"
         )
-    print(f"DEBUG: Node is of kind: {node.final_kind} with size {node.final_size} bytes. Pickle warning: {node.pickle_warning}. Indicators: {node.indicators}")
     # DER classification block (currently the only structured details
     # emitter; future formats will plug in here).
     if node.details_summary is not None:
-        print(f"DEBUG: Node {node.outer_signal_id} at depth {node.depth} has details. Rendering DER details block in text output.")
         _render_der_details(lines, body_prefix, node.details_full or node.details_summary)
 
     if node.stop_reason == STOP_DEPTH_LIMIT:
