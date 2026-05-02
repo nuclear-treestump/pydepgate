@@ -104,6 +104,7 @@ from pydepgate.enrichers._unwrap import (
     UnwrapResult,
     unwrap,
 )
+from pydepgate.enrichers._asn1 import DERClassification
 from pydepgate.traffic_control.triage import FileKind
 
 
@@ -183,6 +184,17 @@ class DecodedNode:
       - The node is from an inner recursive scan (the bytes have
         no meaningful containing file in the original artifact).
     Renderers handle the None case gracefully.
+
+    The details_summary and details_full fields carry the structured
+    classification of binary terminals (currently DER certs and public
+    keys via DERClassification, future formats welcome). Both are
+    plain dicts rather than the original FormatContext object so the
+    DecodedNode remains picklable, JSON-serializable, and decoupled
+    from the parser modules. They are populated from
+    `unwrap_result.details` via the new `summary_dict()` and
+    `full_dict()` methods on DERClassification. None when the
+    terminal had no structured classification (most python_source
+    cases, raw zlib output, etc.).
     """
     outer_signal_id: str
     outer_severity: str
@@ -202,6 +214,8 @@ class DecodedNode:
     ioc_data: IOCData | None = None
     containing_file_sha256: str | None = None
     containing_file_sha512: str | None = None
+    details_summary: dict | None = None
+    details_full: dict | None = None
 
 @dataclass(frozen=True)
 class DecodedTree:
@@ -270,19 +284,27 @@ def _node_file_hash_equals_artifact(
         return False
     return tree.artifact_sha256 == node.containing_file_sha256
 
-
 def _is_payload_bearing(finding: Finding) -> bool:
-    """True iff the finding has a decoded payload we could recurse into."""
-    import sys
-    ctx = finding.signal.context
-    sig_id = finding.signal.signal_id
-    has_full = "_full_value" in ctx
-    has_decoded = "decoded" in ctx
-    if not has_full:
-        return False
-    if not has_decoded:
-        return False
-    return True
+    """True if the finding has a decoded payload we could recurse into.
+
+    Presence of `_full_value` in context is the only criterion. Whether
+    the finding has also been enriched with a `decoded` block by
+    payload_peek is orthogonal: enrichment adds rendering context but
+    does not consume the underlying value. The recursion in
+    `_decode_one` reads from `_full_value` directly and ignores
+    `decoded` entirely.
+
+    The previous version had a truth-table bug: it returned True for
+    (has_full, not has_decoded), False for (not has_full, not
+    has_decoded), and fell through to an implicit None for the
+    remaining two cases. None is falsy, so every finding that had
+    been enriched by payload_peek (i.e. (has_full, has_decoded)) was
+    silently dropped from the recursion. That is why the litellm scan
+    missed the inner B64_SCRIPT (above payload_peek's 1024-byte
+    enrichment threshold, so enriched, so dropped) but caught the
+    line-7 PEM (below the threshold, not enriched, recursed).
+    """
+    return "_full_value" in finding.signal.context
 
 
 def _dedupe_payload_findings(
@@ -308,7 +330,6 @@ def _dedupe_payload_findings(
         key = (
             finding.context.internal_path,
             finding.signal.location.line,
-            finding.signal.location.column,
             value_hash,
         )
 
@@ -389,6 +410,7 @@ def _decode_one(
             extract_iocs=extract_iocs,
             full_value=full_value,
             final_bytes=unwrap_result.final_bytes,
+            details=unwrap_result.details,
         )
 
     unwrap_result = unwrap(
@@ -416,6 +438,7 @@ def _decode_one(
             extract_iocs=extract_iocs,
             full_value=full_value,
             final_bytes=unwrap_result.final_bytes,
+            details=unwrap_result.details,
         )
 
     if unwrap_result.final_kind != "python_source":
@@ -433,6 +456,7 @@ def _decode_one(
             extract_iocs=extract_iocs,
             full_value=full_value,
             final_bytes=unwrap_result.final_bytes,
+            details=unwrap_result.details,
         )
 
     inner_kind = finding.context.file_kind
@@ -485,6 +509,17 @@ def _decode_one(
             full_value, unwrap_result.final_bytes, unwrap_result.final_kind,
         )
 
+    details_summary: dict | None = None
+    details_full: dict | None = None
+    if isinstance(unwrap_result.details, DERClassification):
+        print(f"DEBUG: Call Site: _decode_one at depth {depth} for signal {finding.signal.signal_id} with terminal DER classification. Adding DER details to decoded block.")
+        print("=== DEBUG: DER details summary dict ===")
+        print(f"DEBUG: DER details summary: {unwrap_result.details.summary_dict()}")
+        print(f"DEBUG: DER details full dict: {unwrap_result.details.full_dict()}")
+        print("=== END DEBUG ===")
+        details_summary = unwrap_result.details.summary_dict()
+        details_full = unwrap_result.details.full_dict()
+
     return DecodedNode(
         outer_signal_id=finding.signal.signal_id,
         outer_severity=finding.severity.value,
@@ -504,6 +539,8 @@ def _decode_one(
         ioc_data=ioc_data,
         containing_file_sha256=finding.context.file_sha256,
         containing_file_sha512=finding.context.file_sha512,
+        details_summary=details_summary,
+        details_full=details_full,
     )
 
 
@@ -560,11 +597,32 @@ def _make_leaf_node(
     extract_iocs: bool,
     full_value: str | bytes | None = None,
     final_bytes: bytes | None = None,
+    details: object | None = None,
 ) -> DecodedNode:
-    """Build a node that records why recursion stopped here."""
+    """Build a node that records why recursion stopped here.
+
+    The `details` parameter is `unwrap_result.details` from the caller
+    (typically a DERClassification or None). It gets serialized into
+    the node's details_summary/details_full dicts via the
+    classification's summary_dict() and full_dict() methods. Typed as
+    object rather than FormatContext to keep this signature
+    independent of the parser-class hierarchy; isinstance gates do
+    the actual dispatch.
+    """
     ioc_data = None
     if extract_iocs and full_value is not None and final_bytes is not None:
         ioc_data = _extract_iocs(full_value, final_bytes, final_kind)
+
+    details_summary: dict | None = None
+    details_full: dict | None = None
+    if isinstance(details, DERClassification):
+        print(f"DEBUG: Terminal is recognized DER with kind {details.kind}. Adding DER details to decoded block.")
+        print("=== DEBUG: DER details summary dict ===")
+        print(f"DEBUG: DER details summary: {details.summary_dict()}")
+        print(f"DEBUG: DER details full dict: {details.full_dict()}")
+        print("=== END DEBUG ===")
+        details_summary = details.summary_dict()
+        details_full = details.full_dict()
 
     return DecodedNode(
         outer_signal_id=finding.signal.signal_id,
@@ -585,6 +643,8 @@ def _make_leaf_node(
         ioc_data=ioc_data,
         containing_file_sha256=finding.context.file_sha256,
         containing_file_sha512=finding.context.file_sha512,
+        details_summary=details_summary,
+        details_full=details_full,
     )
 
 
@@ -716,6 +776,11 @@ def _filter_node_by_severity(
 
     if not own_passes and not has_kept_descendants:
         return None
+    
+    if node.details_summary is not None or node.details_full is not None:
+        print(f"DEBUG: Node {node.outer_signal_id} at depth {node.depth} has details. Preserving details in filtered node.")
+        print(f"DEBUG: details_summary: {node.details_summary}")
+        print(f"DEBUG: details_full: {node.details_full}")
 
     return DecodedNode(
         outer_signal_id=node.outer_signal_id,
@@ -736,6 +801,8 @@ def _filter_node_by_severity(
         ioc_data=node.ioc_data,
         containing_file_sha256=node.containing_file_sha256,
         containing_file_sha512=node.containing_file_sha512,
+        details_summary=node.details_summary,
+        details_full=node.details_full,
     )
 
 
@@ -855,6 +922,74 @@ def _render_ioc_section(tree: DecodedTree) -> list[str]:
 
     return lines
 
+def _render_der_details(
+    lines: list[str],
+    body_prefix: str,
+    summary: dict,
+) -> None:
+    """Emit a compact DER classification block.
+
+    Format:
+
+        DER: x509_certificate, RSA-2048
+          subject CN: pem.example.com
+          issuer CN:  pem.example.com
+          validity:   2025-01-01 to 2026-01-01
+          SAN:        dns:foo.example, dns:bar.example
+          anomalies:  2
+
+    Each line uses `body_prefix + "  "` so the whole block sits
+    indented one level under the chain line. Fields that are None
+    or absent in the summary dict are skipped silently rather than
+    rendering as "subject CN: None".
+    """
+    kind = summary.get("kind", "unknown")
+    bit_size = summary.get("bit_size")
+    bit_str = f", {bit_size}-bit" if bit_size else ""
+    lines.append(f"{body_prefix}DER: {kind}{bit_str}")
+
+    inner = body_prefix + "  "
+
+    if summary.get("subject_cn"):
+        lines.append(f"{inner}subject CN: {summary['subject_cn']}")
+    if summary.get("issuer_cn"):
+        lines.append(f"{inner}issuer CN:  {summary['issuer_cn']}")
+    if summary.get("not_before") and summary.get("not_after"):
+        lines.append(
+            f"{inner}validity:   "
+            f"{summary['not_before']} to {summary['not_after']}"
+        )
+    if summary.get("serial"):
+        lines.append(f"{inner}serial:     {summary['serial']}")
+    if summary.get("signature_oid"):
+        lines.append(
+            f"{inner}sig OID:    {summary['signature_oid']}"
+        )
+
+    san_summary = summary.get("san_summary")
+    if san_summary:
+        if len(san_summary) <= 3:
+            san_str = ", ".join(san_summary)
+        else:
+            san_str = (
+                f"{', '.join(san_summary[:3])} "
+                f"(+{len(san_summary) - 3} more)"
+            )
+        lines.append(f"{inner}SAN:        {san_str}")
+
+    extension_oids = summary.get("extension_oids")
+    if extension_oids:
+        critical_count = sum(
+            1 for e in extension_oids if e.get("critical")
+        )
+        ext_str = f"{len(extension_oids)} total"
+        if critical_count:
+            ext_str += f" ({critical_count} critical)"
+        lines.append(f"{inner}extensions: {ext_str}")
+
+    anomaly_count = summary.get("anomaly_count", 0)
+    if anomaly_count > 0:
+        lines.append(f"{inner}anomalies:  {anomaly_count}")
 
 def _render_node_text(
     node: DecodedNode,
@@ -905,16 +1040,32 @@ def _render_node_text(
             f"{body_prefix}WARNING: payload is a Python pickle "
             "stream (NOT deserialized)"
         )
+    print(f"DEBUG: Node is of kind: {node.final_kind} with size {node.final_size} bytes. Pickle warning: {node.pickle_warning}. Indicators: {node.indicators}")
+    # DER classification block (currently the only structured details
+    # emitter; future formats will plug in here).
+    if node.details_summary is not None:
+        print(f"DEBUG: Node {node.outer_signal_id} at depth {node.depth} has details. Rendering DER details block in text output.")
+        _render_der_details(lines, body_prefix, node.details_full or node.details_summary)
 
     if node.stop_reason == STOP_DEPTH_LIMIT:
         lines.append(
             f"{body_prefix}(stopped: recursion depth limit reached)"
         )
     elif node.stop_reason == STOP_NON_PYTHON:
-        lines.append(
-            f"{body_prefix}(stopped: terminal is "
-            f"{node.final_kind}, not Python source)"
-        )
+        # When we have structured details, the stop reason should
+        # reflect that we DID classify the terminal, just that DER
+        # is not Python and recursion stops there.
+        if node.details_summary is not None:
+            kind = node.details_summary.get("kind", "unknown")
+            lines.append(
+                f"{body_prefix}(stopped: structured {kind} terminal, "
+                f"no Python recursion)"
+            )
+        else:
+            lines.append(
+                f"{body_prefix}(stopped: terminal is "
+                f"{node.final_kind}, not Python source)"
+            )
     elif node.stop_reason == STOP_DECODE_FAILED:
         lines.append(
             f"{body_prefix}(stopped: decode failed with status "
@@ -1194,6 +1345,8 @@ def _node_to_dict(node: DecodedNode, *, include_source: bool = True) -> dict:
         "stop_reason": node.stop_reason,
         "containing_file_sha256": node.containing_file_sha256,
         "containing_file_sha512": node.containing_file_sha512,
+        "details_summary": node.details_summary,
+        "details_full": node.details_full,
         "child_findings": [
             {
                 "signal_id": cf.signal_id,

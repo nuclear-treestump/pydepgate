@@ -49,6 +49,11 @@ from pydepgate.enrichers._magic import (
     scan_indicators,
 )
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pydepgate.enrichers._asn1 import FormatContext
+
 
 # Status constants for UnwrapResult.status.
 STATUS_COMPLETED = "completed"
@@ -117,6 +122,11 @@ class UnwrapResult:
             of the next would-be layer (e.g. "base64", "zlib") so
             the renderer can say "depth limit reached; payload
             continues as base64." None otherwise.
+        details: Structured per-format detail object propagated
+            from the terminal FormatDetection. Currently
+            populated when the terminal is binary_unknown and
+            looks_like_der was true, in which case it carries a
+            DERClassification. None otherwise.
     """
     chain: tuple[Layer, ...]
     final_bytes: bytes
@@ -125,6 +135,7 @@ class UnwrapResult:
     indicators: tuple[str, ...]
     pickle_warning: bool
     continues_as: str | None = None
+    details: FormatContext | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -149,16 +160,72 @@ def _decode_base64(data: str | bytes, max_output: int) -> bytes:
     stripped = _WHITESPACE_RE.sub("", text)
     # Try standard then URL-safe; both share most of the alphabet.
     for decoder in (base64.b64decode, base64.urlsafe_b64decode):
-        try:
-            result = decoder(stripped, validate=True)
-        except (binascii.Error, ValueError):
-            continue
+        if decoder is base64.urlsafe_b64decode:
+            try:               
+                # Standard base64 allows some non-alphabet chars as
+                # noise; URL-safe does not. If we see those chars, no
+                # need to try URL-safe.
+                # Also 'validate' doesn't exist for urlsafe_b64decode, so we have to pre-check. 
+                result = decoder(stripped)
+            except (binascii.Error, ValueError):
+                continue
+        else:
+            try:
+               result = decoder(stripped, validate=True)
+            except (binascii.Error, ValueError):
+                continue
         if len(result) > max_output:
             raise _BudgetExceeded(
                 f"base64 output {len(result)} exceeds budget {max_output}"
             )
         return result
     raise _DecodeError("base64 input did not validate")
+
+def _decode_pem(data: str | bytes, max_output: int) -> bytes:
+    """Strip PEM armor and base64-decode the body.
+
+    Reuses the same regex (_PEM_FULL_RE) that is_pem matched on
+    so the body extraction is consistent with detection. The body
+    is whitespace-stripped before base64 decoding to handle the
+    standard line-wrapped form. Output is bounded by max_output.
+    """
+    # Late import to avoid a circular module-level dependency:
+    # _magic.py imports from us indirectly via detect_format
+    # callers; importing it at top-level inside this module
+    # would create a circular module-load chain in some test
+    # configurations. Local import is cheap (cached after first
+    # call).
+    from pydepgate.enrichers._magic import _PEM_FULL_RE
+
+    if isinstance(data, bytes):
+        try:
+            text = data.decode("ascii")
+        except UnicodeDecodeError as e:
+            raise _DecodeError(f"PEM input not ASCII: {e}") from e
+    else:
+        text = data
+
+    match = _PEM_FULL_RE.search(text)
+    if match is None:
+        raise _DecodeError(
+            "PEM markers expected (BEGIN/END pair) but not found"
+        )
+
+    body = match.group(2)
+    body_no_ws = _WHITESPACE_RE.sub("", body)
+
+    try:
+        result = base64.b64decode(body_no_ws, validate=True)
+    except binascii.Error as e:
+        raise _DecodeError(
+            f"PEM body base64 decode failed: {e}"
+        ) from e
+
+    if len(result) > max_output:
+        raise _BudgetExceeded(
+            f"PEM decoded body {len(result)} bytes exceeds budget {max_output}"
+        )
+    return result
 
 
 def _decode_pure_hex(data: str | bytes, max_output: int) -> bytes:
@@ -259,12 +326,12 @@ _TRANSFORMS = {
     "base64": _decode_base64,
     "hex": _decode_pure_hex,
     "hex_0x_list": _decode_hex_0x_list,
+    "pem": _decode_pem,
     "zlib": _decompress_zlib,
     "gzip": _decompress_gzip,
     "bzip2": _decompress_bzip2,
     "lzma": _decompress_lzma,
 }
-
 
 def _apply_transform(kind: str, data, max_output: int) -> bytes:
     transform = _TRANSFORMS.get(kind)
@@ -353,8 +420,11 @@ def unwrap(
     for _ in range(max_depth):
         det = detect_format(detection_input)
         if det.is_terminal:
-            return _terminal_result(chain, current, det.kind)
-
+            print(f"DEBUG: detected terminal format {det.kind} with input of length {len(current)}. Parsing stopped.")
+            print(f"DEBUG: Sample terminal bytes: {current[:100]!r} (truncated to 100 bytes for debug)")
+            return _terminal_result(chain, current, det.kind, det.details)
+        print(f"DEBUG: detected non-terminal format {det.kind} with input of length {len(current)}. Attempting transform.")
+        print(f"DEBUG: Sample input bytes: {current[:100]!r} (truncated to 100 bytes for debug)")
         try:
             new_bytes = _apply_transform(
                 det.kind, detection_input, budget_remaining,
@@ -415,7 +485,9 @@ def unwrap(
             # transformation, we can't run it.
             next_det = detect_format(current)
             if next_det.is_terminal:
-                return _terminal_result(chain, current, next_det.kind)
+                return _terminal_result(
+                    chain, current, next_det.kind, next_det.details,
+                )
             return UnwrapResult(
                 chain=tuple(chain),
                 final_bytes=current,
@@ -430,7 +502,9 @@ def unwrap(
     # Check if there's still more to unwrap.
     next_det = detect_format(current)
     if next_det.is_terminal:
-        return _terminal_result(chain, current, next_det.kind)
+        return _terminal_result(
+            chain, current, next_det.kind, next_det.details,
+        )
     return UnwrapResult(
         chain=tuple(chain),
         final_bytes=current,
@@ -446,8 +520,14 @@ def _terminal_result(
     chain: list[Layer],
     final_bytes: bytes,
     terminal_kind: str,
+    terminal_details: "FormatContext | None" = None,
 ) -> UnwrapResult:
-    """Build the UnwrapResult for a successful terminal classification."""
+    """Build the UnwrapResult for a successful terminal classification.
+
+    The terminal_details argument carries any FormatContext that
+    detect_format produced for the terminal classification (currently
+    a DERClassification when binary_unknown matched looks_like_der).
+    """
     indicators: tuple[str, ...] = ()
     if terminal_kind in ("python_source", "ascii_text"):
         indicators = scan_indicators(final_bytes)
@@ -459,4 +539,5 @@ def _terminal_result(
         indicators=indicators,
         pickle_warning=(terminal_kind == "pickle_data"),
         continues_as=None,
+        details=terminal_details,
     )
