@@ -766,8 +766,6 @@ def _filter_node_by_severity(
 
     if not own_passes and not has_kept_descendants:
         return None
-    
-    if node.details_summary is not None or node.details_full is not None:
 
     return DecodedNode(
         outer_signal_id=node.outer_signal_id,
