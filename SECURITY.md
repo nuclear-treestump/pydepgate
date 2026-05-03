@@ -1,6 +1,10 @@
 # Security Policy
+v1.1
 
-> Last Updated: 04/28/2026
+> What changed:
+* Added ZipCrypto to out of scope bucket
+
+> Last Updated: 2026-05-03 
 
 pydepgate is a security tool, which means the bar for its own security
 is higher than for ordinary software. A vulnerability in pydepgate is
@@ -75,6 +79,13 @@ and I will respect yours.
 - Malicious detections in test fixtures or tests/ directory. The tests are
 benign but look scary for the tool to test detection without detonating malware
  on my only computer.
+- Cryptographic weaknesses in the encrypted-archive feature beyond
+  what's already documented. The README states ZipCrypto is broken
+  by design (AV-friendliness, not confidentiality); a vulnerability
+  in scope here would be one that lets an attacker tamper with
+  archive contents in a way the documented threat model doesn't
+  account for, or that leaks plaintext under conditions that
+  contradict the documentation.
 
 If you're unsure whether something is in scope, err on the side of
 reporting it through the security channel. We would rather review a
