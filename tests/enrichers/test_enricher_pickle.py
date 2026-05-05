@@ -41,7 +41,7 @@ from pydepgate.engines.base import (
 )
 from pydepgate.engines.static import StaticEngine
 from pydepgate.enrichers.base import Enricher
-from pydepgate.enrichers._noop import NoOpEnricher
+from pydepgate.enrichers.passthrough import NoOpEnricher
 
 
 _MALICIOUS_SETUP_PY = b"""
