@@ -349,7 +349,7 @@ class ReporterOmitsUnderscoreKeysTests(unittest.TestCase):
     prefixed context keys to JSON output. They are pipeline-internal."""
 
     def test_underscore_keys_omitted(self):
-        from pydepgate.cli.reporter import _serialize_context
+        from pydepgate.reporters.decoded_tree.json import _serialize_context
         out = _serialize_context({
             "length": 200,
             "_full_value": "A" * 200,
