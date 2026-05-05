@@ -21,7 +21,6 @@ from pydepgate.enrichers.decode_payloads import (
     STOP_LEAF_TERMINAL,
     filter_tree_by_severity
 )
-from pydepgate.reporters.decoded_tree import text as render_text
 from pydepgate.reporters.decoded_tree import iocs as render_iocs
 from pydepgate.reporters.decoded_tree import json as render_decode_json
 from pydepgate.reporters.decoded_tree import sources as render_sources
