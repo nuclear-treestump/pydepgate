@@ -1,4 +1,5 @@
-"""
+"""pydepgate.rules.groups.density
+
 Code-density signal group.
 
 Holds rules and explanations for the DENS001..DENS051 signals plus

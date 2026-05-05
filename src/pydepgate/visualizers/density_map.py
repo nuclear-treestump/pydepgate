@@ -1,4 +1,6 @@
 """
+pydepgate.visualizers.density_map
+
 Density map renderer for pydepgate's human-readable output.
 
 Produces a compact, SSH-randomart-inspired block diagram showing

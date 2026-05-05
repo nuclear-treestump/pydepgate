@@ -1,4 +1,5 @@
-"""
+"""pydepgate.engines.base
+
 Shared types for pydepgate engines.
 
 This module contains data structures that engines produce and consume.

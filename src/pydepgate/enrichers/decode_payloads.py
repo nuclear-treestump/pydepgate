@@ -1,4 +1,5 @@
-"""
+"""pydepgate.enrichers.decode_payloads
+
 Driver for the --decode-payload-depth feature.
 
 Given a ScanResult from the engine and an enabled peek enricher, this

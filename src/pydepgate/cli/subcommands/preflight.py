@@ -1,4 +1,6 @@
-"""Stub for the 'preflight' subcommand. Implementation planned for v0.2."""
+"""pydepgate.cli.subcommands.preflight
+
+Stub for the 'preflight' subcommand. Implementation planned for v0.2."""
 
 from __future__ import annotations
 

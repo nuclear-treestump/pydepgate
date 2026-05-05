@@ -1,4 +1,5 @@
-"""
+"""pydepgate.rules.base
+
 Core data structures and evaluator for the pydepgate rules engine.
 
 This module defines:

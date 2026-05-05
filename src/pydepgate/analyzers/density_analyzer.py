@@ -1,4 +1,5 @@
-"""
+"""pydepgate.analyzers.density_analyzer
+
 Detects structural obfuscation patterns in Python source files.
 
 This analyzer operates at a different layer than the other pydepgate

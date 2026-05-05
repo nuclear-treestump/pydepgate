@@ -1,4 +1,5 @@
-"""
+"""pydepgate.cli.subcommands.scan
+
 The 'scan' subcommand: static analysis of a wheel, sdist, or
 installed package, plus single-file iteration mode.
 

@@ -1,4 +1,5 @@
-"""
+"""pydepgate.cli.completion
+
 Tab-completion engine for the pydepgate CLI.
 
 This module is the data-and-logic layer. It has no argparse

@@ -1,4 +1,6 @@
-"""Rules engine for pydepgate.
+"""pydepgate.rules.__init__
+
+Rules engine for pydepgate.
 
 Rules are data: each rule has match conditions and an effect. The
 evaluator iterates rules per signal, finds applicable matches, and

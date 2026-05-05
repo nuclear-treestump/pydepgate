@@ -1,4 +1,5 @@
-"""
+"""pydepgate.enrichers.passthrough
+
 A no-op enricher used to verify pipeline wiring.
 
 This module exists for two reasons:

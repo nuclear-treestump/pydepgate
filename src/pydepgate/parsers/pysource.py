@@ -1,4 +1,5 @@
-"""
+"""pydepgate.parsers.pysource
+
 Safe parser for arbitrary Python source code.
 
 Produces a structured representation (AST + comments + tokens + metadata)

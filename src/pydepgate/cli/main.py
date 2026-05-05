@@ -1,4 +1,5 @@
-"""
+"""pydepgate.cli.main
+
 pydepgate CLI entry point.
 
 Sets up argparse with global flags, registers all subcommands,
