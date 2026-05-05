@@ -40,9 +40,9 @@ from pydepgate.analyzers.suspicious_stdlib import SuspiciousStdlibAnalyzer
 from pydepgate.analyzers.density_analyzer import CodeDensityAnalyzer
 from pydepgate.cli import exit_codes
 from pydepgate.cli.progress import make_progress_callback
-from pydepgate.cli.reporter import (
-    render_human, report_render_json, render_sarif_stub,
-)
+from pydepgate.cli.reporter import render_sarif_stub
+from pydepgate.reporters.scan_result import human as scan_human
+from pydepgate.reporters.scan_result import json as scan_json
 from pydepgate.engines.base import (
     ArtifactKind, ScanResult, ScanStatistics, Severity,
 )
@@ -401,12 +401,12 @@ def _render_and_exit_code(result: ScanResult, args: argparse.Namespace) -> int:
     
     # Render in the requested format.
     if args.format == "json":
-        report_render_json(filtered, sys.stdout)
+        scan_json.render(filtered, sys.stdout)
     elif args.format == "sarif":
         render_sarif_stub(sys.stdout)
         return exit_codes.TOOL_ERROR
     else:
-        render_human(filtered, sys.stdout, color=args.color, ci_mode=args.ci, peek_chain=peek_chain)
+        scan_human.render(filtered, sys.stdout, color=args.color, ci_mode=args.ci, peek_chain=peek_chain)
 
     # Compute exit code from the appropriate finding set.
     findings_for_exit = (
