@@ -14,8 +14,6 @@ the CLI's job in main.py.
 from __future__ import annotations
 
 import json
-import os
-import sys
 from dataclasses import asdict
 from typing import TextIO
 
@@ -25,83 +23,21 @@ from pydepgate.engines.base import (
     Severity,
 )
 
+from pydepgate.reporters._common.color import (
+    COLOR_ALWAYS,
+    COLOR_AUTO,
+    COLOR_NEVER,
+    Color,
+    color_enabled,
+    severity_color,
+)
+
 from pydepgate.visualizers.density_map import render_density_map
 from pydepgate.visualizers.peek_render import (
     ANSI as _PEEK_ANSI,
     PLAIN as _PEEK_PLAIN,
     render_decoded_block,
 )
-
-
-# ANSI color codes. Using direct codes to avoid a dependency on a
-# color library. NO_COLOR support per https://no-color.org standard.
-class _Color:
-    RESET = "\033[0m"
-    BOLD = "\033[1m"
-    DIM = "\033[2m"
-    RED = "\033[31m"
-    YELLOW = "\033[33m"
-    GREEN = "\033[32m"
-    BLUE = "\033[34m"
-    MAGENTA = "\033[35m"
-    CYAN = "\033[36m"
-
-
-# Color mode constants. Mirror the ones in pydepgate.cli.main; kept
-# here as local strings so the reporter has no upward import on the
-# CLI module. The CLI sets args.color to one of these values; the
-# reporter receives the string and decides what to do with it.
-COLOR_AUTO = "auto"
-COLOR_ALWAYS = "always"
-COLOR_NEVER = "never"
-
-
-def _color_enabled(color_mode: str) -> bool:
-    """Decide whether ANSI color codes should be emitted.
-
-    Three modes:
-      always  Always emit color, even when stdout is not a TTY and
-              even when NO_COLOR is set in the environment. The user
-              explicitly asked for color; respect that.
-      never   Never emit color.
-      auto    Defer to environment and TTY detection. Color is
-              disabled if NO_COLOR or PYDEPGATE_NO_COLOR is set in
-              the environment, or if stdout is not a terminal
-              (output is being piped or redirected).
-
-    The auto branch is the historical default behavior; always and
-    never are the new escape hatches.
-    """
-    if color_mode == COLOR_ALWAYS:
-        return True
-    if color_mode == COLOR_NEVER:
-        return False
-
-    # auto (or any unrecognized value, defensively): the historical
-    # rules. NO_COLOR per the no-color.org standard takes precedence
-    # over auto-detection but not over an explicit "always".
-    if os.environ.get("NO_COLOR"):
-        return False
-    if os.environ.get("PYDEPGATE_NO_COLOR"):
-        return False
-    if not sys.stdout.isatty():
-        return False
-    return True
-
-
-def _severity_color(severity: Severity, color: bool) -> tuple[str, str]:
-    """Return (prefix, suffix) ANSI codes for a severity. ('', '') if no color."""
-    if not color:
-        return ("", "")
-    palette = {
-        Severity.CRITICAL: _Color.RED + _Color.BOLD,
-        Severity.HIGH: _Color.RED,
-        Severity.MEDIUM: _Color.YELLOW,
-        Severity.LOW: _Color.BLUE,
-        Severity.INFO: _Color.DIM,
-    }
-    prefix = palette.get(severity, "")
-    return (prefix, _Color.RESET if prefix else "")
 
 
 def _group_findings_by_path(
@@ -131,7 +67,7 @@ def render_human(
     call site; this signature is intentionally string-only so the
     tristate semantics are explicit.
     """
-    color_on = _color_enabled(color)
+    color_on = color_enabled(color)
     findings = result.findings
     suppressed = result.suppressed_findings
 
@@ -140,7 +76,7 @@ def render_human(
             stream.write(f"pydepgate: clean ({result.artifact_identity})\n")
         else:
             green_pre, green_post = (
-                (_Color.GREEN, _Color.RESET) if color_on else ("", "")
+                (Color.GREEN, Color.RESET) if color_on else ("", "")
             )
             stream.write(
                 f"{green_pre}No findings{green_post} in "
@@ -171,10 +107,10 @@ def render_human(
     if suppressed:
         if not ci_mode:
             dim_pre, dim_post = (
-                (_Color.DIM, _Color.RESET) if color_on else ("", "")
+                (Color.DIM, Color.RESET) if color_on else ("", "")
             )
             yellow_pre, yellow_post = (
-                (_Color.YELLOW, _Color.RESET) if color_on else ("", "")
+                (Color.YELLOW, Color.RESET) if color_on else ("", "")
             )
             stream.write(
                 f"\n{yellow_pre}{len(suppressed)} suppressed finding"
@@ -197,7 +133,7 @@ def _render_suppressed_finding(
     sup, stream: TextIO, color: bool, ci_mode: bool
 ) -> None:
     """Render a single suppressed finding."""
-    dim_pre, dim_post = (_Color.DIM, _Color.RESET) if color else ("", "")
+    dim_pre, dim_post = (Color.DIM, Color.RESET) if color else ("", "")
     sig = sup.original_finding.signal
     would_have = sup.would_have_been
 
@@ -235,9 +171,9 @@ def _render_finding(
     peek_chain: bool = False,
 ) -> None:
     """Render a single finding."""
-    sev_pre, sev_post = _severity_color(finding.severity, color)
-    cyan_pre, cyan_post = (_Color.CYAN, _Color.RESET) if color else ("", "")
-    dim_pre, dim_post = (_Color.DIM, _Color.RESET) if color else ("", "")
+    sev_pre, sev_post = severity_color(finding.severity, color)
+    cyan_pre, cyan_post = (Color.CYAN, Color.RESET) if color else ("", "")
+    dim_pre, dim_post = (Color.DIM, Color.RESET) if color else ("", "")
 
     sev_text = finding.severity.value.upper()
     sig = finding.signal
@@ -295,7 +231,7 @@ def _render_finding(
 
 def _render_statistics(result: ScanResult, stream: TextIO, color: bool) -> None:
     """Render the trailing summary of scan statistics."""
-    dim_pre, dim_post = (_Color.DIM, _Color.RESET) if color else ("", "")
+    dim_pre, dim_post = (Color.DIM, Color.RESET) if color else ("", "")
     stats = result.statistics
     parts = []
     if stats.files_total:
