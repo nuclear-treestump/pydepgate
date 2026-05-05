@@ -1,4 +1,6 @@
-"""Entry point for `python -m pydepgate`."""
+"""pydepgate.cli.__main__
+
+Entry point for `python -m pydepgate`."""
 
 from pydepgate.cli.main import main
 

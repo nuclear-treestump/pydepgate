@@ -1,4 +1,5 @@
-"""
+"""pydepgate.enrichers._unwrap
+
 The unwrap loop for the payload_peek enricher.
 
 Given an initial value (the analyzer-stashed `_full_value`), this

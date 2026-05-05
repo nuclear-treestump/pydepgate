@@ -1,4 +1,5 @@
-"""
+"""pydepgate.parsers.sdist
+
 Safe sdist file enumeration.
 
 An sdist is a tar archive (usually gzipped) containing a Python

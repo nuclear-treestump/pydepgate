@@ -1,4 +1,5 @@
-"""
+"""pydepgate.analyzers.encoding_abuse
+
 Detects patterns where encoded content is decoded and executed.
 
 The canonical attack pattern this catches:

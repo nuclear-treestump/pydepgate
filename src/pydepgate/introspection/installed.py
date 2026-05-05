@@ -1,4 +1,5 @@
-"""
+"""pydepgate.introspection.installed
+
 Read files from installed Python packages.
 
 Uses importlib.metadata to locate packages by name and enumerate

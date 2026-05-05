@@ -1,4 +1,5 @@
-"""
+"""pydepgate.rules.groups.encoding
+
 Encoding-abuse signal group.
 
 Holds rules and explanations for the ENC001 (decode-then-execute) and

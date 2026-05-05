@@ -1,4 +1,5 @@
-"""
+"""pydepgate.parsers.pth
+
 .pth file parser for pydepgate.
 
 Parses Python path-configuration (.pth) files as specified by

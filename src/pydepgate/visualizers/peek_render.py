@@ -1,4 +1,6 @@
 """
+pydepgate.visualizers.peek_render
+
 Human-format renderer for the `decoded` context block produced by
 the payload_peek enricher.
 

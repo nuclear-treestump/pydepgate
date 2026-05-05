@@ -1,4 +1,5 @@
-"""
+"""pydepgate.cli.decode_args
+
 Argparse helpers and validation for the --decode-payload-depth feature.
 
 Adds these flags to the CLI:

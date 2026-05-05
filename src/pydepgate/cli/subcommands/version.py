@@ -1,4 +1,6 @@
-"""The 'version' subcommand: print version info."""
+"""pydepgate.cli.subcommands.version
+
+The 'version' subcommand: print version info."""
 
 from __future__ import annotations
 
@@ -6,7 +8,7 @@ import argparse
 import sys
 
 
-__version__ = "0.3.1"
+__version__ = "0.3.3"
 
 
 def register(subparsers) -> None:

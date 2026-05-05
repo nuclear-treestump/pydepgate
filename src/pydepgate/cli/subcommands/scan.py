@@ -1,4 +1,5 @@
-"""
+"""pydepgate.cli.subcommands.scan
+
 The 'scan' subcommand: static analysis of a wheel, sdist, or
 installed package, plus single-file iteration mode.
 
@@ -39,9 +40,9 @@ from pydepgate.analyzers.suspicious_stdlib import SuspiciousStdlibAnalyzer
 from pydepgate.analyzers.density_analyzer import CodeDensityAnalyzer
 from pydepgate.cli import exit_codes
 from pydepgate.cli.progress import make_progress_callback
-from pydepgate.cli.reporter import (
-    render_human, report_render_json, render_sarif_stub,
-)
+from pydepgate.reporters import sarif
+from pydepgate.reporters.scan_result import human as scan_human
+from pydepgate.reporters.scan_result import json as scan_json
 from pydepgate.engines.base import (
     ArtifactKind, ScanResult, ScanStatistics, Severity,
 )
@@ -61,11 +62,11 @@ from pydepgate.cli.decode_args import (
 from pydepgate.enrichers.decode_payloads import (
     decode_payloads,
     filter_tree_by_severity,
-    render_iocs,
-    render_decode_json,
-    render_sources,
-    render_text,
 )
+from pydepgate.reporters.decoded_tree import iocs as tree_iocs
+from pydepgate.reporters.decoded_tree import json as tree_json
+from pydepgate.reporters.decoded_tree import sources as tree_sources
+from pydepgate.reporters.decoded_tree import text as tree_text
 from pydepgate.cli._archive import write_encrypted_zip
 
 _SDIST_SUFFIXES = (".tar.gz", ".tgz", ".tar.bz2", ".tar.xz", ".tar")
@@ -400,12 +401,12 @@ def _render_and_exit_code(result: ScanResult, args: argparse.Namespace) -> int:
     
     # Render in the requested format.
     if args.format == "json":
-        report_render_json(filtered, sys.stdout)
+        scan_json.render(filtered, sys.stdout)
     elif args.format == "sarif":
-        render_sarif_stub(sys.stdout)
+        sarif.render(filtered, None, sys.stdout)
         return exit_codes.TOOL_ERROR
     else:
-        render_human(filtered, sys.stdout, color=args.color, ci_mode=args.ci, peek_chain=peek_chain)
+        scan_human.render(filtered, sys.stdout, color=args.color, ci_mode=args.ci, peek_chain=peek_chain)
 
     # Compute exit code from the appropriate finding set.
     findings_for_exit = (
@@ -602,7 +603,7 @@ def _run_decode_pass(
         if not tree.nodes and mode != DECODE_IOCS_FULL:
             sys.stderr.write(_no_findings_msg(min_sev))
             return
-        rendered = render_decode_json(tree, include_source=(decode_iocs_mode(args) == DECODE_IOCS_FULL))
+        rendered = tree_json.render(tree, include_source=(decode_iocs_mode(args) == DECODE_IOCS_FULL))
         output_path = _resolve_decode_location(args, result, tree, ".json")
         if not _write_decode_text_file(output_path, rendered):
             return
@@ -616,7 +617,7 @@ def _run_decode_pass(
         if not tree.nodes:
             sys.stderr.write(_no_findings_msg(min_sev))
             return
-        rendered = render_text(tree, include_iocs=False)
+        rendered = tree_text.render(tree, include_iocs=False)
         output_path = _resolve_decode_location(args, result, tree, ".txt")
         if not _write_decode_text_file(output_path, rendered):
             return
@@ -629,8 +630,8 @@ def _run_decode_pass(
         if not tree.nodes:
             sys.stderr.write(_no_findings_msg(min_sev))
             return
-        report_text = render_text(tree, include_iocs=False)
-        iocs_text = render_iocs(tree)
+        report_text = tree_text.render(tree, include_iocs=False)
+        iocs_text = tree_iocs.render(tree)
         main_path = _resolve_decode_location(args, result, tree, ".txt")
         sidecar_path = _sidecar_iocs_path(main_path)
         if not _write_decode_text_file(main_path, report_text):
@@ -644,9 +645,9 @@ def _run_decode_pass(
         return
 
     # mode == DECODE_IOCS_FULL: always write, even on empty.
-    report_text = render_text(tree, include_iocs=False)
-    sources_text = render_sources(tree)
-    iocs_text = render_iocs(tree)
+    report_text = tree_text.render(tree, include_iocs=False)
+    sources_text = tree_sources.render(tree)
+    iocs_text = tree_iocs.render(tree)
 
     archive_path = _resolve_decode_location(args, result, tree, ".zip")
     sidecar_path = _sidecar_iocs_path(archive_path)

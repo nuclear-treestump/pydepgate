@@ -1,4 +1,5 @@
-"""
+"""pydepgate.cli.progress
+
 Progress bar for artifact scans.
 
 Renders a single-line, terminal-style progress indicator to stderr

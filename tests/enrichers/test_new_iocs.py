@@ -19,13 +19,12 @@ from pydepgate.enrichers.decode_payloads import (
     DecodedTree,
     IOCData,
     STOP_LEAF_TERMINAL,
-    filter_tree_by_severity,
-    render_iocs,
-    render_decode_json,
-    render_sources,
-    render_text,
+    filter_tree_by_severity
 )
-from pydepgate.cli.reporter import report_render_json
+from pydepgate.reporters.decoded_tree import iocs as render_iocs
+from pydepgate.reporters.decoded_tree import json as render_decode_json
+from pydepgate.reporters.decoded_tree import sources as render_sources
+from pydepgate.reporters.scan_result.json import render as report_render_json
 
 
 # ---------------------------------------------------------------------------

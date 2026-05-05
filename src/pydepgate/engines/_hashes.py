@@ -1,4 +1,5 @@
-"""
+"""pydepgate.engines._hashes
+
 Hash helpers for the static engine.
 
 Centralizes SHA256 and SHA512 computation so every scan entry point

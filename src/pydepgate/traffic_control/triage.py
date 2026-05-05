@@ -1,4 +1,6 @@
 """
+pydepgate.traffic_control.triage
+
 Triage module ("traffic control"): determine which files in an artifact
 are in scope for pydepgate's analysis.
 

@@ -22,7 +22,6 @@ fields generically.
 from __future__ import annotations
 
 import hashlib
-import json
 import unittest
 from types import SimpleNamespace
 from typing import Any
@@ -46,11 +45,8 @@ from pydepgate.enrichers.decode_payloads import (
     _format_location,
     _is_payload_bearing,
     _pick_primary_finding,
-    _signal_repr,
     _to_child_finding,
     decode_payloads,
-    render_decode_json,
-    render_text,
     ChildFinding,
     DecodedNode,
     DecodedTree,
@@ -58,9 +54,16 @@ from pydepgate.enrichers.decode_payloads import (
     STOP_LEAF_TERMINAL,
     STOP_NO_INNER_FINDINGS,
     filter_tree_by_severity,
-    render_iocs,
-    render_sources,
 )
+
+from pydepgate.reporters.decoded_tree import (
+    text as render_text,
+    json as render_decode_json,
+    iocs as render_iocs,
+    sources as render_sources,
+)
+from pydepgate.reporters.decoded_tree._helpers import _signal_repr
+import json
 
 
 # ---------------------------------------------------------------------------

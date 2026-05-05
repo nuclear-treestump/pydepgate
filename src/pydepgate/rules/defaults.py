@@ -1,4 +1,5 @@
-"""
+"""pydepgate.rules.defaults
+
 Bundled default rules for pydepgate.
 
 These rules encode pydepgate's baseline policy: what severity to assign
