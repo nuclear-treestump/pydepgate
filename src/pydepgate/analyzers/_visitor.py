@@ -1,4 +1,5 @@
-"""
+"""pydepgate.analyzers._visitor
+
 Shared AST visitor infrastructure for pydepgate analyzers.
 
 This module is internal (note the leading underscore). Analyzers

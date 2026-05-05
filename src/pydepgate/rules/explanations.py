@@ -1,4 +1,5 @@
-"""
+"""pydpgate.rules.explanations
+
 Human-readable explanations for pydepgate signals and rules.
 
 The dictionaries SIGNAL_EXPLANATIONS and RULE_EXPLANATIONS surface

@@ -1,4 +1,5 @@
-"""
+"""pydepgate.cli.subcommands.completion
+
 The 'completions' subcommand: emit shell completion scripts.
 
 Also registers the hidden '_complete' subcommand, which is the

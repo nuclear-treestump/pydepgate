@@ -1,4 +1,5 @@
-"""
+"""pydepgate.analyzers.suspicious_stdlib
+
 Detects use of dangerous stdlib functions in startup-vector files.
 
 This analyzer fires on calls to stdlib functions that are commonly

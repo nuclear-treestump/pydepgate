@@ -1,4 +1,5 @@
-"""
+"""pydepgate.analyzers.string_ops
+
 Detects string obfuscation patterns that resolve to sensitive names.
 
 This analyzer uses the safe partial evaluator (analyzers._resolver)

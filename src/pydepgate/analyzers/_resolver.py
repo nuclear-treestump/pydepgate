@@ -1,4 +1,5 @@
-"""
+"""pydepgate.analyzers._resolver
+
 Safe partial evaluator for Python expressions.
 
 The resolver statically computes what a Python expression would

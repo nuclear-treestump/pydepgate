@@ -1,4 +1,5 @@
-"""
+"""pydepgate.rules.groups.dynamic
+
 Dynamic-execution signal group.
 
 Holds rules and explanations for the DYN001..DYN007 signals plus the

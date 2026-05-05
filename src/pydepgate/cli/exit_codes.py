@@ -1,4 +1,5 @@
-"""
+"""pydepgate.cli.exit_codes
+
 Exit codes for the pydepgate CLI.
 
 These codes are part of pydepgate's public interface: CI systems and

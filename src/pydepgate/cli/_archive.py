@@ -1,4 +1,5 @@
-"""
+"""pydepgate.cli._archive
+
 ZipCrypto archive writer for pydepgate.
 
 This module produces single-archive ZIP files encrypted with the

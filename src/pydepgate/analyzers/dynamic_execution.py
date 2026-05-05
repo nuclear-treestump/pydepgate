@@ -1,4 +1,5 @@
-"""
+"""pydepgate.analyzers.dynamic_execution
+
 Detects dynamic code execution patterns.
 
 The dynamic_execution analyzer flags uses of Python's runtime code

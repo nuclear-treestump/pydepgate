@@ -1,4 +1,5 @@
-"""
+"""pydepgate.enrichers._asn1
+
 DER parser primitives and a structural classifier for ASN.1 blobs.
 
 This module exists to give the unwrap pipeline (_unwrap.py) and the

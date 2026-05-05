@@ -1,4 +1,5 @@
-"""
+"""pydepgate.rules.groups.string_ops
+
 String-operations signal group.
 
 Holds rules and explanations for the STR001..STR004 signals. STR001

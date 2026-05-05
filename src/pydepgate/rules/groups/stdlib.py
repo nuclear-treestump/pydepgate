@@ -1,4 +1,5 @@
-"""
+"""pydepgate.rules.groups.stdlib
+
 Suspicious-stdlib signal group.
 
 Holds rules and explanations for the STDLIB001..STDLIB003 signals,

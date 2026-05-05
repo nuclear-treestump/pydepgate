@@ -1,0 +1,3 @@
+"""
+pydepgate.__init__
+"""

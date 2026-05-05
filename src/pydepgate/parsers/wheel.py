@@ -1,4 +1,5 @@
-"""
+"""pydepgate.parsers.wheel
+
 Safe wheel file enumeration.
 
 A wheel is a zip archive with a specific layout. This module reads
