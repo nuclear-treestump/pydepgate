@@ -25,7 +25,7 @@ from pydepgate.enrichers.decode_payloads import (
     render_sources,
     render_text,
 )
-from pydepgate.cli.reporter import report_render_json
+from pydepgate.reporters.scan_result.json import render as report_render_json
 
 
 # ---------------------------------------------------------------------------
