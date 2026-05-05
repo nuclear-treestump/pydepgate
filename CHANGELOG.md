@@ -10,6 +10,33 @@ public API surface (CLI flags, JSON schema, exit codes) within minor
 version bumps. After 1.0, the contracts in [CONTRIBUTING.md](CONTRIBUTING.md)
 become binding stability promises with formal deprecation cycles.
 
+## [Unreleased]
+
+- SARIF Output. In testing.
+
+## [0.3.3] - 2026-05-05
+
+### Changed
+
+- **Reporters refactor.** Improved reporter module organization and structure for enhanced maintainability.
+- **Location field added to all source files.** Every file in `src/pydepgate` now includes location metadata in the docstring. Example: `pydepgate.cli.subcommands.scan`.
+
+## [0.3.2] - 2026-05-02
+
+### Added
+
+- **Tests for PEM detection and DER classification.** Comprehensive test coverage for PEM format recognition and DER structure classification to ensure robust certificate and payload analysis.
+
+### Changed
+
+- **Code structure refactoring.** Improved code organization and readability across core modules for better maintainability and clearer responsibility boundaries.
+
+## [0.3.1] - 2026-05-01
+
+### Fixed
+
+- **JSON output patch.** Resolved issues with JSON output formatting and serialization to ensure consistent and valid JSON emission across all report modes.
+
 ## [0.3.0] - 2026-04-30
 
 ### Added
@@ -224,5 +251,8 @@ issues will land in [ROADMAP.md](ROADMAP.md):
   meaningful speedups on multi-megabyte wheels with thousands
   of files.
 
-[Unreleased]: https://github.com/nuclear-treestump/pydep-vector-runner/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/nuclear-treestump/pydep-vector-runner/compare/v0.3.3...HEAD
+[0.3.3]: https://github.com/nuclear-treestump/pydep-vector-runner/compare/v0.3.2...v0.3.3
+[0.3.2]: https://github.com/nuclear-treestump/pydep-vector-runner/compare/v0.3.1...v0.3.2
+[0.3.1]: https://github.com/nuclear-treestump/pydep-vector-runner/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/nuclear-treestump/pydep-vector-runner/releases/tag/v0.3.0
