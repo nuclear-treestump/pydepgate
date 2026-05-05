@@ -1,4 +1,5 @@
-"""
+"""pydepgate.enrichers.payload_peek
+
 The payload_peek enricher.
 
 Consumes signals flagged with the `payload_peek` enrichment hint by

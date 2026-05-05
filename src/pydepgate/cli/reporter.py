@@ -1,4 +1,5 @@
-"""
+"""pydepgate.cli.reporter
+
 Output rendering for pydepgate scan results.
 
 Two formats fully implemented in v0.1: human-readable terminal output

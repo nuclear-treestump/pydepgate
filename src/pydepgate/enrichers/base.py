@@ -1,4 +1,5 @@
-"""
+"""pydepgate.enrichers.base
+
 Base class and protocol for pydepgate enrichers.
 
 An enricher operates on the raw signal stream produced by analyzers,

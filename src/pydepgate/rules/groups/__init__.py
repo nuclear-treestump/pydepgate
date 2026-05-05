@@ -1,4 +1,5 @@
-"""
+"""pydepgate.rules.groups.__init__
+
 Aggregator for the per-group rules and explanations.
 
 Each group module under pydepgate.rules.groups exposes three module-

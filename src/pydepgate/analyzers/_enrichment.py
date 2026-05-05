@@ -1,4 +1,5 @@
-"""
+"""pydepgate.analyzers._enrichment
+
 Helpers for analyzers that produce signals carrying enrichment hints.
 
 Enrichers (in `pydepgate.enrichers`) consume signals via the

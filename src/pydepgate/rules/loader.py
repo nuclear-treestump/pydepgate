@@ -1,4 +1,5 @@
-"""
+"""pydepgate.rules.loader
+
 Loader for pydepgate rule files (.gate format).
 
 Auto-detects JSON vs TOML format. Validates schema with accumulated

@@ -1,4 +1,5 @@
-"""
+"""pydepgate.engines.static
+
 Static analysis engine.
 
 Given an artifact (loose file, wheel, sdist, or installed package),

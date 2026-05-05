@@ -1,4 +1,5 @@
-"""
+"""pydepgate.analyzers.base
+
 Base classes and protocols for pydepgate analyzers.
 
 An analyzer inspects a parsed representation of source code and emits

@@ -1,4 +1,5 @@
-"""
+"""pydepgate.enrichers._magic
+
 Format detection for the payload_peek enricher.
 
 This module provides three things:

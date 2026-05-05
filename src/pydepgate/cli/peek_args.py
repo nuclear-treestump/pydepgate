@@ -1,4 +1,5 @@
-"""
+"""pydepgate.cli.peek_args
+
 Argparse helpers, environment-variable reading, validation, and
 enricher construction for the payload_peek feature.
 

@@ -1,4 +1,6 @@
-"""The 'explain' subcommand: show signal/rule descriptions."""
+"""pydepgate.cli.subcommands.explain
+
+The 'explain' subcommand: show signal/rule descriptions."""
 
 from __future__ import annotations
 

@@ -1,4 +1,6 @@
-"""Stub for the 'exec' subcommand. Implementation planned for v0.4."""
+"""pydepgate.cli.subcommands.exec
+
+Stub for the 'exec' subcommand. Implementation planned for v0.4."""
 
 from __future__ import annotations
 
