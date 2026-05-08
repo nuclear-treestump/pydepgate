@@ -7,6 +7,9 @@ from pydepgate.engines.base import Severity
 from pydepgate.reporters.sarif.severity import (
     SARIF_LEVEL_BY_SEVERITY,
     SECURITY_SEVERITY_BY_SEVERITY,
+    SEVERITY_RANK,
+    max_severity,
+    severity_rank,
     to_sarif_level,
     to_security_severity,
 )
@@ -106,6 +109,67 @@ class TestMappingTableConsistency(unittest.TestCase):
         for severity in Severity:
             assert severity in SARIF_LEVEL_BY_SEVERITY
             assert severity in SECURITY_SEVERITY_BY_SEVERITY
+
+
+class TestSeverityRanking(unittest.TestCase):
+    """severity_rank and max_severity provide explicit ordering."""
+
+    def test_rank_increases_with_severity(self):
+        ranks = [
+            severity_rank(Severity.INFO),
+            severity_rank(Severity.LOW),
+            severity_rank(Severity.MEDIUM),
+            severity_rank(Severity.HIGH),
+            severity_rank(Severity.CRITICAL),
+        ]
+        self.assertEqual(ranks, sorted(ranks))
+
+    def test_critical_has_highest_rank(self):
+        critical_rank = severity_rank(Severity.CRITICAL)
+        for severity in Severity:
+            if severity is Severity.CRITICAL:
+                continue
+            self.assertGreater(critical_rank, severity_rank(severity))
+
+    def test_info_has_lowest_rank(self):
+        info_rank = severity_rank(Severity.INFO)
+        for severity in Severity:
+            if severity is Severity.INFO:
+                continue
+            self.assertLess(info_rank, severity_rank(severity))
+
+    def test_rank_table_covers_every_severity_member(self):
+        for severity in Severity:
+            self.assertIn(severity, SEVERITY_RANK)
+
+    def test_max_severity_picks_higher_rank(self):
+        self.assertIs(
+            max_severity(Severity.LOW, Severity.HIGH),
+            Severity.HIGH,
+        )
+        self.assertIs(
+            max_severity(Severity.HIGH, Severity.LOW),
+            Severity.HIGH,
+        )
+
+    def test_max_severity_returns_critical_against_anything(self):
+        for other in Severity:
+            self.assertIs(
+                max_severity(Severity.CRITICAL, other),
+                Severity.CRITICAL,
+            )
+            self.assertIs(
+                max_severity(other, Severity.CRITICAL),
+                Severity.CRITICAL,
+            )
+
+    def test_max_severity_ties_return_first_argument(self):
+        # Determinism contract: when both severities are
+        # equal, the function returns the first argument.
+        self.assertIs(
+            max_severity(Severity.HIGH, Severity.HIGH),
+            Severity.HIGH,
+        )
 
 
 if __name__ == "__main__":
