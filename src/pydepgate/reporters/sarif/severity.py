@@ -55,6 +55,56 @@ SECURITY_SEVERITY_BY_SEVERITY: dict[Severity, str] = {
     Severity.INFO: "0.5",
 }
 
+SEVERITY_RANK: dict[Severity, int] = {
+    Severity.INFO: 0,
+    Severity.LOW: 1,
+    Severity.MEDIUM: 2,
+    Severity.HIGH: 3,
+    Severity.CRITICAL: 4,
+}
+
+
+def severity_rank(severity: Severity) -> int:
+    """Return the ordinal rank of a severity.
+
+    Higher rank means worse severity. Use this when comparing
+    severities; the Severity enum itself does not support
+    direct > or < comparison.
+
+    Args:
+        severity: a Severity enum member.
+
+    Returns:
+        An integer rank (0 for INFO, 4 for CRITICAL).
+
+    Raises:
+        KeyError: if severity is not a known Severity member.
+    """
+    return SEVERITY_RANK[severity]
+
+
+def max_severity(a: Severity, b: Severity) -> Severity:
+    """Return the worse of two severities.
+
+    Equivalent to max() with severity_rank() as the key.
+    Useful when reducing a sequence of severities to the
+    worst case (for example, when picking the worst default
+    rule for a signal_id that has multiple default rules
+    targeting it).
+
+    Args:
+        a: a Severity enum member.
+        b: a Severity enum member.
+
+    Returns:
+        Whichever of a or b has the higher rank. Ties
+        return a (the first argument) so the function is
+        deterministic.
+    """
+    if severity_rank(a) >= severity_rank(b):
+        return a
+    return b
+
 
 def to_sarif_level(severity: Severity) -> str:
     """Return the SARIF level string for a pydepgate severity.
