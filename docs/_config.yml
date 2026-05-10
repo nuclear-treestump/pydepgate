@@ -1,5 +1,10 @@
-remote_theme: flancast90/millidocs-dark
+title: pydepgate
+description: Static analyzer for Python supply-chain malware targeting interpreter startup vectors.
+repository: nuclear-treestump/pydepgate
+theme: just-the-docs
 plugins:
   - jekyll-feed
   - jekyll-remote-theme
+
+color_scheme: dark
 
