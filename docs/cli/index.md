@@ -68,11 +68,12 @@ the subcommand name.
 
 | Flag | Values | Default | Env variable | Description |
 |---|---|---|---|---|
-| `--decode-payload-depth` | integer | `0` | `PYDEPGATE_DECODE_PAYLOAD_DEPTH` | Maximum recursion depth for the decode pipeline. `0` disables decoding. Requires `--peek`. |
+| `--decode-payload-depth` | integer | `0 (off)` | `PYDEPGATE_DECODE_PAYLOAD_DEPTH` | Maximum recursion depth for the decode pipeline. `0` disables decoding. Requires `--peek`. |
 | `--decode-iocs` | `off`, `hashes`, `full` | `off` | `PYDEPGATE_DECODE_IOCS` | IOC sidecar output mode. See [Decode Payloads](../guides/decode-payloads.md). |
 | `--decode-location` | path | current dir | `PYDEPGATE_DECODE_LOCATION` | Directory for sidecar and archive output |
 | `--decode-archive-password` | string | `infected` | `PYDEPGATE_DECODE_ARCHIVE_PASSWORD` | Password for the `full` mode encrypted archive |
-| `--decode-archive-compression` | `deflated`, `stored` | `deflated` | `PYDEPGATE_DECODE_ARCHIVE_COMPRESSION` | Archive compression mode. Use `stored` for byte-verifiable forensic archives. |
+| `--decode-archive-stored` | | `false` | (none) | Use STORED compression instead of DEFLATE for the `full` mode archive. No env variable by design; this is a per-investigation choice. |`PYDEPGATE_DECODE_ARCHIVE_COMPRESSION` | Archive compression mode. Use `stored` for byte-verifiable forensic archives. |
+| `--decode-format` | `text`, `json` | `text` | `PYDEPGATE_DECODE_FORMAT` | Output format for the decode report written to `--decode-location`. `text` is the human-readable tree; `json` is structured for downstream tooling. |
 
 ### SARIF
 

@@ -161,11 +161,11 @@ The directory must exist. The filename within it is generated automatically.
 | `--peek-budget` | `PYDEPGATE_PEEK_BUDGET` | 10 MB | In-flight byte budget; bounds decompression |
 | `--peek-min-length` | `PYDEPGATE_PEEK_MIN_LENGTH` | 64 | Minimum literal length to attempt decoding |
 | `--peek-chain` | `PYDEPGATE_PEEK_CHAIN` | off | Verbose per-layer hex dumps in the enricher output |
-| `--decode-payload-depth` | `PYDEPGATE_DECODE_PAYLOAD_DEPTH` | 0 (off) | Max recursion depth for the decode pipeline |
+| `--decode-payload-depth` | `PYDEPGATE_DECODE_PAYLOAD_DEPTH` | 3 (disabled when unset) | Max recursion depth for the decode pipeline |
 | `--decode-iocs` | `PYDEPGATE_DECODE_IOCS` | `off` | IOC output mode: `off`, `hashes`, `full` |
 | `--decode-location` | `PYDEPGATE_DECODE_LOCATION` | current dir | Directory for sidecar and archive output |
 | `--decode-archive-password` | `PYDEPGATE_DECODE_ARCHIVE_PASSWORD` | `infected` | Archive password |
-| `--decode-archive-compression` | `PYDEPGATE_DECODE_ARCHIVE_COMPRESSION` | `deflated` | `deflated` or `stored` |
+| `--decode-archive-stored` | (none) | `False` | Applies Stored compression instead of Deflate |
 
 CLI flags take precedence over environment variables when both are set.
 
