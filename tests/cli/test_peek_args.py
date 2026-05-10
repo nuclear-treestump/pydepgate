@@ -18,7 +18,7 @@ import os
 import unittest
 from unittest import mock
 
-from pydepgate.cli.peek_args import (
+from pydepgate.cli.command_handlers.peek_args import (
     ENV_PEEK,
     ENV_PEEK_BUDGET,
     ENV_PEEK_CHAIN,
@@ -39,7 +39,6 @@ from pydepgate.enrichers.payload_peek import (
     PayloadPeek,
 )
 
-
 # All peek-related env vars, used to clear environment between tests
 # so an inherited PYDEPGATE_PEEK_* doesn't leak in from the test
 # runner's environment.
@@ -58,10 +57,7 @@ def _build_parser(env_overrides: dict | None = None) -> argparse.ArgumentParser:
     if env_overrides is None:
         env_overrides = {}
     # Clear all peek env vars first so test isolation is clean.
-    clean_env = {
-        k: v for k, v in os.environ.items()
-        if k not in _PEEK_ENV_VARS
-    }
+    clean_env = {k: v for k, v in os.environ.items() if k not in _PEEK_ENV_VARS}
     clean_env.update(env_overrides)
     with mock.patch.dict(os.environ, clean_env, clear=True):
         add_peek_arguments(parser, stderr=io.StringIO())
@@ -71,6 +67,7 @@ def _build_parser(env_overrides: dict | None = None) -> argparse.ArgumentParser:
 # ===========================================================================
 # Default parsing
 # ===========================================================================
+
 
 class DefaultArgumentParsingTests(unittest.TestCase):
 
@@ -113,6 +110,7 @@ class DefaultArgumentParsingTests(unittest.TestCase):
 # Environment-variable defaults
 # ===========================================================================
 
+
 class EnvironmentVariableDefaultsTests(unittest.TestCase):
 
     def test_env_peek_truthy_enables_default(self):
@@ -151,10 +149,7 @@ class EnvironmentVariableDefaultsTests(unittest.TestCase):
 
     def test_malformed_int_env_uses_default_with_warning(self):
         stderr = io.StringIO()
-        clean_env = {
-            k: v for k, v in os.environ.items()
-            if k not in _PEEK_ENV_VARS
-        }
+        clean_env = {k: v for k, v in os.environ.items() if k not in _PEEK_ENV_VARS}
         clean_env[ENV_PEEK_DEPTH] = "not-a-number"
         with mock.patch.dict(os.environ, clean_env, clear=True):
             parser = argparse.ArgumentParser()
@@ -167,10 +162,7 @@ class EnvironmentVariableDefaultsTests(unittest.TestCase):
         # Same robustness check for the new env var: a typo'd
         # PYDEPGATE_PEEK_MIN_LENGTH should warn but not abort.
         stderr = io.StringIO()
-        clean_env = {
-            k: v for k, v in os.environ.items()
-            if k not in _PEEK_ENV_VARS
-        }
+        clean_env = {k: v for k, v in os.environ.items() if k not in _PEEK_ENV_VARS}
         clean_env[ENV_PEEK_MIN_LENGTH] = "thirty-two"
         with mock.patch.dict(os.environ, clean_env, clear=True):
             parser = argparse.ArgumentParser()
@@ -183,6 +175,7 @@ class EnvironmentVariableDefaultsTests(unittest.TestCase):
 # ===========================================================================
 # CLI overrides environment
 # ===========================================================================
+
 
 class CliOverridesEnvTests(unittest.TestCase):
 
@@ -205,6 +198,7 @@ class CliOverridesEnvTests(unittest.TestCase):
 # ===========================================================================
 # Validation: soft warnings
 # ===========================================================================
+
 
 class SoftWarningTests(unittest.TestCase):
 
@@ -246,12 +240,17 @@ class SoftWarningTests(unittest.TestCase):
 
     def test_warning_lists_multiple_ignored_flags(self):
         parser = _build_parser()
-        args = parser.parse_args([
-            "--peek-depth", "5",
-            "--peek-chain",
-            "--peek-budget", "8192",
-            "--peek-min-length", "256",
-        ])
+        args = parser.parse_args(
+            [
+                "--peek-depth",
+                "5",
+                "--peek-chain",
+                "--peek-budget",
+                "8192",
+                "--peek-min-length",
+                "256",
+            ]
+        )
         stderr = io.StringIO()
         validate_peek_args(args, stderr=stderr)
         msg = stderr.getvalue()
@@ -262,9 +261,15 @@ class SoftWarningTests(unittest.TestCase):
 
     def test_no_warning_when_peek_enabled_and_tuning_set(self):
         parser = _build_parser()
-        args = parser.parse_args([
-            "--peek", "--peek-depth", "5", "--peek-min-length", "256",
-        ])
+        args = parser.parse_args(
+            [
+                "--peek",
+                "--peek-depth",
+                "5",
+                "--peek-min-length",
+                "256",
+            ]
+        )
         stderr = io.StringIO()
         validate_peek_args(args, stderr=stderr)
         self.assertEqual(stderr.getvalue(), "")
@@ -273,6 +278,7 @@ class SoftWarningTests(unittest.TestCase):
 # ===========================================================================
 # Validation: hard errors
 # ===========================================================================
+
 
 class HardErrorTests(unittest.TestCase):
 
@@ -287,9 +293,13 @@ class HardErrorTests(unittest.TestCase):
 
     def test_depth_above_ceiling_raises(self):
         parser = _build_parser()
-        args = parser.parse_args([
-            "--peek", "--peek-depth", str(PEEK_DEPTH_CEILING + 1),
-        ])
+        args = parser.parse_args(
+            [
+                "--peek",
+                "--peek-depth",
+                str(PEEK_DEPTH_CEILING + 1),
+            ]
+        )
         stderr = io.StringIO()
         with self.assertRaises(SystemExit):
             validate_peek_args(args, stderr=stderr)
@@ -297,9 +307,13 @@ class HardErrorTests(unittest.TestCase):
 
     def test_budget_below_floor_raises(self):
         parser = _build_parser()
-        args = parser.parse_args([
-            "--peek", "--peek-budget", str(MIN_BUDGET_FLOOR - 1),
-        ])
+        args = parser.parse_args(
+            [
+                "--peek",
+                "--peek-budget",
+                str(MIN_BUDGET_FLOOR - 1),
+            ]
+        )
         stderr = io.StringIO()
         with self.assertRaises(SystemExit):
             validate_peek_args(args, stderr=stderr)
@@ -307,9 +321,13 @@ class HardErrorTests(unittest.TestCase):
 
     def test_min_length_below_floor_raises(self):
         parser = _build_parser()
-        args = parser.parse_args([
-            "--peek", "--peek-min-length", str(MIN_LENGTH_FLOOR - 1),
-        ])
+        args = parser.parse_args(
+            [
+                "--peek",
+                "--peek-min-length",
+                str(MIN_LENGTH_FLOOR - 1),
+            ]
+        )
         stderr = io.StringIO()
         with self.assertRaises(SystemExit) as ctx:
             validate_peek_args(args, stderr=stderr)
@@ -320,9 +338,13 @@ class HardErrorTests(unittest.TestCase):
         # Exactly at the floor should be accepted; the check is
         # strictly less-than.
         parser = _build_parser()
-        args = parser.parse_args([
-            "--peek", "--peek-min-length", str(MIN_LENGTH_FLOOR),
-        ])
+        args = parser.parse_args(
+            [
+                "--peek",
+                "--peek-min-length",
+                str(MIN_LENGTH_FLOOR),
+            ]
+        )
         stderr = io.StringIO()
         validate_peek_args(args, stderr=stderr)  # should not raise
         self.assertEqual(stderr.getvalue(), "")
@@ -351,6 +373,7 @@ class HardErrorTests(unittest.TestCase):
 # Enricher construction
 # ===========================================================================
 
+
 class BuildPeekEnricherTests(unittest.TestCase):
 
     def test_returns_none_when_peek_disabled(self):
@@ -360,9 +383,15 @@ class BuildPeekEnricherTests(unittest.TestCase):
 
     def test_returns_configured_enricher_when_enabled(self):
         parser = _build_parser()
-        args = parser.parse_args([
-            "--peek", "--peek-depth", "2", "--peek-budget", "32768",
-        ])
+        args = parser.parse_args(
+            [
+                "--peek",
+                "--peek-depth",
+                "2",
+                "--peek-budget",
+                "32768",
+            ]
+        )
         enricher = build_peek_enricher(args)
         self.assertIsInstance(enricher, PayloadPeek)
         self.assertEqual(enricher.max_depth, 2)
@@ -382,9 +411,13 @@ class BuildPeekEnricherTests(unittest.TestCase):
         # just sit in the namespace unused. This test catches
         # plumbing regressions.
         parser = _build_parser()
-        args = parser.parse_args([
-            "--peek", "--peek-min-length", "256",
-        ])
+        args = parser.parse_args(
+            [
+                "--peek",
+                "--peek-min-length",
+                "256",
+            ]
+        )
         enricher = build_peek_enricher(args)
         self.assertIsInstance(enricher, PayloadPeek)
         self.assertEqual(enricher.min_length, 256)
@@ -393,6 +426,7 @@ class BuildPeekEnricherTests(unittest.TestCase):
 # ===========================================================================
 # peek_chain_enabled
 # ===========================================================================
+
 
 class PeekChainEnabledTests(unittest.TestCase):
 

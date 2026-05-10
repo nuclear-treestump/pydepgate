@@ -44,12 +44,18 @@ from pydepgate.reporters import sarif
 from pydepgate.reporters.scan_result import human as scan_human
 from pydepgate.reporters.scan_result import json as scan_json
 from pydepgate.engines.base import (
-    ArtifactKind, ScanResult, ScanStatistics, Severity,
+    ArtifactKind,
+    ScanResult,
+    ScanStatistics,
+    Severity,
 )
 from pydepgate.engines.static import StaticEngine
 from pydepgate.traffic_control.triage import FileKind
-from pydepgate.cli.peek_args import build_peek_enricher, peek_chain_enabled
-from pydepgate.cli.decode_args import (
+from pydepgate.cli.command_handlers.peek_args import (
+    build_peek_enricher,
+    peek_chain_enabled,
+)
+from pydepgate.cli.command_handlers.decode_args import (
     DECODE_IOCS_FULL,
     DECODE_IOCS_HASHES,
     DECODE_IOCS_OFF,
@@ -68,6 +74,7 @@ from pydepgate.reporters.decoded_tree import json as tree_json
 from pydepgate.reporters.decoded_tree import sources as tree_sources
 from pydepgate.reporters.decoded_tree import text as tree_text
 from pydepgate.cli._archive import write_encrypted_zip
+from pydepgate.cli.command_handlers.sarif_args import sarif_srcroot
 
 _SDIST_SUFFIXES = (".tar.gz", ".tgz", ".tar.bz2", ".tar.xz", ".tar")
 
@@ -76,8 +83,11 @@ _SDIST_SUFFIXES = (".tar.gz", ".tgz", ".tar.bz2", ".tar.xz", ".tar")
 # treat the file as. These names are user-facing; FileKind values are
 # internal. Keep this dict in sync with the choices argparse exposes.
 _AS_KIND_CHOICES = (
-    "setup_py", "init_py", "pth",
-    "sitecustomize", "usercustomize",
+    "setup_py",
+    "init_py",
+    "pth",
+    "sitecustomize",
+    "usercustomize",
     "library_py",
 )
 
@@ -196,9 +206,7 @@ def run(args: argparse.Namespace) -> int:
         )
         return exit_codes.TOOL_ERROR
     if args.as_kind and not args.single:
-        sys.stderr.write(
-            "error: --as only applies in --single mode.\n"
-        )
+        sys.stderr.write("error: --as only applies in --single mode.\n")
         return exit_codes.TOOL_ERROR
     if args.deep and args.single:
         sys.stderr.write(
@@ -224,9 +232,7 @@ def run(args: argparse.Namespace) -> int:
 
     # Surface discovery information.
     if loaded.source_path:
-        sys.stderr.write(
-            f"note: using rules file {loaded.source_path}\n"
-        )
+        sys.stderr.write(f"note: using rules file {loaded.source_path}\n")
     if loaded.also_found:
         for other in loaded.also_found:
             sys.stderr.write(
@@ -263,7 +269,8 @@ def run(args: argparse.Namespace) -> int:
         )
         try:
             result = _dispatch_scan(
-                engine, args.target,
+                engine,
+                args.target,
                 progress_callback=update_progress,
             )
         finally:
@@ -271,16 +278,25 @@ def run(args: argparse.Namespace) -> int:
             # scan raised. Otherwise an exception traceback would
             # render on the same line as the bar.
             finish_progress()
-    exit_code = _render_and_exit_code(result, args)
-
-    # Decoded-payload pass. Runs after the main scan when the user
-    # opted in via --decode-payload-depth. The driver re-invokes the
-    # engine on the decoded form of payload-bearing findings,
-    # recursing up to the requested depth. Output goes to a file at
-    # the user-specified --decode-location (or an auto-generated
-    # path under <cwd>/decoded/).
+    # Decoded-payload tree. Computed once when decoding is enabled,
+    # then passed to BOTH the format renderer (so SARIF can include
+    # codeFlows for findings reached via decoded payload chains)
+    # AND the file-writing decode pass (which uses it for the text
+    # or JSON report and any IOC sidecars or archives). Compute-
+    # once-render-twice avoids running the expensive decode driver
+    # more than once while still producing all requested outputs.
+    decoded_tree = None
     if decode_enabled(args):
-        _run_decode_pass(result, engine, args)
+        decoded_tree = _compute_decoded_tree(result, engine, args)
+
+    exit_code = _render_and_exit_code(result, args, decoded_tree)
+
+    # File-writing decode pass. Skipped if the early compute
+    # failed (decoded_tree is None) or decoding was not enabled.
+    # See _run_decode_pass for the iocs-mode branching that
+    # determines exactly which files are written.
+    if decoded_tree is not None:
+        _run_decode_pass(result, engine, args, tree=decoded_tree)
 
     return exit_code
 
@@ -306,13 +322,15 @@ def _dispatch_scan(
         if target.endswith(suffix):
             if path.is_file():
                 return engine.scan_sdist(
-                    path, progress_callback=progress_callback,
+                    path,
+                    progress_callback=progress_callback,
                 )
             break
 
     # Fallback: treat as installed package name.
     return engine.scan_installed(
-        target, progress_callback=progress_callback,
+        target,
+        progress_callback=progress_callback,
     )
 
 
@@ -372,19 +390,30 @@ def _empty_result_with_diag(path: Path, diagnostic: str) -> ScanResult:
     )
 
 
-def _render_and_exit_code(result: ScanResult, args: argparse.Namespace) -> int:
+def _render_and_exit_code(
+    result: ScanResult,
+    args: argparse.Namespace,
+    decoded_tree: "DecodedTree | None" = None,
+) -> int:
     """Render result in the requested format and compute exit code.
 
     Honors --min-severity for both display and exit code, unless
-    --strict-exit is set, in which case the exit code uses unfiltered
-    findings.
+    --strict-exit is set, in which case the exit code uses
+    unfiltered findings.
+
+    The decoded_tree parameter, when non-None, is forwarded to
+    the SARIF renderer so Phase D codeFlow results appear in
+    the output. Other formats ignore it; their separate file
+    output is produced by _run_decode_pass after this function
+    returns.
     """
     min_severity = _parse_severity(args.min_severity)
     strict_exit = args.strict_exit
 
     # Filter findings for display.
     display_findings = tuple(
-        f for f in result.findings
+        f
+        for f in result.findings
         if _severity_meets_threshold(f.severity, min_severity)
     )
 
@@ -398,20 +427,34 @@ def _render_and_exit_code(result: ScanResult, args: argparse.Namespace) -> int:
         diagnostics=result.diagnostics,
     )
     peek_chain = peek_chain_enabled(args)
-    
+
     # Render in the requested format.
     if args.format == "json":
         scan_json.render(filtered, sys.stdout)
     elif args.format == "sarif":
-        sarif.render(filtered, None, sys.stdout)
-        return exit_codes.TOOL_ERROR
+        # SARIF gets the decoded tree (when present) plus the
+        # srcroot and scan_mode kwargs the user supplied via
+        # CLI flags. scan_mode appends '_deep' to artifact_kind
+        # when --deep is set so cross-run grouping in GitHub
+        # distinguishes deep from non-deep scans.
+        sarif.render(
+            filtered,
+            decoded_tree,
+            sys.stdout,
+            srcroot=sarif_srcroot(args),
+            scan_mode=_sarif_scan_mode(result, args),
+        )
     else:
-        scan_human.render(filtered, sys.stdout, color=args.color, ci_mode=args.ci, peek_chain=peek_chain)
+        scan_human.render(
+            filtered,
+            sys.stdout,
+            color=args.color,
+            ci_mode=args.ci,
+            peek_chain=peek_chain,
+        )
 
     # Compute exit code from the appropriate finding set.
-    findings_for_exit = (
-        result.findings if strict_exit else display_findings
-    )
+    findings_for_exit = result.findings if strict_exit else display_findings
 
     return _compute_exit_code(findings_for_exit)
 
@@ -450,8 +493,7 @@ def _compute_exit_code(findings) -> int:
     if not findings:
         return exit_codes.CLEAN
     has_blocking = any(
-        f.severity in (Severity.HIGH, Severity.CRITICAL)
-        for f in findings
+        f.severity in (Severity.HIGH, Severity.CRITICAL) for f in findings
     )
     if has_blocking:
         return exit_codes.FINDINGS_BLOCKING
@@ -541,12 +583,98 @@ def _resolve_decode_location(
     return directory / filename
 
 
+def _compute_decoded_tree(
+    result: ScanResult,
+    engine: StaticEngine,
+    args: argparse.Namespace,
+) -> "DecodedTree | None":
+    """Run the decode driver and return the (optionally filtered) tree.
+
+    Extracted from _run_decode_pass so the SARIF format path can
+    consume the tree before format dispatch and the file-writing
+    pass can consume the same tree without re-running decode.
+
+    The --min-severity filter is applied to the tree before it
+    is returned, matching how _render_and_exit_code applies the
+    same filter to ScanResult findings before format dispatch.
+    Decoding itself is NOT gated by --min-severity because a
+    low-severity outer finding can decode to a critical inner
+    one; the filter exists for presentation, not for performance.
+
+    Failures are non-fatal: a stderr warning is written and None
+    is returned. Callers that wanted decode output get an empty
+    result rather than a crash; the main scan exit code already
+    fired by the time this function runs.
+    """
+    extract_iocs = decode_extract_iocs(args)
+
+    try:
+        tree = decode_payloads(
+            result,
+            engine=engine,
+            max_depth=args.decode_payload_depth,
+            peek_min_length=args.peek_min_length,
+            peek_max_depth=args.peek_depth,
+            peek_max_budget=args.peek_budget,
+            extract_iocs=extract_iocs,
+        )
+    except Exception as exc:  # noqa: BLE001 - non-fatal post-scan step
+        sys.stderr.write(
+            f"warning: decoded-payload pass failed: " f"{type(exc).__name__}: {exc}\n"
+        )
+        return None
+
+    # Apply --min-severity as a post-decode presentation filter.
+    # See module docstring of decode_payloads for the "keep for
+    # context" preservation semantics that protect chains where
+    # a low outer ancestor has a critical descendant.
+    min_sev = getattr(args, "min_severity", None)
+    if min_sev:
+        tree = filter_tree_by_severity(tree, min_sev)
+
+    return tree
+
+
+def _sarif_scan_mode(
+    result: ScanResult,
+    args: argparse.Namespace,
+) -> str | None:
+    """Compute the SARIF automationDetails scan-mode segment.
+
+    Combines artifact_kind with the --deep flag for cross-run
+    grouping in GitHub code scanning. Without --deep, returns
+    None so the SARIF document assembler defaults to
+    artifact_kind.value alone. With --deep, returns
+    f"{artifact_kind.value}_deep" so a deep wheel scan groups
+    under 'wheel_deep' (separately from a non-deep wheel under
+    'wheel' and from a deep sdist under 'sdist_deep').
+
+    --single is mutually exclusive with --deep upstream, so
+    LOOSE_FILE artifact kind never combines with the deep
+    suffix. The argparse layer rejects --single --deep
+    combinations before this function is called.
+    """
+    if not getattr(args, "deep", False):
+        return None
+    return f"{result.artifact_kind.value}_deep"
+
+
 def _run_decode_pass(
     result: ScanResult,
     engine: StaticEngine,
     args: argparse.Namespace,
+    *,
+    tree: "DecodedTree | None" = None,
 ) -> None:
     """Run the decoded-payload driver and write its output to disk.
+
+    When `tree` is None (legacy callers), this function computes
+    the tree itself by calling _compute_decoded_tree. When `tree`
+    is provided (Phase F's compute-once-render-twice path), the
+    decode call is skipped and the provided tree is used directly.
+    The decision of whether to compute or reuse is made by the
+    caller based on whether SARIF was the active format (in which
+    case run() has already computed the tree to pass to render()).
 
     Branching on --decode-iocs mode:
       off    : single plaintext report file. Skip on empty tree.
@@ -566,34 +694,19 @@ def _run_decode_pass(
     Failures are non-fatal: the main scan exit code already fired,
     so a problem here just gets a stderr diagnostic.
     """
-    extract_iocs = decode_extract_iocs(args)
+    if tree is None:
+        tree = _compute_decoded_tree(result, engine, args)
+        if tree is None:
+            # Decode failed; _compute_decoded_tree already
+            # wrote the warning to stderr.
+            return
 
-    try:
-        tree = decode_payloads(
-            result,
-            engine=engine,
-            max_depth=args.decode_payload_depth,
-            peek_min_length=args.peek_min_length,
-            peek_max_depth=args.peek_depth,
-            peek_max_budget=args.peek_budget,
-            extract_iocs=extract_iocs,
-        )
-    except Exception as exc:  # noqa: BLE001 - non-fatal post-scan step
-        sys.stderr.write(
-            f"warning: decoded-payload pass failed: "
-            f"{type(exc).__name__}: {exc}\n"
-        )
-        return
-
-    # Apply --min-severity as a post-decode presentation filter.
-    # Decoding was NOT gated by this; the engine ran over every
-    # payload-bearing finding so a low-severity outer that decodes
-    # to a critical inner is still captured. The filter here just
-    # cleans the tree up before rendering.
+    # Re-resolve min_severity for downstream use. The filter
+    # itself already ran inside _compute_decoded_tree; this
+    # local is only needed by _no_findings_msg(min_sev) calls
+    # later in this function (the JSON-mode short-circuit and
+    # the text-mode skip path both reference it).
     min_sev = getattr(args, "min_severity", None)
-    if min_sev:
-        tree = filter_tree_by_severity(tree, min_sev)
-
     mode = decode_iocs_mode(args)
 
     # JSON format short-circuits the mode logic. The JSON output
@@ -603,13 +716,13 @@ def _run_decode_pass(
         if not tree.nodes and mode != DECODE_IOCS_FULL:
             sys.stderr.write(_no_findings_msg(min_sev))
             return
-        rendered = tree_json.render(tree, include_source=(decode_iocs_mode(args) == DECODE_IOCS_FULL))
+        rendered = tree_json.render(
+            tree, include_source=(decode_iocs_mode(args) == DECODE_IOCS_FULL)
+        )
         output_path = _resolve_decode_location(args, result, tree, ".json")
         if not _write_decode_text_file(output_path, rendered):
             return
-        sys.stderr.write(
-            f"note: decoded-payload report written to {output_path}\n"
-        )
+        sys.stderr.write(f"note: decoded-payload report written to {output_path}\n")
         return
 
     # Text format. Branch on mode.
@@ -621,9 +734,7 @@ def _run_decode_pass(
         output_path = _resolve_decode_location(args, result, tree, ".txt")
         if not _write_decode_text_file(output_path, rendered):
             return
-        sys.stderr.write(
-            f"note: decoded-payload report written to {output_path}\n"
-        )
+        sys.stderr.write(f"note: decoded-payload report written to {output_path}\n")
         return
 
     if mode == DECODE_IOCS_HASHES:
@@ -721,10 +832,7 @@ def _no_findings_msg(min_sev) -> str:
             f"--min-severity={min_sev}; no decoded-payload "
             f"report written.\n"
         )
-    return (
-        "note: no payload-bearing findings; no decoded-payload "
-        "report written.\n"
-    )
+    return "note: no payload-bearing findings; no decoded-payload " "report written.\n"
 
 
 def _write_decode_text_file(output_path: Path, rendered: str) -> bool:
