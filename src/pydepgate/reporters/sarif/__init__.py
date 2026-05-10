@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-"""pydepgate.reporters.sarif.__init__
+"""pydepgate.reporters.sarif
 
 SARIF 2.1.0 output for pydepgate scan results.
 
@@ -8,25 +8,22 @@ This package emits SARIF documents compatible with GitHub
 code scanning's ingestion subset of the OASIS SARIF 2.1.0
 standard. The implementation is split across submodules:
 
-  - severity.py: pydepgate Severity to SARIF level mapping
-    and GitHub security-severity numeric.
-  - uris.py: artifactLocation URI scheme decisions per path
-    kind (real, artifact-internal, synthetic decoded).
+  - severity.py: pydepgate Severity to SARIF level
+    mapping, GitHub security-severity numeric, and
+    severity rank helpers.
+  - uris.py: artifactLocation URI scheme decisions per
+    path kind (real, artifact-internal, synthetic
+    decoded).
   - fingerprints.py: partialFingerprints algorithm for
     GitHub alert deduplication across runs.
-  - rules.py: rule descriptor generation (Phase B,
-    planned).
-  - results.py: result generation including codeFlows for
-    decoded payload chains 
-  - document.py: full SARIF document assembly and emission.
+  - rules.py: rule descriptor generation from
+    SIGNAL_EXPLANATIONS plus the default rule walk.
+  - results.py: result entries from pydepgate findings,
+    including codeFlows for findings reached via decoded
+    payload chains.
 
 The public entry point is render(result, decoded_tree,
 stream).
-
-The placeholder is intentionally valid SARIF rather than an
-unstructured message so that consumers (CI pipelines,
-upload-sarif actions) can ingest it without parse errors
-even before real findings are emitted.
 """
 
 import json
@@ -38,7 +35,7 @@ if TYPE_CHECKING:
 
 
 # Tool identity constants. Centralized here so the document
-# assembly phase can import them rather than redefining.
+# assembly code can import them rather than redefining.
 TOOL_NAME = "pydepgate"
 TOOL_INFORMATION_URI = "https://github.com/nuclear-treestump/pydepgate"
 TOOL_ORGANIZATION = "Nuclear Treestump"
@@ -56,10 +53,16 @@ def render(
     Args:
         result: the ScanResult from the main scan pass.
         decoded_tree: optional DecodedTree from the decode
-            pass.
+            pass. None when decode is disabled.
         stream: a writable text stream. The function writes
             the SARIF document plus a trailing newline.
 
+    While the full SARIF emission is incomplete, this
+    writes a minimal valid SARIF 2.1.0 document with the
+    correct tool identity and a notification indicating
+    the implementation is under development. Consumers can
+    parse the output without errors but it carries no
+    findings.
     """
     placeholder_document = {
         "$schema": SARIF_SCHEMA_URI,
