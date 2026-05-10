@@ -44,7 +44,10 @@ from pydepgate.reporters import sarif
 from pydepgate.reporters.scan_result import human as scan_human
 from pydepgate.reporters.scan_result import json as scan_json
 from pydepgate.engines.base import (
-    ArtifactKind, ScanResult, ScanStatistics, Severity,
+    ArtifactKind,
+    ScanResult,
+    ScanStatistics,
+    Severity,
 )
 from pydepgate.engines.static import StaticEngine
 from pydepgate.traffic_control.triage import FileKind
@@ -76,8 +79,11 @@ _SDIST_SUFFIXES = (".tar.gz", ".tgz", ".tar.bz2", ".tar.xz", ".tar")
 # treat the file as. These names are user-facing; FileKind values are
 # internal. Keep this dict in sync with the choices argparse exposes.
 _AS_KIND_CHOICES = (
-    "setup_py", "init_py", "pth",
-    "sitecustomize", "usercustomize",
+    "setup_py",
+    "init_py",
+    "pth",
+    "sitecustomize",
+    "usercustomize",
     "library_py",
 )
 
@@ -196,9 +202,7 @@ def run(args: argparse.Namespace) -> int:
         )
         return exit_codes.TOOL_ERROR
     if args.as_kind and not args.single:
-        sys.stderr.write(
-            "error: --as only applies in --single mode.\n"
-        )
+        sys.stderr.write("error: --as only applies in --single mode.\n")
         return exit_codes.TOOL_ERROR
     if args.deep and args.single:
         sys.stderr.write(
@@ -224,9 +228,7 @@ def run(args: argparse.Namespace) -> int:
 
     # Surface discovery information.
     if loaded.source_path:
-        sys.stderr.write(
-            f"note: using rules file {loaded.source_path}\n"
-        )
+        sys.stderr.write(f"note: using rules file {loaded.source_path}\n")
     if loaded.also_found:
         for other in loaded.also_found:
             sys.stderr.write(
@@ -263,7 +265,8 @@ def run(args: argparse.Namespace) -> int:
         )
         try:
             result = _dispatch_scan(
-                engine, args.target,
+                engine,
+                args.target,
                 progress_callback=update_progress,
             )
         finally:
@@ -306,13 +309,15 @@ def _dispatch_scan(
         if target.endswith(suffix):
             if path.is_file():
                 return engine.scan_sdist(
-                    path, progress_callback=progress_callback,
+                    path,
+                    progress_callback=progress_callback,
                 )
             break
 
     # Fallback: treat as installed package name.
     return engine.scan_installed(
-        target, progress_callback=progress_callback,
+        target,
+        progress_callback=progress_callback,
     )
 
 
@@ -384,7 +389,8 @@ def _render_and_exit_code(result: ScanResult, args: argparse.Namespace) -> int:
 
     # Filter findings for display.
     display_findings = tuple(
-        f for f in result.findings
+        f
+        for f in result.findings
         if _severity_meets_threshold(f.severity, min_severity)
     )
 
@@ -398,20 +404,23 @@ def _render_and_exit_code(result: ScanResult, args: argparse.Namespace) -> int:
         diagnostics=result.diagnostics,
     )
     peek_chain = peek_chain_enabled(args)
-    
+
     # Render in the requested format.
     if args.format == "json":
         scan_json.render(filtered, sys.stdout)
     elif args.format == "sarif":
         sarif.render(filtered, None, sys.stdout)
-        return exit_codes.TOOL_ERROR
     else:
-        scan_human.render(filtered, sys.stdout, color=args.color, ci_mode=args.ci, peek_chain=peek_chain)
+        scan_human.render(
+            filtered,
+            sys.stdout,
+            color=args.color,
+            ci_mode=args.ci,
+            peek_chain=peek_chain,
+        )
 
     # Compute exit code from the appropriate finding set.
-    findings_for_exit = (
-        result.findings if strict_exit else display_findings
-    )
+    findings_for_exit = result.findings if strict_exit else display_findings
 
     return _compute_exit_code(findings_for_exit)
 
@@ -450,8 +459,7 @@ def _compute_exit_code(findings) -> int:
     if not findings:
         return exit_codes.CLEAN
     has_blocking = any(
-        f.severity in (Severity.HIGH, Severity.CRITICAL)
-        for f in findings
+        f.severity in (Severity.HIGH, Severity.CRITICAL) for f in findings
     )
     if has_blocking:
         return exit_codes.FINDINGS_BLOCKING
@@ -580,8 +588,7 @@ def _run_decode_pass(
         )
     except Exception as exc:  # noqa: BLE001 - non-fatal post-scan step
         sys.stderr.write(
-            f"warning: decoded-payload pass failed: "
-            f"{type(exc).__name__}: {exc}\n"
+            f"warning: decoded-payload pass failed: " f"{type(exc).__name__}: {exc}\n"
         )
         return
 
@@ -603,13 +610,13 @@ def _run_decode_pass(
         if not tree.nodes and mode != DECODE_IOCS_FULL:
             sys.stderr.write(_no_findings_msg(min_sev))
             return
-        rendered = tree_json.render(tree, include_source=(decode_iocs_mode(args) == DECODE_IOCS_FULL))
+        rendered = tree_json.render(
+            tree, include_source=(decode_iocs_mode(args) == DECODE_IOCS_FULL)
+        )
         output_path = _resolve_decode_location(args, result, tree, ".json")
         if not _write_decode_text_file(output_path, rendered):
             return
-        sys.stderr.write(
-            f"note: decoded-payload report written to {output_path}\n"
-        )
+        sys.stderr.write(f"note: decoded-payload report written to {output_path}\n")
         return
 
     # Text format. Branch on mode.
@@ -621,9 +628,7 @@ def _run_decode_pass(
         output_path = _resolve_decode_location(args, result, tree, ".txt")
         if not _write_decode_text_file(output_path, rendered):
             return
-        sys.stderr.write(
-            f"note: decoded-payload report written to {output_path}\n"
-        )
+        sys.stderr.write(f"note: decoded-payload report written to {output_path}\n")
         return
 
     if mode == DECODE_IOCS_HASHES:
@@ -721,10 +726,7 @@ def _no_findings_msg(min_sev) -> str:
             f"--min-severity={min_sev}; no decoded-payload "
             f"report written.\n"
         )
-    return (
-        "note: no payload-bearing findings; no decoded-payload "
-        "report written.\n"
-    )
+    return "note: no payload-bearing findings; no decoded-payload " "report written.\n"
 
 
 def _write_decode_text_file(output_path: Path, rendered: str) -> bool:
