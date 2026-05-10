@@ -12,7 +12,156 @@ become binding stability promises with formal deprecation cycles.
 
 ## [Unreleased]
 
-- SARIF Output. In testing.
+(no changes yet)
+
+## [0.4.0] - 2026-05-10
+
+### Added
+
+- **SARIF 2.1.0 output.** `--format sarif` now emits real
+  SARIF 2.1.0 documents instead of the under-development stub
+  that shipped through 0.3.x. Each scan run produces a single
+  document with the full rules catalog under
+  `tool.driver.rules`, per-finding results with severity-mapped
+  levels (critical/high to `error`, medium to `warning`, low/info
+  to `note`), GitHub-compatible `security-severity` numeric
+  scores, 24-character partial fingerprints for cross-run alert
+  deduplication, and `automationDetails.id` of the form
+  `pydepgate/{artifact_kind}/` for cross-run grouping. Deep
+  scans suffix `_deep` to the artifact kind so deep and non-deep
+  runs of the same artifact group separately. Compatible with
+  GitHub Code Scanning, Azure DevOps, and any consumer that
+  follows the OASIS SARIF 2.1.0 spec.
+- **Decoded-payload codeFlows.** Findings reached through the
+  recursive decode pipeline are surfaced as SARIF results with
+  `codeFlows` describing the decode chain. Each `threadFlow`
+  walks from the outer high-entropy literal through each decode
+  layer to the innermost detection, surfacing the attack path
+  in consumer UI like GitHub's "Show paths". Multi-layer
+  payloads (the LiteLLM 1.82.8 attack pattern) produce nested
+  threadFlow encoding with `nestingLevel` reflecting decode
+  depth.
+- **`--sarif-srcroot PATH` flag and `PYDEPGATE_SARIF_SRCROOT`
+  environment variable.** Populates
+  `originalUriBaseIds.PROJECTROOT` in the emitted document and
+  tags on-disk artifact locations with `uriBaseId: "PROJECTROOT"`
+  so SARIF consumers resolve paths against a known source root.
+  Required when ingesting into GitHub Code Scanning for in-repo
+  source navigation. The flag has CLI-over-env precedence
+  matching the existing flag conventions, treats empty string
+  as unset, and emits a soft warning to stderr when set without
+  `--format sarif`.
+- **Content-blind SARIF emission.** The document describes what
+  was called (`subprocess.run()`, `urllib.request.urlopen()`)
+  without including arguments, URLs, or literal payload bytes.
+  This is by design: SARIF documents flow into CI logs, code
+  scanning UIs, and artifact downloads, and embedding payload
+  content there would replicate the exact threat the analyzer
+  is detecting. A defender can publish a SARIF document
+  publicly without re-leaking the underlying attack content.
+  Verified against a real LiteLLM 1.82.8 sample before release.
+- **`pydepgate.reporters.sarif` package.** New reporter package
+  with submodules for severity mapping, URI scheme decisions,
+  partial fingerprints, rule descriptor catalog generation,
+  per-finding result construction, and full document assembly.
+  The package is imported automatically when `--format sarif`
+  is selected and is not part of the public API surface.
+- **`pydepgate.cli.sarif_args` module.** Argparse helpers and
+  validation for the new SARIF flag family, mirroring the
+  `decode_args` and `peek_args` patterns. Exposes
+  `add_sarif_arguments`, `sarif_srcroot` query helper, and
+  `validate_sarif_args` soft-warning function.
+- **`scripts/build_sarif_fixtures.py`.** Stdlib-only fixture
+  builder that produces three benign wheels for SARIF
+  validation: a clean package, a package with high-entropy
+  literals that trigger DENS010/DENS011, and a package with a
+  2-layer base64 chain whose innermost layer contains a
+  benign `subprocess.run(['echo', 'hello-from-fixture'], ...)`
+  call. The fixtures pattern-match as suspicious to the
+  analyzer but contain no real malicious behavior, keeping CI
+  artifacts safe to share and reproducible from a reviewable
+  Python script. No binary fixtures committed to the
+  repository.
+- **`scripts/validate_sarif.sh`.** Local equivalent of the CI
+  validation workflow. Builds the fixtures, scans each, runs
+  `sarif validate` on the output. Useful for catching SARIF
+  regressions on a developer machine before pushing to CI.
+  Requires .NET SDK 8.0 or later for the Microsoft SARIF
+  Multitool. Accepts an optional target argument to scan a
+  specific file instead of the synthesized fixtures.
+- **`.github/workflows/do_sarif_validation.yml`.** New CI
+  workflow that validates pydepgate's SARIF emission against
+  the Microsoft SARIF Multitool on every PR to main. The
+  Multitool is the authoritative SARIF 2.1.0 validator and is
+  what GitHub Code Scanning's ingestion uses internally.
+  Validation hard-fails on warnings and errors. Accepts a
+  `workflow_dispatch` `target` input for manual validation
+  against arbitrary artifacts. Uploads emitted SARIF documents
+  as a 7-day artifact regardless of pass/fail for debugging.
+
+### Changed
+
+- **`--format sarif` exit code semantics.** Previously returned
+  exit code 3 (TOOL_ERROR) regardless of findings, signaling
+  the under-development stub. Now computes the same exit code
+  as the JSON and human formats: 0 for clean, 1 for findings
+  below blocking severity, 2 for HIGH or CRITICAL findings, 3
+  only for actual tool errors. CI that relied on the always-
+  error behavior to detect "SARIF is not implemented yet" needs
+  updating; that detection mechanism was never documented as a
+  contract.
+- **CLI scan flow restructured for SARIF and decode
+  integration.** When `--format sarif` and
+  `--decode-payload-depth` are both set, the decoded tree is
+  now computed before the format dispatch and threaded into
+  the SARIF renderer so codeFlows appear in the output. The
+  same tree is then reused by the file-writing decode pass
+  instead of running the decode driver twice. Users running
+  both SARIF and decode in the same scan now get all expected
+  outputs (SARIF document plus text/JSON report, IOC sidecar,
+  optional encrypted archive) from one decode pass. Previously,
+  SARIF format suppressed the file-writing decode pass; users
+  who wanted both outputs had to run two scans.
+- **Documentation.** README updated with a new SARIF output
+  section under Usage, a Recently Added entry leading the
+  section, and additions to the flag and environment-variable
+  tables. The Status section now lists SARIF under "What works
+  today" with the codeFlow encoding, severity mapping, and
+  content-blindness properties called out. CHANGELOG, this
+  document, gets the present entry.
+
+### Security
+
+The SARIF emission was audited against a real LiteLLM 1.82.8
+sample before release. The document describes findings
+behaviorally without including arguments to dangerous calls,
+URLs, command lines, or literal payload bytes. This property
+is structural rather than incidental: the per-finding message
+text is constructed from analyzer signal IDs and rule
+descriptions, not from the matched content. A future change
+that introduced content into the message text would violate
+this design constraint and is the kind of regression the CI
+validation catches.
+
+No security advisories in this release.
+
+### Coming in 0.5.0
+
+The following are planned for the next minor release. Tracking
+issues will land in [ROADMAP.md](ROADMAP.md):
+
+- **SIEM emission layer.** First-class HEC integration for
+  Splunk, with CIM-compliant data models so findings populate
+  Enterprise Security correctly rather than appearing as raw
+  JSON. Elastic, Datadog and Sentinel emission planned
+  alongside. Carried forward from the 0.3.0 changelog's
+  "Coming in 0.4.0" list; SARIF was the headline item that
+  landed in 0.4.0.
+- **Engine parallelism.** The picklability contract documented
+  in CONTRIBUTING.md is preserved through 0.4.0; 0.5.0 will
+  enable a process pool for the per-file scan phase, targeting
+  meaningful speedups on multi-megabyte wheels with thousands
+  of files. Carried forward from the 0.3.0 list.
 
 ## [0.3.3] - 2026-05-05
 
