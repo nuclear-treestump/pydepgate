@@ -23,7 +23,6 @@ from __future__ import annotations
 
 from typing import Iterable
 
-
 # ---------------------------------------------------------------------------
 # Subcommand inventory
 # ---------------------------------------------------------------------------
@@ -67,24 +66,27 @@ _HIDDEN_SUBCOMMANDS: frozenset[str] = frozenset({"_complete"})
 # The peek-related flags also count as global because the existing
 # add_peek_arguments call site adds them via _add_global_flags too.
 
-_GLOBAL_BOOL_FLAGS: frozenset[str] = frozenset({
-    "--ci",
-    "--no-color",
-    "--strict-exit",
-    "--no-map",
-    "--peek",
-    "--peek-chain",
-})
+_GLOBAL_BOOL_FLAGS: frozenset[str] = frozenset(
+    {
+        "--ci",
+        "--no-color",
+        "--strict-exit",
+        "--no-map",
+        "--peek",
+        "--peek-chain",
+    }
+)
 
 
 _GLOBAL_VALUE_FLAGS: dict[str, tuple[str, ...] | None] = {
     "--format": ("human", "json", "sarif"),
     "--color": ("auto", "always", "never"),
     "--min-severity": ("info", "low", "medium", "high", "critical"),
-    "--rules-file": None,        # filesystem path; shell handles fallback
-    "--peek-depth": None,        # integer; no completion
-    "--peek-budget": None,       # integer; no completion
-    "--peek-min-length": None,   # integer; no completion
+    "--rules-file": None,  # filesystem path; shell handles fallback
+    "--peek-depth": None,  # integer; no completion
+    "--peek-budget": None,  # integer; no completion
+    "--peek-min-length": None,  # integer; no completion
+    "--sarif-srcroot": None,  # filesystem path; shell handles fallback
 }
 
 
@@ -103,8 +105,11 @@ _SCAN_BOOL_FLAGS: frozenset[str] = frozenset({"--deep", "--no-bar"})
 _SCAN_VALUE_FLAGS: dict[str, tuple[str, ...] | None] = {
     "--single": None,  # filesystem path
     "--as": (
-        "setup_py", "init_py", "pth",
-        "sitecustomize", "usercustomize",
+        "setup_py",
+        "init_py",
+        "pth",
+        "sitecustomize",
+        "usercustomize",
         "library_py",
     ),
 }
@@ -141,12 +146,12 @@ _SUBCOMMAND_FLAGS: dict[
     str,
     tuple[frozenset[str], dict[str, tuple[str, ...] | None]],
 ] = {
-    "scan":        (_SCAN_BOOL_FLAGS,        _SCAN_VALUE_FLAGS),
-    "explain":     (_EXPLAIN_BOOL_FLAGS,     _EXPLAIN_VALUE_FLAGS),
-    "preflight":   (_PREFLIGHT_BOOL_FLAGS,   _PREFLIGHT_VALUE_FLAGS),
-    "exec":        (_EXEC_BOOL_FLAGS,        _EXEC_VALUE_FLAGS),
-    "version":     (_VERSION_BOOL_FLAGS,     _VERSION_VALUE_FLAGS),
-    "help":        (_HELP_BOOL_FLAGS,        _HELP_VALUE_FLAGS),
+    "scan": (_SCAN_BOOL_FLAGS, _SCAN_VALUE_FLAGS),
+    "explain": (_EXPLAIN_BOOL_FLAGS, _EXPLAIN_VALUE_FLAGS),
+    "preflight": (_PREFLIGHT_BOOL_FLAGS, _PREFLIGHT_VALUE_FLAGS),
+    "exec": (_EXEC_BOOL_FLAGS, _EXEC_VALUE_FLAGS),
+    "version": (_VERSION_BOOL_FLAGS, _VERSION_VALUE_FLAGS),
+    "help": (_HELP_BOOL_FLAGS, _HELP_VALUE_FLAGS),
     "completions": (_COMPLETIONS_BOOL_FLAGS, _COMPLETIONS_VALUE_FLAGS),
 }
 
@@ -163,6 +168,7 @@ _SUBCOMMAND_POSITIONAL_CHOICES: dict[str, tuple[str, ...]] = {
 # ---------------------------------------------------------------------------
 # Public helpers used by the engine
 # ---------------------------------------------------------------------------
+
 
 def _detect_subcommand(words: Iterable[str]) -> str | None:
     """Return the first subcommand name in `words`, or None.
@@ -271,6 +277,7 @@ def _explain_topic_candidates() -> list[str]:
     user_rules: list = []
     try:
         from pydepgate.rules.loader import load_user_rules
+
         loaded = load_user_rules()
         user_rules = list(loaded.rules)
     except Exception:
@@ -300,6 +307,7 @@ def _explain_topic_candidates() -> list[str]:
 # ---------------------------------------------------------------------------
 # Main entry point
 # ---------------------------------------------------------------------------
+
 
 def complete_words(cur: str, prev: str, words: list[str]) -> list[str]:
     """Compute completion candidates for the current shell state.
@@ -333,15 +341,13 @@ def complete_words(cur: str, prev: str, words: list[str]) -> list[str]:
     # Step 2: user is typing a flag (current token starts with -).
     subcommand = _detect_subcommand(words)
     if cur.startswith("-"):
-        return [
-            f for f in _flag_names_for_context(subcommand)
-            if f.startswith(cur)
-        ]
+        return [f for f in _flag_names_for_context(subcommand) if f.startswith(cur)]
 
     # Step 3: no subcommand yet, offer the subcommand list.
     if subcommand is None:
         candidates = sorted(
-            sc for sc in SUBCOMMAND_NAMES
+            sc
+            for sc in SUBCOMMAND_NAMES
             if sc not in _HIDDEN_SUBCOMMANDS and sc.startswith(cur)
         )
         return candidates
@@ -352,10 +358,7 @@ def complete_words(cur: str, prev: str, words: list[str]) -> list[str]:
         return [c for c in choices if c.startswith(cur)]
 
     if subcommand == "explain":
-        return [
-            t for t in _explain_topic_candidates()
-            if t.startswith(cur)
-        ]
+        return [t for t in _explain_topic_candidates() if t.startswith(cur)]
 
     # Step 5: scan, exec, preflight have free-form positionals
     # (paths, package names, scripts). Return empty so the shell
@@ -530,9 +533,7 @@ def script_for_shell(shell: str) -> str:
         return zsh_completion_script()
     if shell == "fish":
         return fish_completion_script()
-    raise ValueError(
-        f"unknown shell {shell!r}; expected one of: bash, zsh, fish"
-    )
+    raise ValueError(f"unknown shell {shell!r}; expected one of: bash, zsh, fish")
 
 
 SUPPORTED_SHELLS: tuple[str, ...] = ("bash", "zsh", "fish")

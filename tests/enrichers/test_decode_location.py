@@ -29,7 +29,7 @@ from pydepgate.cli.subcommands.scan import (
     _resolve_decode_location,
     _sanitize_target_for_filename,
 )
-from pydepgate.cli.decode_args import (
+from pydepgate.cli.command_handlers.decode_args import (
     DECODE_IOCS_FULL,
     DECODE_IOCS_HASHES,
     DECODE_IOCS_OFF,
@@ -45,12 +45,11 @@ from pydepgate.cli.subcommands.scan import (
     _run_decode_pass,
     _sidecar_iocs_path,
 )
- 
-
 
 # ---------------------------------------------------------------------------
 # _sanitize_target_for_filename
 # ---------------------------------------------------------------------------
+
 
 class SanitizeTargetForFilenameTests(unittest.TestCase):
 
@@ -133,6 +132,7 @@ class SanitizeTargetForFilenameTests(unittest.TestCase):
 # _build_decode_filename
 # ---------------------------------------------------------------------------
 
+
 class BuildDecodeFilenameTests(unittest.TestCase):
 
     def test_basic_pattern_with_pinned_timestamp(self):
@@ -184,13 +184,15 @@ class BuildDecodeFilenameTests(unittest.TestCase):
         # We can't assert a specific value but we can sanity-check the
         # format and ensure the result is a parseable timestamp.
         result = _build_decode_filename(
-            status="FINDINGS", target="x", ext=".txt",
+            status="FINDINGS",
+            target="x",
+            ext=".txt",
         )
         # Format: FINDINGS_YYYY-MM-DD_HH-MM-SS_x.txt
         self.assertTrue(result.startswith("FINDINGS_"))
         self.assertTrue(result.endswith("_x.txt"))
         # Parse the middle 19 chars as a timestamp.
-        ts_part = result[len("FINDINGS_"):-len("_x.txt")]
+        ts_part = result[len("FINDINGS_") : -len("_x.txt")]
         # Should parse without raising.
         datetime.datetime.strptime(ts_part, "%Y-%m-%d_%H-%M-%S")
 
@@ -200,7 +202,10 @@ class BuildDecodeFilenameTests(unittest.TestCase):
         # fine but redundant).
         ts = datetime.datetime(2026, 4, 29, 14, 30, 45, tzinfo=datetime.timezone.utc)
         result = _build_decode_filename(
-            status="FINDINGS", target="x", ext=".txt", timestamp=ts,
+            status="FINDINGS",
+            target="x",
+            ext=".txt",
+            timestamp=ts,
         )
         self.assertNotIn("Z", result)
 
@@ -208,6 +213,7 @@ class BuildDecodeFilenameTests(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # _resolve_decode_location
 # ---------------------------------------------------------------------------
+
 
 def _fake_result(identity: str) -> SimpleNamespace:
     return SimpleNamespace(artifact_identity=identity, findings=[])
@@ -222,6 +228,7 @@ def _tree_with_one_node(target: str = "x") -> DecodedTree:
     # branch is exercised. We don't care about the node's contents
     # for these tests; only that nodes is non-empty.
     from pydepgate.enrichers.decode_payloads import DecodedNode, STOP_NO_INNER_FINDINGS
+
     node = DecodedNode(
         outer_signal_id="DENS010",
         outer_severity="high",
@@ -346,15 +353,15 @@ def _make_args(
         decode_archive_stored=decode_archive_stored,
         min_severity=min_severity,
     )
- 
- 
+
+
 def _fake_result(identity: str = "litellm-1.82.8-py3-none-any.whl") -> SimpleNamespace:
     return SimpleNamespace(
         artifact_identity=identity,
         findings=[],  # decode_payloads is mocked, so contents don't matter
     )
- 
- 
+
+
 def _node_with_ioc(
     *,
     severity: str = "high",
@@ -388,37 +395,39 @@ def _node_with_ioc(
         children=children,
         ioc_data=ioc,
     )
- 
- 
+
+
 def _tree_with_nodes(target: str = "litellm.whl") -> DecodedTree:
     return DecodedTree(
-        target=target, max_depth=3, nodes=(_node_with_ioc(),),
+        target=target,
+        max_depth=3,
+        nodes=(_node_with_ioc(),),
     )
- 
- 
+
+
 def _empty_tree(target: str = "litellm.whl") -> DecodedTree:
     return DecodedTree(target=target, max_depth=3, nodes=())
- 
- 
+
+
 class _DecodeFlowTestBase(unittest.TestCase):
     """Common setup: temp directory, captured stderr, mock decode_payloads.
- 
+
     Each subclass test sets `self.tree_to_return` to control what the
     mocked decode_payloads emits, then calls _run_decode_pass.
     """
- 
+
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.outdir = Path(self.tmp.name) / "out"
- 
+
         self.tree_to_return: DecodedTree = _tree_with_nodes()
- 
+
         self.stderr = io.StringIO()
         self._stderr_patch = mock.patch.object(sys, "stderr", self.stderr)
         self._stderr_patch.start()
         self.addCleanup(self._stderr_patch.stop)
- 
+
         # Patch decode_payloads at its bound location inside scan.py.
         self._decode_patch = mock.patch(
             "pydepgate.cli.scan.decode_payloads",
@@ -426,24 +435,25 @@ class _DecodeFlowTestBase(unittest.TestCase):
         )
         self.mock_decode = self._decode_patch.start()
         self.addCleanup(self._decode_patch.stop)
- 
+
         # Patch the archive writer at its bound location inside scan.py.
         self._archive_patch = mock.patch(
             "pydepgate.cli.scan.write_encrypted_zip",
         )
         self.mock_write_archive = self._archive_patch.start()
         self.addCleanup(self._archive_patch.stop)
- 
+
     def stderr_text(self) -> str:
         return self.stderr.getvalue()
- 
- 
+
+
 # ---------------------------------------------------------------------------
 # mode == off
 # ---------------------------------------------------------------------------
- 
+
+
 class OffModeTests(_DecodeFlowTestBase):
- 
+
     def test_writes_single_txt_when_tree_has_nodes(self):
         self.tree_to_return = _tree_with_nodes()
         args = _make_args(
@@ -451,13 +461,13 @@ class OffModeTests(_DecodeFlowTestBase):
             decode_location=str(self.outdir),
         )
         _run_decode_pass(_fake_result(), engine=mock.Mock(), args=args)
- 
+
         files = list(self.outdir.glob("*"))
         self.assertEqual(len(files), 1)
         self.assertTrue(files[0].name.startswith("FINDINGS_"))
         self.assertTrue(files[0].suffix == ".txt")
         self.mock_write_archive.assert_not_called()
- 
+
     def test_skips_when_tree_empty(self):
         self.tree_to_return = _empty_tree()
         args = _make_args(
@@ -465,12 +475,12 @@ class OffModeTests(_DecodeFlowTestBase):
             decode_location=str(self.outdir),
         )
         _run_decode_pass(_fake_result(), engine=mock.Mock(), args=args)
- 
+
         # No files, no archive call.
         self.assertFalse(self.outdir.exists() and any(self.outdir.iterdir()))
         self.mock_write_archive.assert_not_called()
         self.assertIn("no payload-bearing findings", self.stderr_text())
- 
+
     def test_no_iocs_section_in_off_mode_report(self):
         # In off mode the txt should not have the IOC section even
         # if ioc_data is somehow populated on the nodes.
@@ -480,18 +490,19 @@ class OffModeTests(_DecodeFlowTestBase):
             decode_location=str(self.outdir),
         )
         _run_decode_pass(_fake_result(), engine=mock.Mock(), args=args)
- 
+
         files = list(self.outdir.glob("*"))
         content = files[0].read_text()
         self.assertNotIn("IOC (INDICATORS OF COMPROMISE)", content)
- 
- 
+
+
 # ---------------------------------------------------------------------------
 # mode == hashes
 # ---------------------------------------------------------------------------
- 
+
+
 class HashesModeTests(_DecodeFlowTestBase):
- 
+
     def test_writes_report_and_sidecar_when_tree_has_nodes(self):
         self.tree_to_return = _tree_with_nodes()
         args = _make_args(
@@ -499,7 +510,7 @@ class HashesModeTests(_DecodeFlowTestBase):
             decode_location=str(self.outdir),
         )
         _run_decode_pass(_fake_result(), engine=mock.Mock(), args=args)
- 
+
         files = sorted(self.outdir.glob("*"))
         # One main .txt and one .iocs.txt sidecar.
         self.assertEqual(len(files), 2)
@@ -507,12 +518,11 @@ class HashesModeTests(_DecodeFlowTestBase):
         # Main file is FINDINGS_<ts>_<target>.txt
         # Sidecar is FINDINGS_<ts>_<target>.iocs.txt
         self.assertTrue(any(n.endswith(".iocs.txt") for n in names))
-        self.assertTrue(any(
-            n.endswith(".txt") and not n.endswith(".iocs.txt")
-            for n in names
-        ))
+        self.assertTrue(
+            any(n.endswith(".txt") and not n.endswith(".iocs.txt") for n in names)
+        )
         self.mock_write_archive.assert_not_called()
- 
+
     def test_sidecar_contains_hash_records(self):
         self.tree_to_return = _tree_with_nodes()
         args = _make_args(
@@ -520,13 +530,13 @@ class HashesModeTests(_DecodeFlowTestBase):
             decode_location=str(self.outdir),
         )
         _run_decode_pass(_fake_result(), engine=mock.Mock(), args=args)
- 
+
         sidecars = list(self.outdir.glob("*.iocs.txt"))
         self.assertEqual(len(sidecars), 1)
         content = sidecars[0].read_text()
         self.assertIn("decoded_sha256", content)
         self.assertIn("original_sha256", content)
- 
+
     def test_skips_when_tree_empty(self):
         self.tree_to_return = _empty_tree()
         args = _make_args(
@@ -534,26 +544,29 @@ class HashesModeTests(_DecodeFlowTestBase):
             decode_location=str(self.outdir),
         )
         _run_decode_pass(_fake_result(), engine=mock.Mock(), args=args)
- 
+
         self.assertFalse(self.outdir.exists() and any(self.outdir.iterdir()))
         self.mock_write_archive.assert_not_called()
- 
- 
+
+
 # ---------------------------------------------------------------------------
 # mode == full
 # ---------------------------------------------------------------------------
- 
+
+
 class FullModeTests(_DecodeFlowTestBase):
- 
+
     def setUp(self) -> None:
         super().setUp()
+
         # Make write_encrypted_zip actually create a (placeholder)
         # file at its target path so the tmp.replace() call has
         # something to work with.
         def fake_write(path, entries, *, password, compression):
             Path(path).write_bytes(b"FAKE_ZIP")
+
         self.mock_write_archive.side_effect = fake_write
- 
+
     def test_writes_archive_and_sidecar_when_tree_has_nodes(self):
         self.tree_to_return = _tree_with_nodes()
         args = _make_args(
@@ -561,17 +574,17 @@ class FullModeTests(_DecodeFlowTestBase):
             decode_location=str(self.outdir),
         )
         _run_decode_pass(_fake_result(), engine=mock.Mock(), args=args)
- 
+
         # Archive writer should have been called once.
         self.mock_write_archive.assert_called_once()
- 
+
         # Final files in the directory: <archive>.zip and <stem>.iocs.txt.
         files = sorted(self.outdir.glob("*"))
         suffixes = sorted(f.suffix for f in files if f.is_file())
         self.assertIn(".zip", suffixes)
         # Sidecar suffix is multi-part: .iocs.txt -> Path.suffix is .txt
         self.assertTrue(any(f.name.endswith(".iocs.txt") for f in files))
- 
+
     def test_archive_entries_have_three_files_in_subdir(self):
         self.tree_to_return = _tree_with_nodes()
         args = _make_args(
@@ -579,11 +592,11 @@ class FullModeTests(_DecodeFlowTestBase):
             decode_location=str(self.outdir),
         )
         _run_decode_pass(_fake_result(), engine=mock.Mock(), args=args)
- 
+
         call = self.mock_write_archive.call_args
         # The entries arg is positional[1] in our signature.
         entries = call.args[1] if len(call.args) > 1 else call.kwargs["entries"]
- 
+
         names = [name for (name, _) in entries]
         self.assertEqual(len(names), 3)
         # All three should share a subdirectory prefix derived from
@@ -593,7 +606,7 @@ class FullModeTests(_DecodeFlowTestBase):
         # Filenames inside.
         leaves = sorted(n.split("/")[-1] for n in names)
         self.assertEqual(leaves, ["iocs.txt", "report.txt", "sources.txt"])
- 
+
     def test_password_and_compression_forwarded(self):
         self.tree_to_return = _tree_with_nodes()
         args = _make_args(
@@ -603,11 +616,11 @@ class FullModeTests(_DecodeFlowTestBase):
             decode_archive_stored=True,
         )
         _run_decode_pass(_fake_result(), engine=mock.Mock(), args=args)
- 
+
         call = self.mock_write_archive.call_args
         self.assertEqual(call.kwargs["password"], "burritos")
         self.assertEqual(call.kwargs["compression"], "stored")
- 
+
     def test_atomic_write_targets_tmp_first(self):
         self.tree_to_return = _tree_with_nodes()
         args = _make_args(
@@ -615,7 +628,7 @@ class FullModeTests(_DecodeFlowTestBase):
             decode_location=str(self.outdir),
         )
         _run_decode_pass(_fake_result(), engine=mock.Mock(), args=args)
- 
+
         # The path passed to write_encrypted_zip should end in .tmp,
         # NOT in .zip. The .replace() call moves it into place.
         call = self.mock_write_archive.call_args
@@ -624,7 +637,7 @@ class FullModeTests(_DecodeFlowTestBase):
             path_arg.endswith(".tmp"),
             f"expected write_encrypted_zip target to be a .tmp path, got {path_arg}",
         )
- 
+
     def test_writes_stub_archive_when_tree_empty(self):
         self.tree_to_return = _empty_tree()
         args = _make_args(
@@ -632,15 +645,15 @@ class FullModeTests(_DecodeFlowTestBase):
             decode_location=str(self.outdir),
         )
         _run_decode_pass(_fake_result(), engine=mock.Mock(), args=args)
- 
+
         # NOFINDINGS still produces an archive in full mode.
         self.mock_write_archive.assert_called_once()
- 
+
         # The archive filename has NOFINDINGS as the status prefix.
         call = self.mock_write_archive.call_args
         path_arg = call.args[0]
         self.assertIn("NOFINDINGS_", path_arg)
- 
+
     def test_inner_subdir_uses_sanitized_target_name(self):
         self.tree_to_return = _tree_with_nodes()
         args = _make_args(
@@ -652,7 +665,7 @@ class FullModeTests(_DecodeFlowTestBase):
             engine=mock.Mock(),
             args=args,
         )
- 
+
         call = self.mock_write_archive.call_args
         entries = call.args[1] if len(call.args) > 1 else call.kwargs["entries"]
         prefix = entries[0][0].split("/")[0]
@@ -660,14 +673,15 @@ class FullModeTests(_DecodeFlowTestBase):
         self.assertNotIn("+", prefix)
         self.assertNotIn("@", prefix)
         self.assertIn("evil-pkg", prefix)
- 
- 
+
+
 # ---------------------------------------------------------------------------
 # JSON format
 # ---------------------------------------------------------------------------
- 
+
+
 class JsonFormatTests(_DecodeFlowTestBase):
- 
+
     def test_json_format_writes_single_json_file_in_off_mode(self):
         self.tree_to_return = _tree_with_nodes()
         args = _make_args(
@@ -676,12 +690,12 @@ class JsonFormatTests(_DecodeFlowTestBase):
             decode_location=str(self.outdir),
         )
         _run_decode_pass(_fake_result(), engine=mock.Mock(), args=args)
- 
+
         files = list(self.outdir.glob("*"))
         self.assertEqual(len(files), 1)
         self.assertEqual(files[0].suffix, ".json")
         self.mock_write_archive.assert_not_called()
- 
+
     def test_json_format_writes_single_json_file_in_full_mode_too(self):
         # JSON output carries IOC data inline, so the three-file
         # split doesn't apply. JSON is always one file.
@@ -692,19 +706,20 @@ class JsonFormatTests(_DecodeFlowTestBase):
             decode_location=str(self.outdir),
         )
         _run_decode_pass(_fake_result(), engine=mock.Mock(), args=args)
- 
+
         files = list(self.outdir.glob("*"))
         self.assertEqual(len(files), 1)
         self.assertEqual(files[0].suffix, ".json")
         self.mock_write_archive.assert_not_called()
- 
- 
+
+
 # ---------------------------------------------------------------------------
 # min-severity filter integration
 # ---------------------------------------------------------------------------
- 
+
+
 class MinSeverityFilterTests(_DecodeFlowTestBase):
- 
+
     def test_filter_runs_after_decode_not_before(self):
         # If filter ran before decode, decode_payloads would be
         # called with extract_iocs=False or similar gated behavior.
@@ -729,7 +744,9 @@ class MinSeverityFilterTests(_DecodeFlowTestBase):
             ioc_data=None,
         )
         self.tree_to_return = DecodedTree(
-            target="litellm.whl", max_depth=3, nodes=(node_low,),
+            target="litellm.whl",
+            max_depth=3,
+            nodes=(node_low,),
         )
         args = _make_args(
             decode_iocs="off",
@@ -737,16 +754,14 @@ class MinSeverityFilterTests(_DecodeFlowTestBase):
             min_severity="high",
         )
         _run_decode_pass(_fake_result(), engine=mock.Mock(), args=args)
- 
+
         # Decode was called.
         self.mock_decode.assert_called_once()
         # The filter pruned the low-severity node, so the tree is
         # empty post-filter and we hit the skip path.
         self.assertIn("at or above --min-severity=high", self.stderr_text())
-        self.assertFalse(
-            self.outdir.exists() and any(self.outdir.iterdir())
-        )
- 
+        self.assertFalse(self.outdir.exists() and any(self.outdir.iterdir()))
+
     def test_keep_for_context_preserves_low_parent_with_critical_child(self):
         # The filter's "keep for context" rule means a low-severity
         # outer with a critical descendant survives. We verify the
@@ -771,7 +786,9 @@ class MinSeverityFilterTests(_DecodeFlowTestBase):
         )
         low_parent = _node_with_ioc(severity="low", children=(crit_child,))
         self.tree_to_return = DecodedTree(
-            target="litellm.whl", max_depth=3, nodes=(low_parent,),
+            target="litellm.whl",
+            max_depth=3,
+            nodes=(low_parent,),
         )
         args = _make_args(
             decode_iocs="off",
@@ -779,18 +796,19 @@ class MinSeverityFilterTests(_DecodeFlowTestBase):
             min_severity="high",
         )
         _run_decode_pass(_fake_result(), engine=mock.Mock(), args=args)
- 
+
         # File should exist; the low parent stays for context.
         files = list(self.outdir.glob("*"))
         self.assertEqual(len(files), 1)
- 
- 
+
+
 # ---------------------------------------------------------------------------
 # _sidecar_iocs_path helper
 # ---------------------------------------------------------------------------
- 
+
+
 class SidecarIocsPathTests(unittest.TestCase):
- 
+
     def test_replaces_zip_with_iocs_txt(self):
         main = Path("/tmp/x/FINDINGS_2026-04-29_14-30-45_litellm.whl.zip")
         sidecar = _sidecar_iocs_path(main)
@@ -799,7 +817,7 @@ class SidecarIocsPathTests(unittest.TestCase):
             "FINDINGS_2026-04-29_14-30-45_litellm.whl.iocs.txt",
         )
         self.assertEqual(sidecar.parent, main.parent)
- 
+
     def test_replaces_txt_with_iocs_txt(self):
         main = Path("/tmp/x/FINDINGS_2026-04-29_14-30-45_litellm.whl.txt")
         sidecar = _sidecar_iocs_path(main)
@@ -807,7 +825,7 @@ class SidecarIocsPathTests(unittest.TestCase):
             sidecar.name,
             "FINDINGS_2026-04-29_14-30-45_litellm.whl.iocs.txt",
         )
- 
+
     def test_handles_filename_with_multiple_dots(self):
         # Last-suffix replacement only.
         main = Path("/tmp/x/FINDINGS_litellm-1.82.8-py3-none-any.whl.zip")
@@ -816,7 +834,7 @@ class SidecarIocsPathTests(unittest.TestCase):
             sidecar.name,
             "FINDINGS_litellm-1.82.8-py3-none-any.whl.iocs.txt",
         )
- 
- 
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1,4 +1,4 @@
-"""pydepgate.cli.decode_args
+"""pydepgate.cli.command_handlers.decode_args
 
 Argparse helpers and validation for the --decode-payload-depth feature.
 
@@ -79,7 +79,6 @@ import argparse
 import os
 import sys
 from typing import TextIO
-
 
 # Env var names. Constants so tests can reference them without retyping.
 ENV_DECODE_DEPTH = "PYDEPGATE_DECODE_PAYLOAD_DEPTH"
@@ -244,7 +243,9 @@ def add_decode_arguments(
         default_archive_stored = argparse.SUPPRESS
     else:
         default_depth = _env_int(
-            ENV_DECODE_DEPTH, _DECODE_DEPTH_UNSET, stderr=stderr,
+            ENV_DECODE_DEPTH,
+            _DECODE_DEPTH_UNSET,
+            stderr=stderr,
         )
         default_location = _env_str(ENV_DECODE_LOCATION, None)
         default_format = _env_str(ENV_DECODE_FORMAT, DEFAULT_DECODE_FORMAT)
@@ -256,7 +257,8 @@ def add_decode_arguments(
             default_format = DEFAULT_DECODE_FORMAT
         default_iocs = _env_iocs(stderr=stderr)
         default_archive_password = _env_str(
-            ENV_DECODE_ARCHIVE_PASSWORD, DEFAULT_ARCHIVE_PASSWORD,
+            ENV_DECODE_ARCHIVE_PASSWORD,
+            DEFAULT_ARCHIVE_PASSWORD,
         )
         default_archive_stored = False
 
@@ -267,7 +269,7 @@ def add_decode_arguments(
         "(LiteLLM 1.82.8 has at least two: an outer base64 payload "
         "whose decoded Python source contains a second base64 payload "
         "which decodes to the actual exfiltration code). Requires "
-        "--peek; the decoded-payload driver consumes peek's output."
+        "--peek; the decoded-payload driver consumes peek's output.",
     )
 
     group.add_argument(
@@ -449,7 +451,9 @@ def validate_decode_args(
     location = getattr(args, "decode_location", None)
     fmt = getattr(args, "decode_format", DEFAULT_DECODE_FORMAT)
     iocs = decode_iocs_mode(args)
-    archive_password = getattr(args, "decode_archive_password", DEFAULT_ARCHIVE_PASSWORD)
+    archive_password = getattr(
+        args, "decode_archive_password", DEFAULT_ARCHIVE_PASSWORD
+    )
     archive_password_set = (
         archive_password is not None
         and archive_password != ""
@@ -457,10 +461,7 @@ def validate_decode_args(
     )
     archive_stored = bool(getattr(args, "decode_archive_stored", False))
 
-    fmt_was_explicit = (
-        location is not None or
-        fmt != DEFAULT_DECODE_FORMAT
-    )
+    fmt_was_explicit = location is not None or fmt != DEFAULT_DECODE_FORMAT
 
     # Deprecation notice for the bare --decode-iocs spelling. This
     # fires regardless of whether the decode pass is enabled, so the
@@ -489,7 +490,7 @@ def validate_decode_args(
                 f"{MAX_DECODE_DEPTH}; got {depth}. Beyond this, the "
                 f"recursion is far past any real attack pattern; "
                 f"use --peek-budget if you need to inspect a single "
-                f"very large payload."
+                f"very large payload.",
             )
         # Hard error: depth is set but peek is off.
         peek_on = bool(getattr(args, "peek", False))
@@ -499,7 +500,7 @@ def validate_decode_args(
                 "--decode-payload-depth requires --peek to be "
                 "enabled. The decoded-payload driver consumes the "
                 "peek enricher's output; without --peek there is "
-                "nothing to decode."
+                "nothing to decode.",
             )
 
         # Soft warnings about archive flags that have no effect
@@ -532,7 +533,7 @@ def validate_decode_args(
             f"--decode-iocs={iocs} requires --peek to be enabled. "
             f"IOC extraction operates on the peek enricher's "
             f"decoded output; without --peek there is nothing to "
-            f"hash."
+            f"hash.",
         )
 
     # Soft warning path: depth is disabled, but other decode flags
