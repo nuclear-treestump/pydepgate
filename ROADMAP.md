@@ -1,160 +1,209 @@
 # pydepgate roadmap
 
-This document describes the build plan for pydepgate. It is a living document;
-scope and ordering may change as the project develops. The versioning scheme
-matches the phased delivery: v0.1 is the first usable release, v1.0 is the
-first release suitable for public recommendation.
+This document describes the forward trajectory of pydepgate. For what has
+already shipped, see [CHANGELOG.md](CHANGELOG.md).
 
-## Current state
+The version numbers in this document are targets, not commitments.
+Pre-1.0 versions reserve the right to make breaking changes to the public
+API surface (CLI flags, JSON schema, SARIF schema, exit codes, rule
+schema) within minor version bumps. After 1.0, breaking changes go
+through a formal deprecation cycle.
 
-**v0.0.1 - Foundation**
+## Where this document came from
 
-- [x] Project skeleton and `src/` layout
-- [x] `.pth` parser (`pydepgate.parsers.pth`)
-- [x] Fourteen `.pth` test fixtures with generator script
-- [x] Parser test harness (safety, classification, encoding, line endings,
-      manifest-driven fixture validation)
+The previous version of this file was written before any code existed. It
+described a five-version build plan with neat phase boundaries, intended
+features per version, and acceptance criteria. Reality outpaced the plan
+within weeks.
 
-Nothing else. No rules, no engines, no CLI, no runtime mode.
+The original plan said v0.4.0 would deliver runtime mode (PEP 578 audit
+hooks, build-time manifests, policy enforcement). v0.4.0 is shipping
+SARIF 2.1.0 instead. The original plan said SARIF was a v1.0.0 feature.
+The original plan said the density layer (32 rules across DENS001-051)
+did not exist; it does. The original plan did not anticipate recursive
+payload decoding, encrypted-archive output, pre-commit hooks, the rules
+engine with TOML/JSON loading and predicate operators, or the
+content-blind SARIF emission. All of those shipped.
 
-## v0.1.0 - Static analysis for `.pth` files
+This rewrite reflects where the project actually is, what is queued, and
+what slipped. It is meant to be coherent against today's source rather
+than a clean projection from a starting point that no longer applies.
 
-The first usable release. Goal: given a wheel, report on suspicious `.pth`
-content.
+## Current state: v0.4.0
 
-- [ ] Data model (`pydepgate.model`): `Severity`, `Finding`, `ScanResult`,
-      `ScanContext`
-- [ ] Rule base class and registry (`pydepgate.rules`)
-- [ ] First rule: PTH005 (oversized `.pth` file) — trivial, proves the pipeline
-- [ ] Remaining `.pth` rules: PTH001 (subprocess), PTH002 (base64+exec),
-      PTH003 (multi-exec), PTH004 (networking)
-- [ ] Wheel unpacker (`pydepgate.parsers.wheel`)
-- [ ] Static engine (`pydepgate.engines.static`)
-- [ ] Minimal CLI (`pydepgate static <wheel>`)
-- [ ] Human-readable reporter with ANSI output
-- [ ] JSON reporter
-- [ ] README updated with usage examples
+The static analysis pipeline is functional end-to-end against wheels,
+sdists, installed packages, and loose files. The output formats are
+human-readable terminal, JSON v3, and SARIF 2.1.0. The recursive payload
+decoder reconstructs multi-layer attack chains. The rules engine
+supports user-supplied TOML or JSON rule files with predicate operators
+and typo suggestions. Five production analyzers cover encoding abuse,
+dynamic execution, string obfuscation, suspicious stdlib usage, and the
+density layer. The default rule set ships 32 rules dedicated to density
+signals.
 
-**Acceptance criteria:** `pydepgate static <wheel>` on a wheel containing a
-synthetic LiteLLM-shaped payload reports all applicable PTH findings with
-accurate line numbers, severities, and rule IDs. Zero third-party
-dependencies. Full test coverage on the rule engine and static engine.
+For the full feature list see the README "What works today" section. For
+the chronological account of how things landed see CHANGELOG.
 
-## v0.2.0 - Preflight mode
+## Versioning
 
-Extend static analysis to installed environments.
+- **0.4.x** patches and minor performance work. No breaking changes.
+- **0.5.0 onward** new feature surfaces. Pre-1.0 still reserves
+  breaking-change rights but in practice these have been confined to
+  schema field additions and CLI flag additions, both backwards-
+  compatible for sane consumers.
+- **1.0.0** the API-stability inflection point. CLI flags, JSON schema,
+  SARIF schema, exit codes, and the rule-engine schema all become
+  formally stable with deprecation-cycle requirements before any
+  breaking change.
 
-- [ ] Sdist unpacker (`pydepgate.parsers.sdist`)
-- [ ] Dist-info / egg-info reader (`pydepgate.parsers.dist_info`)
-- [ ] Environment walker (`pydepgate.engines.preflight`)
-- [ ] `pydepgate preflight` CLI subcommand
-- [ ] Cross-check against known-bad feeds (OSV, optional)
-- [ ] `--all-environments` flag to scan every Python install on the host
-- [ ] Exit code differentiation: 0 clean, 1 findings, 2 blocking, 3 tool error
+## v0.4.x: stabilization and parallelism
 
-**Acceptance criteria:** `pydepgate preflight` on a machine with a deliberately
-installed inert LiteLLM-shaped package correctly identifies the `.pth` file
-and reports findings. No false positives on a clean environment with
-setuptools editable installs and common packages.
+- [ ] Engine parallelism. No later than v0.4.5. The picklability
+      contract for `FileScanInput`/`FileScanOutput` has been preserved
+      since v0.1, so the per-file scan phase can move to a process pool
+      without engine refactoring. Target is meaningful speedup on
+      multi-megabyte wheels with thousands of internal files. No CLI
+      changes; opt-in via a flag with conservative default worker
+      count.
+- Routine bug fixes, documentation refinements, dependency-free minor
+  performance work.
 
-## v0.3.0 - Additional startup vectors
+## v0.5.0: SIEM emission
 
-Expand beyond `.pth` to the full startup-vector surface.
+- [ ] SIEM emission layer. First-class HEC integration for Splunk with
+      CIM-compliant data models so findings populate Enterprise Security
+      correctly rather than appearing as raw JSON. Elastic, Datadog, and
+      Sentinel emission planned alongside.
 
-- [ ] `setup.py` parser and rules (command-overwriting, module-level exec,
-      network imports)
-- [ ] `__init__.py` top-level analyzer and rules
-- [ ] `sitecustomize.py` / `usercustomize.py` detection and rules
-- [ ] Console-script entry-point analyzer and rules
-- [ ] Expanded fixture corpus covering each vector
+The SIEM work is bounded; once shipped it should not need significant
+expansion until customers ask for additional vendor backends.
 
-**Acceptance criteria:** Static and preflight modes catch all five attack
-classes catalogued under T1546.018. Rule documentation enumerates every
-heuristic with rationale and MITRE mapping.
+## v0.6.0: analyzer expansion and dependency-graph awareness
 
-## v0.4.0 - Runtime mode
+The exact contents of this version are not yet pinned. The candidate
+pool, drawn from items currently flagged "in active development" in the
+README:
 
-The differentiator. Wrap `python` itself with interdiction.
+- [ ] `comment_analysis` analyzer. Detection of payloads hidden in
+      comments and docstrings beyond what DENS050/DENS051 already cover.
+- [ ] Aliased import resolution. Catches `from subprocess import Popen
+      as P` and similar evasions that currently slip past the dynamic-
+      execution analyzer.
+- [ ] Preflight mode. Environment-walking variant of the static engine
+      that scans every importable package in a Python install. Different
+      engine path from the artifact-scanning entry points; reuses the
+      analyzer set unchanged.
+- [ ] Transitive-dependency audit subcommand. Pip-wrapper or standalone
+      `audit` subcommand that resolves a dependency graph and scans each
+      reachable package.
 
-- [ ] Self-integrity subsystem (`pydepgate.integrity`)
-- [ ] Build-time manifest generation (SHA256 of every file in the package)
-- [ ] Bootstrap chain: re-exec with `-S -I`, verify self, freeze critical refs,
-      install hooks, run instrumented `site.main()`, run user script
-- [ ] PEP 578 audit hook manager (`pydepgate.engines.runtime`)
-- [ ] `site.addpackage` shim with policy enforcement
-- [ ] Policy modes: `--enforce` (block), `--warn` (log), `--audit` (SARIF)
-- [ ] `pydepgate exec <script>` CLI subcommand
-- [ ] Subprocess propagation: child Python processes inherit instrumentation
-- [ ] Benchmarks: happy-path overhead must stay under 100ms
+These items do not all need to land in 0.6.0. Some may slip to 0.6.x
+patches or to 0.7.x once runtime mode lands. The slot is a candidate
+pool, not a commitment.
 
-**Acceptance criteria:** `pydepgate exec --enforce target.py` in an environment
-containing a synthetic LiteLLM-shaped `.pth` file prevents the payload from
-executing and reports the interdiction. Clean-environment overhead is within
-budget. Self-integrity check fails closed when any pydepgate file is tampered.
+## v0.7.0: runtime mode
 
-## v1.0.0 - Polish and public release
+The marquee feature originally targeted for v0.4.0. The slip from v0.4
+to v0.7 was deliberate: getting the output formats, rules engine, and
+analyzer set right matters more than getting runtime interdiction
+shipped fast, because runtime mode depends on a stable data-shape and
+pluggability story to be useful. May land earlier than v0.7.0 if the
+intermediate work falls into place faster than expected.
 
-- [ ] SARIF 2.1.0 reporter with GitHub Advanced Security integration
-- [ ] Allowlist subsystem: bundled, project-level, and session-level
-- [ ] `pydepgate list-rules` and `pydepgate show-allowlist` introspection
-      commands
-- [ ] GitHub Action for CI integration
-- [ ] Comprehensive documentation: architecture, rule catalog, allowlist
-      workflow, threat model, limitations
-- [ ] Public sample corpus script (`scripts/verify_against_real_corpus.sh`)
-      demonstrating catches against real malicious packages in VM
-- [ ] Announcement blog post
-- [ ] License finalized
+- [ ] Self-integrity subsystem. Critical stdlib references captured into
+      locals before any untrusted code runs.
+- [ ] Build-time manifest generation. SHA256 of every file in the
+      package, signed, embedded.
+- [ ] Bootstrap chain. Re-exec with `-S -I`, verify self, freeze
+      critical refs, install hooks, run instrumented `site.main()`,
+      then user script.
+- [ ] PEP 578 audit hook manager.
+- [ ] `site.addpackage` shim with policy enforcement.
+- [ ] Policy modes: `--enforce` (block), `--warn` (log), `--audit`
+      (SARIF emission of would-block events).
+- [ ] `pydepgate exec <script>` CLI subcommand.
+- [ ] Subprocess propagation. Child Python processes inherit
+      instrumentation.
+- [ ] Performance budget. Happy-path overhead under 100ms;
+      benchmarked before merge.
 
-**Acceptance criteria:** A developer can install pydepgate from PyPI, run
-`pydepgate preflight`, and get a useful report within 10 seconds on a typical
-environment. A CI pipeline can integrate pydepgate via GitHub Action with a
-single YAML block. The rule catalog page lists every heuristic with clear
-rationale.
+Runtime mode requires the picklability contract that v0.4.x parallelism
+will validate, the SARIF emission that v0.4.0 ships (for `--audit`
+output), and the rules engine that v0.3.0 shipped. The dependency chain
+is why runtime mode lives at v0.7 rather than v0.4.
+
+## v1.0.0: API stability
+
+The transition from "moves fast and breaks things on minor version
+bumps" to "deprecation-cycle-bound stability."
+
+- [ ] Stability promises for CLI flags, JSON schema, SARIF schema,
+      exit codes, rule-engine schema. Breaking changes only via
+      deprecation cycle.
+- [ ] Comprehensive documentation: architecture document, formal threat
+      model, complete rule catalog with rationale and MITRE mapping,
+      consumer guide for downstream tooling.
+- [ ] Public sample corpus script demonstrating catches against real
+      malicious packages in a disposable VM.
+- [ ] Announcement post.
+- [ ] License finalized (currently Apache 2.0; no anticipated change).
+
+Acceptance criterion: a downstream tool consuming pydepgate's JSON or
+SARIF output can rely on the schema for the duration of the 1.x line.
 
 ## Beyond v1.0
 
-Not committed to ordering or scope. These are candidates, not promises.
-
-- **Rust-accelerated hot paths.** Audit hook dispatch and manifest
-  verification are the performance-sensitive components; porting them to a
-  C extension or Rust module could reduce overhead further. Violates
-  zero-dependency for users unless the extension is optional.
-
-- **Stronger self-integrity.** Move the trust anchor from a Python constant
-  to a compiled C extension to raise the cost of evasion. Same tradeoff.
-
-- **Pickle, torch, and ML-model vectors.** Extend the static engine to cover
-  pickle-based attack surfaces (overlapping with picklescan's scope, but
-  integrated into pydepgate's pipeline).
-
-- **PyDepGuard integration.** Refactor pydepgate's engines into loadable
-  modules that PyDepGuard can consume directly, making pydepgate a
-  reference implementation of the startup-vector subsystem.
-
-- **Windows-specific hardening.** `.pth` files behave slightly differently
-  on Windows (file locking, path separators); dedicated testing and rules.
-
-- **IDE integration.** Language-server mode for real-time feedback in
-  editors when a `.pth` file is opened.
-
-- **Threat intelligence feed.** A published, signed, regularly-updated feed
-  of known-bad package hashes for the preflight known-bad check.
+Not committed. PyDepGuard integration remains a long-term direction.
+Other directions will surface as the project matures and as user demand
+makes priorities clearer.
 
 ## Principles
 
-Decisions about scope, features, and tradeoffs should be evaluated against:
+Decisions about scope, features, and tradeoffs are evaluated against
+these criteria. They are derived from the constraints that have shaped
+the project to date, rewritten to match where it is rather than where
+the original plan thought it would be.
 
-1. **Does this preserve zero runtime dependencies for users?** If not, it
-   goes in a separate optional package or gets rejected.
-2. **Does this preserve the under-100ms overhead budget for `exec` mode?**
-   Benchmark before merging anything that touches the hot path.
-3. **Does this improve the structural robustness of the tool?** A feature
-   that catches more attacks at the cost of being easier to evade is a net
-   loss.
-4. **Is this independently testable?** Features that require elaborate
-   end-to-end setup to verify tend to rot. Prefer capabilities expressible
-   as pure-function rules over those that require orchestration.
-5. **Does this match the product story?** pydepgate is a lightweight runner
-   that interdicts suspicious startup behavior. Features that don't serve
-   that story belong in PyDepGuard, not here.
+1. **Zero runtime dependencies for users.** The standard library only.
+   This is a load-bearing constraint, not a stylistic preference: every
+   additional dependency is a supply-chain attack surface for a tool
+   whose job is to defend against supply-chain attacks. CI, build, and
+   test dependencies are not constrained; runtime is.
+
+2. **Safe by construction.** Parsers, the partial evaluator, and the
+   payload-peek and decode loops never execute, compile, or import
+   input content. Every operation modeled by the resolver is
+   reimplemented from scratch using only Python builtins on values the
+   resolver itself produced. Pickle data is detected, never
+   deserialized.
+
+3. **Content-blind output.** SARIF and JSON output describe what was
+   detected behaviorally, not what content was matched. Argument
+   values, URLs, command lines, and literal payload bytes never appear
+   in output that flows into CI logs or public artifact uploads. A
+   defender can publish output without re-leaking the underlying
+   attack content.
+
+4. **Performance budgets are per-mode and benchmarked.** Static
+   analysis runs in roughly twenty seconds for the full test suite on a
+   2 core 8 GB Github Codespace. SARIF validation against the Microsoft Multitool
+   adds CI cost but not user-facing cost. Runtime mode (v0.7.0
+   target) carries a happy-path overhead budget under 100ms;
+   benchmarks land before any feature that touches that hot path.
+
+5. **Independently testable.** Features that require elaborate
+   end-to-end orchestration to verify tend to rot. Capabilities
+   expressible as pure-function rules over parsed representations are
+   strongly preferred over those that require integration setup.
+
+6. **Structural robustness over feature breadth.** A feature that
+   catches more attacks at the cost of being easier to evade is a net
+   loss. The "harder they hide it the stronger the signal" model
+   stays load-bearing.
+
+7. **Match the product story.** pydepgate is a static and (in v0.7+) a
+   runtime analyzer for the Python startup-vector attack surface.
+   Features that don't serve that story belong in PyDepGuard, not
+   here. PyDepGuard's broader runtime-sandboxing and dependency-
+   management scope is a deliberate separation, not a tracking
+   inadequacy.
