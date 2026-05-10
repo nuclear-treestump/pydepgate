@@ -13,7 +13,7 @@ name: SARIF validation
 #                     wheel without local .NET setup.
 #
 # The workflow does NOT scan real malware. The fixtures are
-# synthesized from scripts/build_sarif_fixtures.py and contain
+# synthesized from scripts/make_sarif_fixtures.py and contain
 # benign content that pattern-matches as suspicious to pydepgate's
 # analyzers (high-entropy literals, base64 chains decoding to a
 # harmless echo command). This keeps CI artifacts safe to share
@@ -79,7 +79,7 @@ jobs:
       - name: Build fixtures and scan
         if: github.event.inputs.target == ''
         run: |
-          python scripts/build_sarif_fixtures.py /tmp/sarif-fixtures
+          python scripts/make_sarif_fixtures.py /tmp/sarif-fixtures
 
           # Clean fixture: no decode flags.
           pydepgate scan \
