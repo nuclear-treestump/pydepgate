@@ -20,22 +20,26 @@ from pydepgate.cli.subcommands import (
     preflight,
     scan,
     version,
-    explain
+    explain,
 )
 from pydepgate.cli.subcommands.version import get_version
 
-from pydepgate.cli.peek_args import (
+from pydepgate.cli.command_handlers.peek_args import (
     add_peek_arguments,
     build_peek_enricher,
     peek_chain_enabled,
     validate_peek_args,
 )
-from pydepgate.cli.decode_args import (
+from pydepgate.cli.command_handlers.decode_args import (
     add_decode_arguments,
     decode_enabled,
     validate_decode_args,
 )
 
+from pydepgate.cli.command_handlers.sarif_args import (
+    add_sarif_arguments,
+    validate_sarif_args,
+)
 
 # Color mode constants. Used as the values of args.color and as the
 # argparse choices. Exposed at module level so tests and the reporter
@@ -129,8 +133,7 @@ def _add_global_flags(
         choices=("human", "json", "sarif"),
         default=format_default,
         help=(
-            "Output format. Default: human (json under --ci). "
-            "Env: PYDEPGATE_FORMAT"
+            "Output format. Default: human (json under --ci). " "Env: PYDEPGATE_FORMAT"
         ),
     )
 
@@ -175,10 +178,7 @@ def _add_global_flags(
         "--min-severity",
         choices=("info", "low", "medium", "high", "critical"),
         default=min_severity_default,
-        help=(
-            "Suppress findings below this severity. "
-            "Env: PYDEPGATE_MIN_SEVERITY"
-        ),
+        help=("Suppress findings below this severity. " "Env: PYDEPGATE_MIN_SEVERITY"),
     )
     parser.add_argument(
         "--strict-exit",
@@ -191,27 +191,27 @@ def _add_global_flags(
     )
 
     parser.add_argument(
-            "--rules-file",
-            default=(
-                argparse.SUPPRESS if is_subparser
-                else _env_str("PYDEPGATE_RULES_FILE")
-            ),
-            help=(
-                "Path to a .gate rules file. Default: discover "
-                "pydepgate.gate in cwd or venv. Env: PYDEPGATE_RULES_FILE"
-            ),
-        )
+        "--rules-file",
+        default=(
+            argparse.SUPPRESS if is_subparser else _env_str("PYDEPGATE_RULES_FILE")
+        ),
+        help=(
+            "Path to a .gate rules file. Default: discover "
+            "pydepgate.gate in cwd or venv. Env: PYDEPGATE_RULES_FILE"
+        ),
+    )
     parser.add_argument(
-            "--no-map",
-            action="store_true",
-            default=bool(os.environ.get("PYDEPGATE_NO_MAP")),
-            help=(
-                "Suppress the density map visualization in human output. "
-                "Env: PYDEPGATE_NO_MAP"
-            ),
-        )
-    add_peek_arguments(parser, is_subparser=is_subparser)
-    add_decode_arguments(parser, is_subparser=is_subparser)
+        "--no-map",
+        action="store_true",
+        default=bool(os.environ.get("PYDEPGATE_NO_MAP")),
+        help=(
+            "Suppress the density map visualization in human output. "
+            "Env: PYDEPGATE_NO_MAP"
+        ),
+    )
+    add_peek_arguments(parser, is_subparser=is_subparser)  # Peek args (--peek*)
+    add_decode_arguments(parser, is_subparser=is_subparser)  # Decode args (--decode*)
+    add_sarif_arguments(parser, is_subparser=is_subparser)  # SARIF args (--sarif*)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -284,7 +284,8 @@ def _run_help(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
         return 0
     # Find the subparser for the given topic and print its help.
     subparsers_actions = [
-        action for action in parser._actions
+        action
+        for action in parser._actions
         if isinstance(action, argparse._SubParsersAction)
     ]
     for sp_action in subparsers_actions:
@@ -320,6 +321,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     validate_peek_args(args)
     validate_decode_args(args)
+    validate_sarif_args(args)
 
     if not args.subcommand:
         parser.print_help()

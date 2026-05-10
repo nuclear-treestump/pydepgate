@@ -1,4 +1,4 @@
-"""pydepgate.cli.peek_args
+"""pydepgate.cli.command_handlers.peek_args
 
 Argparse helpers, environment-variable reading, validation, and
 enricher construction for the payload_peek feature.
@@ -59,7 +59,6 @@ from pydepgate.enrichers.payload_peek import (
     PayloadPeek,
 )
 
-
 # Hard ceiling on user-supplied depth. The unwrap loop's worst-case
 # work is O(max_depth * max_budget) bytes processed; capping depth
 # at 10 keeps a misconfigured run from churning indefinitely on a
@@ -78,6 +77,7 @@ ENV_PEEK_MIN_LENGTH = "PYDEPGATE_PEEK_MIN_LENGTH"
 # ---------------------------------------------------------------------------
 # Environment-variable parsing
 # ---------------------------------------------------------------------------
+
 
 def _truthy_env(value: str | None) -> bool:
     """True iff `value` is a recognized truthy string."""
@@ -124,6 +124,7 @@ def _env_int(
 # Argparse wiring
 # ---------------------------------------------------------------------------
 
+
 def add_peek_arguments(
     parser: argparse.ArgumentParser,
     *,
@@ -154,7 +155,9 @@ def add_peek_arguments(
         default_budget = _env_int(ENV_PEEK_BUDGET, DEFAULT_MAX_BUDGET, stderr=stderr)
         default_chain = _env_bool(ENV_PEEK_CHAIN, False)
         default_min_length = _env_int(
-            ENV_PEEK_MIN_LENGTH, DEFAULT_MIN_LENGTH, stderr=stderr,
+            ENV_PEEK_MIN_LENGTH,
+            DEFAULT_MIN_LENGTH,
+            stderr=stderr,
         )
 
     group = parser.add_argument_group(
@@ -240,6 +243,7 @@ def add_peek_arguments(
 # Post-parse validation
 # ---------------------------------------------------------------------------
 
+
 def validate_peek_args(
     args: argparse.Namespace,
     *,
@@ -290,8 +294,7 @@ def validate_peek_args(
     if args.peek_depth > PEEK_DEPTH_CEILING:
         _exit_with_error(
             stderr,
-            f"--peek-depth ceiling is {PEEK_DEPTH_CEILING}; "
-            f"got {args.peek_depth}",
+            f"--peek-depth ceiling is {PEEK_DEPTH_CEILING}; " f"got {args.peek_depth}",
         )
     if args.peek_budget < MIN_BUDGET_FLOOR:
         _exit_with_error(
@@ -317,6 +320,7 @@ def _exit_with_error(stderr: TextIO, message: str) -> None:
 # ---------------------------------------------------------------------------
 # Enricher construction
 # ---------------------------------------------------------------------------
+
 
 def build_peek_enricher(args: argparse.Namespace) -> PayloadPeek | None:
     """Construct a PayloadPeek configured per CLI args.

@@ -25,7 +25,7 @@ import os
 import unittest
 from unittest.mock import patch
 
-from pydepgate.cli.decode_args import (
+from pydepgate.cli.command_handlers.decode_args import (
     DECODE_IOCS_FULL,
     DECODE_IOCS_HASHES,
     DECODE_IOCS_OFF,
@@ -129,7 +129,8 @@ class HelperFunctionTests(unittest.TestCase):
     def test_decode_archive_password_default(self):
         ns = argparse.Namespace()
         self.assertEqual(
-            decode_archive_password(ns), DEFAULT_ARCHIVE_PASSWORD,
+            decode_archive_password(ns),
+            DEFAULT_ARCHIVE_PASSWORD,
         )
 
     def test_decode_archive_password_custom(self):
@@ -139,13 +140,15 @@ class HelperFunctionTests(unittest.TestCase):
     def test_decode_archive_password_empty_string_treated_as_default(self):
         ns = argparse.Namespace(decode_archive_password="")
         self.assertEqual(
-            decode_archive_password(ns), DEFAULT_ARCHIVE_PASSWORD,
+            decode_archive_password(ns),
+            DEFAULT_ARCHIVE_PASSWORD,
         )
 
     def test_decode_archive_password_none_treated_as_default(self):
         ns = argparse.Namespace(decode_archive_password=None)
         self.assertEqual(
-            decode_archive_password(ns), DEFAULT_ARCHIVE_PASSWORD,
+            decode_archive_password(ns),
+            DEFAULT_ARCHIVE_PASSWORD,
         )
 
     def test_decode_archive_compression_default_deflate(self):
