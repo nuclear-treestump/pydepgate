@@ -1,10 +1,13 @@
 title: pydepgate
 description: Static analyzer for Python supply-chain malware targeting interpreter startup vectors.
 repository: nuclear-treestump/pydepgate
-theme: just-the-docs
+remote_theme: just-the-docs/just-the-docs
 plugins:
   - jekyll-feed
   - jekyll-remote-theme
 
 color_scheme: dark
+search_enabled: true
+enable_copy_code_button: true
+
 
