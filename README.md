@@ -1,7 +1,7 @@
 
 # pydepgate
 
-[![PyPI](https://img.shields.io/pypi/v/pydepgate.svg)](https://pypi.org/project/pydepgate/)[![Downloads](https://pepy.tech/badge/pydepgate)](https://pepy.tech/project/pydepgate)[![Unit tests](https://github.com/nuclear-treestump/pydep-vector-runner/actions/workflows/do_unittests.yml/badge.svg)](https://github.com/nuclear-treestump/pydep-vector-runner/actions/workflows/do_unittests.yml)[![CodeQL Advanced](https://github.com/nuclear-treestump/pydep-vector-runner/actions/workflows/codeql.yml/badge.svg)](https://github.com/nuclear-treestump/pydep-vector-runner/actions/workflows/codeql.yml)[![docker-publish](https://github.com/nuclear-treestump/pydep-vector-runner/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/nuclear-treestump/pydep-vector-runner/actions/workflows/docker-publish.yml)[![CodeQL](https://github.com/nuclear-treestump/pydep-vector-runner/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/nuclear-treestump/pydep-vector-runner/actions/workflows/github-code-scanning/codeql)
+[![PyPI](https://img.shields.io/pypi/v/pydepgate.svg)](https://pypi.org/project/pydepgate/)[![Downloads](https://pepy.tech/badge/pydepgate)](https://pepy.tech/project/pydepgate)[![Unit tests](https://github.com/nuclear-treestump/pydep-vector-runner/actions/workflows/do_unittests.yml/badge.svg)](https://github.com/nuclear-treestump/pydep-vector-runner/actions/workflows/do_unittests.yml)[![SARIF validation](https://github.com/nuclear-treestump/pydep-vector-runner/actions/workflows/do_sarif_validation.yml/badge.svg)](https://github.com/nuclear-treestump/pydep-vector-runner/actions/workflows/do_sarif_validation.yml)[![CodeQL Advanced](https://github.com/nuclear-treestump/pydep-vector-runner/actions/workflows/codeql.yml/badge.svg)](https://github.com/nuclear-treestump/pydep-vector-runner/actions/workflows/codeql.yml)[![docker-publish](https://github.com/nuclear-treestump/pydep-vector-runner/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/nuclear-treestump/pydep-vector-runner/actions/workflows/docker-publish.yml)[![CodeQL](https://github.com/nuclear-treestump/pydep-vector-runner/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/nuclear-treestump/pydep-vector-runner/actions/workflows/github-code-scanning/codeql)
 
 **A lightweight Python runner that interdicts suspicious startup behavior.**
 
@@ -13,6 +13,42 @@ March 2026 LiteLLM supply-chain compromise and catalogued as
 <img width="1086" height="720" alt="Screen Recording 2026-04-28 091139" src="https://github.com/user-attachments/assets/28a737fd-4ba0-4401-b49e-5d84703cad25" />
 
 ## Recently Added
+
+### SARIF 2.1.0 output for GitHub Code Scanning
+
+`--format sarif` emits SARIF 2.1.0 documents that ingest into
+GitHub Code Scanning, Azure DevOps, and any other SARIF
+consumer that follows the OASIS spec. Each scan run produces
+a single document with the full rules catalog, per-finding
+results with severity-mapped levels and partial fingerprints
+for cross-run alert deduplication, and tool identity metadata.
+
+Findings reached through the recursive decode pipeline are
+surfaced as SARIF results with `codeFlows` describing the
+decode chain. A finding inside a 2-layer base64-decoded
+payload appears in the document with a single result whose
+threadFlow walks from the outer high-entropy literal through
+each decode layer to the innermost detection. This gives
+consumers like GitHub's "Show paths" UI a visualizable
+representation of the attack chain.
+
+`--sarif-srcroot PATH` populates `originalUriBaseIds.PROJECTROOT`
+in the emitted document and tags artifact locations with the
+matching `uriBaseId` so consumers resolve paths against a known
+source root. The flag has an environment variable equivalent
+(`PYDEPGATE_SARIF_SRCROOT`) and degrades gracefully when not
+set: paths emit unprefixed and the document remains valid.
+
+The SARIF emission is content-blind: messages describe what
+was called (`subprocess.run()`, `urllib.request.urlopen()`)
+without including arguments, URLs, or literal payload bytes.
+A defender can publish a SARIF document without re-leaking
+the underlying attack content. Validation against the
+Microsoft SARIF Multitool runs in CI on every PR, hard-failing
+on warnings to catch structural regressions before they ship.
+
+See the SARIF output section below for the flag table and
+example invocations.
 
 ### Recursive payload decoding with encrypted-archive output
 
@@ -121,7 +157,10 @@ iteration on individual files) and explain subcommands, environment
 variable support, configurable severity thresholds, and CI-friendly
 output modes.
 - Three output formats: human-readable terminal, JSON (schema v2), and
-a stub for SARIF (planned for v0.4).
+SARIF 2.1.0 with codeFlow encoding for decoded payload chains,
+GitHub-compatible severity mapping, partial fingerprints for alert
+deduplication, and content-blind message text. Validated in CI against
+the Microsoft SARIF Multitool.
 - Explicit color control via `--color={auto,always,never}` (or
 `PYDEPGATE_COLOR`), with `--no-color` preserved as an alias.
 `--color=always` forces ANSI codes through pipes for `less -R` and
@@ -144,7 +183,6 @@ What is in active development:
 - Environment auditing (`preflight` mode).
 - Aliased import resolution (`from subprocess import Popen as P`).
 - A pip-wrapper / transitive-dependency `audit` subcommand.
-- SARIF 2.1.0 output for GitHub code scanning and similar consumers.
 
 [Available on PyPI as pydepgate](https://pypi.org/project/pydepgate/).
 
@@ -334,6 +372,107 @@ Stacked layers (`base64 → zlib → python_source`) are intent. Default
 severities for ENC002 vary by file kind and unwrap status; see
 `pydepgate.rules.defaults` for the full table.
 
+### SARIF output
+
+SARIF 2.1.0 documents are emitted with `--format sarif` and
+contain the same findings as the JSON and human formats,
+structured for ingestion by GitHub Code Scanning, Azure
+DevOps, and other SARIF consumers. Each scan run produces a
+single SARIF document with the full rules catalog, per-finding
+results with severity-mapped levels and partial fingerprints,
+and tool identity metadata.
+
+| Flag | Env var | Default | Notes |
+|---|---|---|---|
+| `--format sarif` | `PYDEPGATE_FORMAT` | `human` | Emit SARIF instead of human or JSON. |
+| `--sarif-srcroot PATH` | `PYDEPGATE_SARIF_SRCROOT` | (none) | Source root used to populate `originalUriBaseIds.PROJECTROOT`. When set, on-disk artifact locations carry `uriBaseId: "PROJECTROOT"` so consumers resolve paths against this root. Empty string treated as unset. Soft-warns when set without `--format sarif`. |
+
+Basic usage:
+
+```bash
+pydepgate scan some-package.whl --format sarif > findings.sarif
+```
+
+With srcroot for path resolution and decode-pass integration:
+
+```bash
+pydepgate scan some-package.whl \
+    --format sarif \
+    --sarif-srcroot "$(pwd)" \
+    --peek \
+    --decode-payload-depth=4 \
+    > findings.sarif
+```
+
+#### What the document includes
+
+- One run per scan, with `automationDetails.id` of the form
+  `pydepgate/{artifact_kind}/` (e.g. `pydepgate/wheel/`,
+  `pydepgate/sdist_deep/`) for cross-run grouping. Deep
+  scans suffix `_deep` to distinguish from non-deep runs of
+  the same artifact kind.
+- Full rules catalog under `tool.driver.rules`, regardless
+  of which rules actually fired in the run, so consumers
+  can build UI for any rule pydepgate could emit.
+- Per-finding results with severity mapped to SARIF levels
+  (critical/high → `error`, medium → `warning`, low/info →
+  `note`), GitHub-compatible `security-severity` numeric
+  scores, and 24-character partial fingerprints for alert
+  deduplication across runs.
+- `codeFlows` for findings reached through encoded payload
+  layers. Each threadFlow walks from the outer literal
+  through each decode step to the innermost detection,
+  surfacing the attack chain in consumer UI.
+- `originalUriBaseIds.PROJECTROOT` declaration, populated
+  from `--sarif-srcroot` when set, empty placeholder URI
+  when not.
+
+#### What the document does not include
+
+- Argument values to dangerous calls. The message text
+  describes what was called (`subprocess.run()`,
+  `urllib.request.urlopen()`) but not what was passed (no
+  URLs, no command lines, no literal payload bytes). SARIF
+  documents flow into CI logs, code scanning UIs, and
+  artifact downloads; embedding payload content there
+  would replicate the exact threat the analyzer is
+  detecting.
+- Embedded source content under `artifacts[]`. The
+  document references locations but does not include
+  source bodies.
+- CWE taxonomy mappings. Each rule has descriptive `tags`
+  with the analyzer name; no formal taxonomy reference.
+
+The emission is content-blind by construction: an attacker
+cannot exfiltrate their payload through pydepgate's SARIF
+output even if a defender publishes the document.
+
+#### Validation
+
+The Microsoft SARIF Multitool validates pydepgate's
+emission in CI on every PR. Validation runs against three
+synthetic fixtures (clean scan, scan with findings, scan
+with multi-layer codeFlows) and hard-fails on any warning
+or error. The fixture builder lives at
+`scripts/build_sarif_fixtures.py` and produces wheels with
+benign content that pattern-matches as suspicious to the
+analyzer; no real malware is in the test corpus or the CI
+runner. The local equivalent of the workflow is
+`scripts/validate_sarif.sh`, which runs the same checks
+on a developer's machine given .NET SDK 8.0 or later.
+
+#### Consumption
+
+For ingestion into GitHub Code Scanning, pipe the SARIF
+output to the `github/codeql-action/upload-sarif` action.
+Pydepgate's exit code on findings is non-zero by default,
+so the scan step needs `continue-on-error: true` (or
+equivalent workflow-level handling) for the upload step
+to run. The exact wiring is your call; pydepgate emits the
+document, GitHub or your SARIF consumer ingests it. See
+GitHub's [Uploading a SARIF file to GitHub](https://docs.github.com/en/code-security/code-scanning/integrating-with-code-scanning/uploading-a-sarif-file-to-github)
+for the consumer side.
+
 ### Exit codes
 
 - `0` Clean. No findings (or no findings above `--min-severity`).
@@ -365,7 +504,8 @@ All flags can be set via environment variables. Explicit flags override environm
 | `PYDEPGATE_DECODE_FORMAT` | `--decode-format` |
 | `PYDEPGATE_DECODE_IOCS` | `--decode-iocs` |
 | `PYDEPGATE_DECODE_ARCHIVE_PASSWORD` | `--decode-archive-password` |
- 
+| `PYDEPGATE_SARIF_SRCROOT` | `--sarif-srcroot` |
+
 `--decode-archive-stored` deliberately has no environment variable;
 it is a per-investigation choice (use STORED when byte-verifiable
 archive contents matter for that specific investigation) rather than
