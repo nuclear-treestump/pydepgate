@@ -7,7 +7,6 @@ import subprocess
 import sys
 import unittest
 
-
 # ANSI escape sequence pattern. Used to assert the presence or
 # absence of color codes in CLI output. Matches the standard
 # CSI-style escape codes pydepgate emits (e.g. "\033[1m", "\033[0m",
@@ -46,28 +45,50 @@ class JsonFormatTests(unittest.TestCase):
     def test_json_schema_has_expected_top_level_keys(self):
         rc, out, err = _run_cli(["scan", "pip", "--format", "json"])
         payload = json.loads(out)
-        for key in ("schema_version", "artifact", "findings",
-                    "skipped", "statistics", "diagnostics"):
+        for key in (
+            "schema_version",
+            "artifact",
+            "findings",
+            "skipped",
+            "statistics",
+            "diagnostics",
+        ):
             self.assertIn(key, payload)
 
 
 class HumanFormatTests(unittest.TestCase):
 
     def test_human_format_clean_scan(self):
-        rc, out, err = _run_cli([
-            "scan", "pip", "--format", "human", "--no-color",
-        ])
+        rc, out, err = _run_cli(
+            [
+                "scan",
+                "pip",
+                "--format",
+                "human",
+                "--no-color",
+            ]
+        )
         self.assertEqual(rc, 0)
         self.assertIn("No findings", out)
 
 
-class SarifStubTests(unittest.TestCase):
+class SarifFormatTests(unittest.TestCase):
 
-    def test_sarif_format_emits_stub_message(self):
-        rc, out, err = _run_cli(["scan", "pip", "--format", "sarif"])
-        # SARIF stub returns TOOL_ERROR.
-        self.assertEqual(rc, 3)
-        self.assertIn("under development", out)
+    def test_sarif_format_clean_scan(self):
+        rc, out, err = _run_cli(
+            [
+                "scan",
+                "pip",
+                "--format",
+                "sarif",
+            ]
+        )
+        self.assertEqual(rc, 0)
+        # Output must parse as JSON.
+        payload = json.loads(out)
+        self.assertIn("$schema", payload)
+        self.assertIn("version", payload)
+        self.assertIn("runs", payload)
 
 
 # ===========================================================================
@@ -90,36 +111,65 @@ class SarifStubTests(unittest.TestCase):
 #   - Invalid --color values are rejected by argparse (exit 2).
 # ===========================================================================
 
+
 class ColorFlagTests(unittest.TestCase):
 
     # --- choice acceptance -------------------------------------------------
 
     def test_color_auto_accepted(self):
-        rc, out, err = _run_cli([
-            "scan", "pip", "--format", "human", "--color", "auto",
-        ])
+        rc, out, err = _run_cli(
+            [
+                "scan",
+                "pip",
+                "--format",
+                "human",
+                "--color",
+                "auto",
+            ]
+        )
         self.assertEqual(rc, 0)
         self.assertIn("No findings", out)
 
     def test_color_always_accepted(self):
-        rc, out, err = _run_cli([
-            "scan", "pip", "--format", "human", "--color", "always",
-        ])
+        rc, out, err = _run_cli(
+            [
+                "scan",
+                "pip",
+                "--format",
+                "human",
+                "--color",
+                "always",
+            ]
+        )
         self.assertEqual(rc, 0)
         self.assertIn("No findings", out)
 
     def test_color_never_accepted(self):
-        rc, out, err = _run_cli([
-            "scan", "pip", "--format", "human", "--color", "never",
-        ])
+        rc, out, err = _run_cli(
+            [
+                "scan",
+                "pip",
+                "--format",
+                "human",
+                "--color",
+                "never",
+            ]
+        )
         self.assertEqual(rc, 0)
         self.assertIn("No findings", out)
 
     def test_invalid_color_value_rejected(self):
         # Argparse should reject anything outside the choices set.
-        rc, out, err = _run_cli([
-            "scan", "pip", "--format", "human", "--color", "rainbow",
-        ])
+        rc, out, err = _run_cli(
+            [
+                "scan",
+                "pip",
+                "--format",
+                "human",
+                "--color",
+                "rainbow",
+            ]
+        )
         self.assertEqual(rc, 2)
         self.assertIn("invalid choice", err)
 
@@ -128,25 +178,47 @@ class ColorFlagTests(unittest.TestCase):
     def test_no_color_alias_still_works(self):
         # Backwards compatibility: existing CI configs and shell
         # aliases that pass --no-color must continue to function.
-        rc, out, err = _run_cli([
-            "scan", "pip", "--format", "human", "--no-color",
-        ])
+        rc, out, err = _run_cli(
+            [
+                "scan",
+                "pip",
+                "--format",
+                "human",
+                "--no-color",
+            ]
+        )
         self.assertEqual(rc, 0)
         self.assertNotRegex(out, _ANSI_RE)
 
     def test_no_color_produces_same_output_as_color_never(self):
-        rc1, out1, _ = _run_cli([
-            "scan", "pip", "--format", "human", "--no-color",
-        ])
-        rc2, out2, _ = _run_cli([
-            "scan", "pip", "--format", "human", "--color", "never",
-        ])
+        rc1, out1, _ = _run_cli(
+            [
+                "scan",
+                "pip",
+                "--format",
+                "human",
+                "--no-color",
+            ]
+        )
+        rc2, out2, _ = _run_cli(
+            [
+                "scan",
+                "pip",
+                "--format",
+                "human",
+                "--color",
+                "never",
+            ]
+        )
         self.assertEqual(rc1, rc2)
+
         # The statistics line includes a duration that varies between
         # runs. Strip it before comparing.
         def _strip_duration(text):
             return re.sub(r"\d+ms", "Nms", text)
+
         self.assertEqual(_strip_duration(out1), _strip_duration(out2))
+
     # --- always overrides redirection --------------------------------------
 
     def test_color_always_emits_ansi_under_redirection(self):
@@ -154,16 +226,30 @@ class ColorFlagTests(unittest.TestCase):
         # sys.stdout.isatty() returns False inside the child. Under
         # auto mode that suppresses color; under "always" it must
         # not. This is the headline test for --color=always.
-        rc, out, err = _run_cli([
-            "scan", "pip", "--format", "human", "--color", "always",
-        ])
+        rc, out, err = _run_cli(
+            [
+                "scan",
+                "pip",
+                "--format",
+                "human",
+                "--color",
+                "always",
+            ]
+        )
         self.assertEqual(rc, 0)
         self.assertRegex(out, _ANSI_RE)
 
     def test_color_never_suppresses_ansi(self):
-        rc, out, err = _run_cli([
-            "scan", "pip", "--format", "human", "--color", "never",
-        ])
+        rc, out, err = _run_cli(
+            [
+                "scan",
+                "pip",
+                "--format",
+                "human",
+                "--color",
+                "never",
+            ]
+        )
         self.assertEqual(rc, 0)
         self.assertNotRegex(out, _ANSI_RE)
 
@@ -171,9 +257,16 @@ class ColorFlagTests(unittest.TestCase):
         # The historical default behavior: piping/redirecting stdout
         # disables color. We're capturing into a pipe via subprocess
         # so this exercises the not-a-TTY code path.
-        rc, out, err = _run_cli([
-            "scan", "pip", "--format", "human", "--color", "auto",
-        ])
+        rc, out, err = _run_cli(
+            [
+                "scan",
+                "pip",
+                "--format",
+                "human",
+                "--color",
+                "auto",
+            ]
+        )
         self.assertEqual(rc, 0)
         self.assertNotRegex(out, _ANSI_RE)
 
@@ -239,11 +332,18 @@ class ColorFlagTests(unittest.TestCase):
     def test_ci_mode_disables_color_by_default(self):
         # --ci historically forces color off. The new auto-flip in
         # _apply_ci_defaults preserves that for the common case.
-        rc, out, err = _run_cli([
-            "--ci", "scan", "pip", "--format", "human",
-        ])
+        rc, out, err = _run_cli(
+            [
+                "--ci",
+                "scan",
+                "pip",
+                "--format",
+                "human",
+            ]
+        )
         self.assertEqual(rc, 0)
         self.assertNotRegex(out, _ANSI_RE)
+
 
 if __name__ == "__main__":
     unittest.main()
