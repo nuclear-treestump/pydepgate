@@ -1,7 +1,6 @@
-
 # pydepgate
 
-[![PyPI](https://img.shields.io/pypi/v/pydepgate.svg)](https://pypi.org/project/pydepgate/)[![Downloads](https://pepy.tech/badge/pydepgate)](https://pepy.tech/project/pydepgate)[![Unit tests](https://github.com/nuclear-treestump/pydep-vector-runner/actions/workflows/do_unittests.yml/badge.svg)](https://github.com/nuclear-treestump/pydep-vector-runner/actions/workflows/do_unittests.yml)[![SARIF validation](https://github.com/nuclear-treestump/pydep-vector-runner/actions/workflows/do_sarif_validation.yml/badge.svg)](https://github.com/nuclear-treestump/pydep-vector-runner/actions/workflows/do_sarif_validation.yml)[![CodeQL Advanced](https://github.com/nuclear-treestump/pydep-vector-runner/actions/workflows/codeql.yml/badge.svg)](https://github.com/nuclear-treestump/pydep-vector-runner/actions/workflows/codeql.yml)[![docker-publish](https://github.com/nuclear-treestump/pydep-vector-runner/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/nuclear-treestump/pydep-vector-runner/actions/workflows/docker-publish.yml)[![CodeQL](https://github.com/nuclear-treestump/pydep-vector-runner/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/nuclear-treestump/pydep-vector-runner/actions/workflows/github-code-scanning/codeql)
+[![PyPI](https://img.shields.io/pypi/v/pydepgate.svg)](https://pypi.org/project/pydepgate/)[![Downloads](https://pepy.tech/badge/pydepgate)](https://pepy.tech/project/pydepgate)[![Unit tests](https://github.com/nuclear-treestump/pydepgate/actions/workflows/do_unittests.yml/badge.svg)](https://github.com/nuclear-treestump/pydepgate/actions/workflows/do_unittests.yml)[![SARIF validation](https://github.com/nuclear-treestump/pydepgate/actions/workflows/do_sarif_validation.yml/badge.svg)](https://github.com/nuclear-treestump/pydepgate/actions/workflows/do_sarif_validation.yml)[![CodeQL Advanced](https://github.com/nuclear-treestump/pydepgate/actions/workflows/codeql.yml/badge.svg)](https://github.com/nuclear-treestump/pydepgate/actions/workflows/codeql.yml)[![docker-publish](https://github.com/nuclear-treestump/pydepgate/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/nuclear-treestump/pydepgate/actions/workflows/docker-publish.yml)[![CodeQL](https://github.com/nuclear-treestump/pydepgate/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/nuclear-treestump/pydepgate/actions/workflows/github-code-scanning/codeql)
 
 **A lightweight Python runner that interdicts suspicious startup behavior.**
 
@@ -11,178 +10,6 @@ March 2026 LiteLLM supply-chain compromise and catalogued as
 [MITRE ATT&CK T1546.018](https://attack.mitre.org/techniques/T1546/018/).
 
 <img width="1086" height="720" alt="Screen Recording 2026-04-28 091139" src="https://github.com/user-attachments/assets/28a737fd-4ba0-4401-b49e-5d84703cad25" />
-
-## Recently Added
-
-### SARIF 2.1.0 output for GitHub Code Scanning
-
-`--format sarif` emits SARIF 2.1.0 documents that ingest into
-GitHub Code Scanning, Azure DevOps, and any other SARIF
-consumer that follows the OASIS spec. Each scan run produces
-a single document with the full rules catalog, per-finding
-results with severity-mapped levels and partial fingerprints
-for cross-run alert deduplication, and tool identity metadata.
-
-Findings reached through the recursive decode pipeline are
-surfaced as SARIF results with `codeFlows` describing the
-decode chain. A finding inside a 2-layer base64-decoded
-payload appears in the document with a single result whose
-threadFlow walks from the outer high-entropy literal through
-each decode layer to the innermost detection. This gives
-consumers like GitHub's "Show paths" UI a visualizable
-representation of the attack chain.
-
-`--sarif-srcroot PATH` populates `originalUriBaseIds.PROJECTROOT`
-in the emitted document and tags artifact locations with the
-matching `uriBaseId` so consumers resolve paths against a known
-source root. The flag has an environment variable equivalent
-(`PYDEPGATE_SARIF_SRCROOT`) and degrades gracefully when not
-set: paths emit unprefixed and the document remains valid.
-
-The SARIF emission is content-blind: messages describe what
-was called (`subprocess.run()`, `urllib.request.urlopen()`)
-without including arguments, URLs, or literal payload bytes.
-A defender can publish a SARIF document without re-leaking
-the underlying attack content. Validation against the
-Microsoft SARIF Multitool runs in CI on every PR, hard-failing
-on warnings to catch structural regressions before they ship.
-
-See the SARIF output section below for the flag table and
-example invocations.
-
-### Recursive payload decoding with encrypted-archive output
-
-`--decode-payload-depth=N` runs a recursive re-scan over decoded
-payloads. When the peek enricher's unwrap chain produces Python source,
-that source is fed back through the engine, and any payload-bearing
-findings inside it are themselves decoded. This catches the
-multi-layer attack shape used by LiteLLM 1.82.8: a base64 outer
-payload whose decoded source contains a second base64 payload which
-decodes to the actual exfiltration code.
-
-Output goes to a directory chosen with `--decode-location` (default
-`./decoded/`), with files named `{STATUS}_{timestamp}_{target}{ext}`
-where `STATUS` is `FINDINGS` or `NOFINDINGS`, `timestamp` is UTC in
-`YYYY-MM-DD_HH-MM-SS` format, and `target` is the sanitized artifact
-basename. This convention preserves run history and sorts
-chronologically by filename.
-
-`--decode-iocs={off,hashes,full}` controls whether IOC data and
-decoded source are extracted alongside the report. Mode `full`
-produces an encrypted ZIP archive (default password `infected`, the
-malware-research convention) containing the report, decoded source
-dumps, and IOC hash records, plus a plaintext IOC sidecar next to the
-archive for grep-friendly hash extraction.
-
-`--min-severity` flows into the decoded-payload report as a
-presentation filter. The decode pass itself runs over every
-payload-bearing finding regardless of severity, because a low-severity
-outer finding can decode to a critical inner one. The filter then
-prunes the resulting tree, with a "keep for context" rule: a node
-stays if its own severity meets the threshold OR if any of its
-descendants do, so chains aren't broken when only the inner finding
-is severe.
-
-See the Payload Decoding section below for the full flag table,
-output layout, and end-to-end examples.
-
-### Tab completion works!
-
-```
-usage: pydepgate completions [-h] {bash,zsh,fish}
-
-Print a shell completion script to stdout. Running this command alone does NOT install completion; you have to do something with the output.
-
-Quickest install (bash, current shell only):
-  eval "$(pydepgate completions bash)"
-
-Persistent install (bash, all future shells):
-  pydepgate completions bash >> ~/.bashrc
-
-Persistent install (zsh):
-  pydepgate completions zsh >> ~/.zshrc
-
-Persistent install (fish):
-  pydepgate completions fish > ~/.config/fish/completions/pydepgate.fish
-
-After installing, open a new shell or re-source your rc file, then test with:
-  pydepgate <TAB><TAB>
-
-When run interactively (output to a terminal rather than redirected), this command also prints install instructions to stderr.
-
-positional arguments:
-  {bash,zsh,fish}  Target shell. Supported: bash, zsh, fish.
-```
-
-## Status
-
-**Static analysis is functional end-to-end.**
-
-pydepgate can statically analyze wheels, sdists, installed packages, and
-single loose files for the patterns used in real-world Python supply-chain
-attacks. The detection covers payload encoding, dynamic code execution,
-string obfuscation, suspicious stdlib usage, and a broad code-density
-layer that catches obfuscation, Unicode trickery, and machine-generated
-identifier patterns.
-
-What works today:
-
-- Static analysis of `.whl` files, sdists (`.tar.gz`/`.tgz`/etc.),
-installed packages by name, and individual loose files via `--single`.
-- Five production analyzers: `encoding_abuse`, `dynamic_execution`,
-`string_ops`, `suspicious_stdlib`, and `code_density`.
-- Defense in depth on real attack shapes. The LiteLLM 1.82.8 `.pth`
-payload, for example, fires across four analyzers simultaneously
-(ENC001, DYN002, DENS010, DENS011) so an attacker has to evade every
-layer to get past the scanner.
-- A rules engine that promotes severity based on file kind and signal
-context, fully data-driven via TOML or JSON. The default rule set
-includes 32 rules dedicated to density-layer signals alone.
-- A safe partial evaluator that resolves obfuscated string expressions
-without executing user code.
-- An optional payload-peek enricher (`--peek`) that safely partial-decodes
-large encoded literals so you can see what's inside without executing
-anything. Handles base64, hex, zlib, gzip, bzip2, and lzma chains up to
-a configurable depth, classifies the terminal payload, scans for
-high-signal indicator strings, and emits ENC002 when the unwrap chain
-is nested. Pickle data is detected but never deserialized;
-decompression bombs are bounded by an in-flight byte budget. Tunable
-via `--peek-depth`, `--peek-budget`, `--peek-min-length`, and
-`--peek-chain` (verbose per-layer hex dumps).
-- An SSH-randomart-style finding-distribution map rendered inline with
-human-readable scan output, showing where in a file the findings
-cluster and at what severity.
-- Command-line interface with `scan` (including `--single` for
-iteration on individual files) and explain subcommands, environment
-variable support, configurable severity thresholds, and CI-friendly
-output modes.
-- Three output formats: human-readable terminal, JSON (schema v2), and
-SARIF 2.1.0 with codeFlow encoding for decoded payload chains,
-GitHub-compatible severity mapping, partial fingerprints for alert
-deduplication, and content-blind message text. Validated in CI against
-the Microsoft SARIF Multitool.
-- Explicit color control via `--color={auto,always,never}` (or
-`PYDEPGATE_COLOR`), with `--no-color` preserved as an alias.
-`--color=always` forces ANSI codes through pipes for `less -R` and
-terminal-aware log viewers.
-- Pre-commit hook integration. Drop pydepgate into any Python project's
-`.pre-commit-config.yaml` to catch startup-vector patterns at commit
-time. Two hook ids: `pydepgate` for `.py` files (defaults to
-`--min-severity high` so informational findings don't block commits)
-and `pydepgate-pth` for `.pth` files (no severity filter; .pth files
-have no legitimate use for the patterns pydepgate detects).
-- Official Docker image at `ghcr.io/nuclear-treestump/pydepgate`.
-Multi-stage Alpine build under 50 MB, runs as non-root (uid 1000),
-published for `linux/amd64` and `linux/arm64`, tagged per release.
-Composes with any Python build pipeline that produces a wheel.
-
-What is in active development:
-
-- The comment_analysis analyzer.
-- Runtime interdiction (`exec` mode).
-- Environment auditing (`preflight` mode).
-- Aliased import resolution (`from subprocess import Popen as P`).
-- A pip-wrapper / transitive-dependency `audit` subcommand.
 
 [Available on PyPI as pydepgate](https://pypi.org/project/pydepgate/).
 
@@ -214,29 +41,48 @@ pip install pydepgate
 
 Requires Python 3.11 or later. No third-party runtime dependencies.
 
+## Quickstart
+
+```bash
+# Scan a wheel
+pydepgate scan some-package-1.0.0-py3-none-any.whl
+
+# Scan an installed package by name
+pydepgate scan litellm
+
+# Scan a single file
+pydepgate scan --single suspicious_module.py
+
+# Look up what a signal means
+pydepgate explain DENS010
+```
+
+Exit code `0` is clean, `2` means at least one HIGH or CRITICAL finding.
+The full exit code contract is in
+[docs/reference/exit-codes.md](https://nuclear-treestump.github.io/pydepgate/reference/exit-codes).
+
 ## Usage
 
-Scan a wheel:
+### Scan an artifact
+
+Wheels, source distributions, and installed packages all use the same
+positional `scan` invocation:
 
 ```bash
 pydepgate scan some-package-1.0.0-py3-none-any.whl
-```
-
-Scan a source distribution:
-
-```bash
 pydepgate scan some-package-1.0.0.tar.gz
-```
-
-Scan an installed package by name:
-
-```bash
 pydepgate scan litellm
 ```
 
-Scan a single loose file (useful for iterating on test fixtures, ad-hoc
+The wheel and sdist paths read directly from disk. The installed-package
+form is resolved via `importlib.metadata` against the active environment.
+
+### Scan a single file
+
+`--single` bypasses wheel/sdist/installed-package dispatch and analyzes
+the file directly. Useful for iterating on test fixtures, ad-hoc
 inspection of a suspicious file, or reproducing a finding without
-restructuring the file into a package):
+restructuring the file into a package:
 
 ```bash
 pydepgate scan --single suspicious_module.py
@@ -244,335 +90,164 @@ pydepgate scan --single fixture.pth
 pydepgate scan --single garbage.py --as init_py
 ```
 
-`--single` bypasses wheel/sdist/installed-package dispatch and analyzes
-the file directly. The file kind is auto-detected from the filename:
-`.pth` files are treated as `pth`; files named `setup.py`,
-`__init__.py`, `sitecustomize.py`, or `usercustomize.py` are classified
-as their natural kind; anything else defaults to `setup_py` (the most
-permissive context, ideal for surfacing every signal at realistic
-attack-shape severity). Override with `--as`:
-`setup_py` / `init_py` / `pth` / `sitecustomize` / `usercustomize`.
+The file kind is auto-detected from the filename. `.pth` files are
+treated as `pth`; files named `setup.py`, `__init__.py`,
+`sitecustomize.py`, or `usercustomize.py` are classified as their natural
+kind; anything else defaults to `setup_py` (the most permissive context).
+Override with `--as`: `setup_py` / `init_py` / `pth` / `sitecustomize` /
+`usercustomize` / `library_py`.
 
-Explain what a signal means and what triggers it:
+### Scan with payload peek
 
-```bash
-pydepgate explain STDLIB001
-pydepgate explain DENS010
-pydepgate explain --rule litellm-pth-stdlib
-pydepgate explain --list
-```
-
-In CI, use `--ci` for compact JSON output and proper exit codes:
+The peek enricher attempts safe partial decoding of large encoded
+literals so you can see what's actually inside a flagged blob without
+ever executing it:
 
 ```bash
-pydepgate --ci scan some-package.whl
+pydepgate scan some-package.whl --peek
+pydepgate scan some-package.whl --peek --peek-chain
 ```
 
-Filter findings by severity:
+Peek handles base64, hex, zlib, gzip, bzip2, and lzma chains up to a
+configurable depth, classifies the terminal payload, and emits ENC002
+when the unwrap chain is nested. Pickle data is detected but never
+deserialized; decompression bombs are bounded by an in-flight byte
+budget.
+
+Full peek flag reference: [docs/cli/index.md](https://nuclear-treestump.github.io/pydepgate/cli/index#payload-peek).
+
+### Scan with recursive decode
+
+`--decode-payload-depth=N` runs a recursive re-scan over decoded
+payloads, catching the multi-layer attack shape used by LiteLLM 1.82.8
+(a base64 outer payload whose decoded source contains a second base64
+payload).
 
 ```bash
-pydepgate scan some-package.whl --min-severity high
+pydepgate scan --deep some-package.whl --peek \
+    --decode-payload-depth=3 \
+    --decode-iocs=full \
+    --decode-location ./forensics
 ```
 
-Apply a custom rules file:
+Output goes to a directory chosen with `--decode-location` (default
+`./decoded/`). With `--decode-iocs=full`, the run produces an encrypted
+ZIP archive (default password `infected`, the malware-research
+convention) plus a plaintext IOC sidecar for grep-friendly hash
+extraction.
+
+Full decode pipeline reference, including the IOC mode matrix and
+end-to-end forensic example:
+[docs/guides/decode-payloads.md](https://nuclear-treestump.github.io/pydepgate/guides/decode-payloads).
+
+### Scan in CI
+
+`--ci` forces machine-readable JSON output and disables ANSI color. It
+does not change `--min-severity`; combine the two when CI should block
+only on HIGH and CRITICAL findings:
+
+```bash
+pydepgate scan --ci --min-severity high some-package.whl
+```
+
+Full CI guide (GitHub Actions, GitLab CI, Docker, pre-commit hooks):
+[docs/guides/ci-integration.md](https://nuclear-treestump.github.io/pydepgate/guides/ci-integration).
+
+### Scan with custom rules
 
 ```bash
 pydepgate scan some-package.whl --rules-file company-rules.gate
 ```
 
-Scan an entire library archive:
-> Recommend using --min-severity as this is noisy by design.
-```bash
-pydepgate scan --deep somefile.whl
-```
+Auto-discovery checks `./pydepgate.gate` then `<venv>/pydepgate.gate`
+when the flag is not set. The rule file format is TOML or JSON,
+auto-detected. Full format spec:
+[docs/reference/rules-file.md](https://nuclear-treestump.github.io/pydepgate/reference/rules-file).
 
-Decode payloads recursively into a directory:
- 
-```bash
-pydepgate scan --deep some-package.whl --peek \
-    --decode-payload-depth=3 \
-    --decode-iocs=full \
-    --decode-location ./forensics \
-    --decode-archive-password investigation
-```
- 
-This produces an encrypted archive at
-`./forensics/FINDINGS_<timestamp>_some-package.whl.zip` and a
-plaintext IOC sidecar at
-`./forensics/FINDINGS_<timestamp>_some-package.whl.iocs.txt`. The
-archive contents extract into a subdirectory matching the artifact
-name. See the Payload Decoding section for full details.
-
-### Payload peek
-
-Some malware compresses or base64-encodes its payload to slip past
-naive string-match scanners. The payload-peek enricher attempts safe
-partial decoding of large encoded literals so you can see what's
-actually inside a flagged blob without ever executing it. Off by
-default; opt in with `--peek`.
-
-| Flag | Env var | Default | Notes |
-|---|---|---|---|
-| `--peek` | `PYDEPGATE_PEEK` | off | Enable the enricher. Runs a bounded decode pass over hint-tagged signals. |
-| `--peek-depth N` | `PYDEPGATE_PEEK_DEPTH` | 3 | Max unwrap layers. Floor 1, ceiling 10. |
-| `--peek-budget BYTES` | `PYDEPGATE_PEEK_BUDGET` | 524288 (512 KB) | Cumulative output cap across all layers. Floor 1024. |
-| `--peek-chain` | `PYDEPGATE_PEEK_CHAIN` | off | Verbose per-layer breakdown with xxd-style hex dump in human output. |
-| `--peek-min-length BYTES` | `PYDEPGATE_PEEK_MIN_LENGTH` | 1024 | Minimum literal size before unwrap is attempted. Floor 16. |
-
-These behave as global flags accepted before or after the subcommand:
+### Look up a signal or rule
 
 ```bash
-pydepgate --peek scan litellm-1.82.8-py3-none-any.whl
-pydepgate scan litellm-1.82.8-py3-none-any.whl --peek --peek-chain
+pydepgate explain STDLIB001
+pydepgate explain DENS010
+pydepgate explain --rule default_stdlib001_in_pth
+pydepgate explain --list
 ```
 
-Scanning the LiteLLM 1.82.8 wheel with `--peek` surfaces the embedded
-payload directly:
+### Scan an entire library archive
 
-```
-[CRITICAL] DENS010 (code_density)
-  in litellm/proxy/proxy_server.py:130:14
-  string literal at line 130 has Shannon entropy 5.61 bits/char (length 34460)
-  decoded chain: base64 -> python_source (1 layer, 25.2 KB)
-  indicators: subprocess, base64.b64decode
+```bash
+pydepgate scan --deep some-package.whl --min-severity high
 ```
 
-The same `decoded` block lands in JSON output under
-`findings[*].context.decoded` regardless of `--peek-chain`, with the
-full chain, terminal classification, indicators list, and a hex-encoded
-preview of the unwrapped bytes. See `docs/json_schema_v2.md` for the
-field reference.
-
-#### Safety guarantees
-
-The peek loop is strictly read-only. Three specific guarantees worth
-stating explicitly:
-
-**Pickle is detected, never deserialized.** When the unwrap loop hits
-a Python pickle stream as a terminal layer, it sets
-`pickle_warning: true` in the decoded block and stops.
-`pickle.loads()` on attacker-controlled bytes is code execution by
-design, that is the bug being analyzed, not a tool action. Inspect
-such payloads with `pickletools.dis()` (which walks the opcode stream
-without executing it) in an isolated environment.
-
-**Decompression bombs are bounded.** Cumulative output across all
-unwrap layers is capped by `--peek-budget`. A 2 KB zlib stream that
-would expand to 2 GB trips the cap at 512 KB (default), records
-`unwrap_status: exhausted_budget`, and stops. The cap is enforced
-in-flight via incremental `decompressobj.decompress(data, max_length=N)`
-calls, bytes that exceed the budget are never materialized.
-
-**ENC002 fires on nested chains.** When the unwrap chain reaches
-depth 2 or exhausts `--peek-depth` with more transformations still
-possible, the enricher emits an `ENC002` signal carrying the decoded
-block plus a chain summary. A single base64 layer is unremarkable,
-it's the lingua franca of certificates, tokens, and config blobs.
-Stacked layers (`base64 → zlib → python_source`) are intent. Default
-severities for ENC002 vary by file kind and unwrap status; see
-`pydepgate.rules.defaults` for the full table.
+`--deep` runs the density analyzer over ordinary library `.py` files in
+addition to startup vectors. The density layer produces enough
+informational signals at library scope that the `--min-severity high`
+filter is strongly recommended.
 
 ### SARIF output
-
-SARIF 2.1.0 documents are emitted with `--format sarif` and
-contain the same findings as the JSON and human formats,
-structured for ingestion by GitHub Code Scanning, Azure
-DevOps, and other SARIF consumers. Each scan run produces a
-single SARIF document with the full rules catalog, per-finding
-results with severity-mapped levels and partial fingerprints,
-and tool identity metadata.
-
-| Flag | Env var | Default | Notes |
-|---|---|---|---|
-| `--format sarif` | `PYDEPGATE_FORMAT` | `human` | Emit SARIF instead of human or JSON. |
-| `--sarif-srcroot PATH` | `PYDEPGATE_SARIF_SRCROOT` | (none) | Source root used to populate `originalUriBaseIds.PROJECTROOT`. When set, on-disk artifact locations carry `uriBaseId: "PROJECTROOT"` so consumers resolve paths against this root. Empty string treated as unset. Soft-warns when set without `--format sarif`. |
-
-Basic usage:
 
 ```bash
 pydepgate scan some-package.whl --format sarif > findings.sarif
 ```
 
-With srcroot for path resolution and decode-pass integration:
-
-```bash
-pydepgate scan some-package.whl \
-    --format sarif \
-    --sarif-srcroot "$(pwd)" \
-    --peek \
-    --decode-payload-depth=4 \
-    > findings.sarif
-```
-
-#### What the document includes
-
-- One run per scan, with `automationDetails.id` of the form
-  `pydepgate/{artifact_kind}/` (e.g. `pydepgate/wheel/`,
-  `pydepgate/sdist_deep/`) for cross-run grouping. Deep
-  scans suffix `_deep` to distinguish from non-deep runs of
-  the same artifact kind.
-- Full rules catalog under `tool.driver.rules`, regardless
-  of which rules actually fired in the run, so consumers
-  can build UI for any rule pydepgate could emit.
-- Per-finding results with severity mapped to SARIF levels
-  (critical/high → `error`, medium → `warning`, low/info →
-  `note`), GitHub-compatible `security-severity` numeric
-  scores, and 24-character partial fingerprints for alert
-  deduplication across runs.
-- `codeFlows` for findings reached through encoded payload
-  layers. Each threadFlow walks from the outer literal
-  through each decode step to the innermost detection,
-  surfacing the attack chain in consumer UI.
-- `originalUriBaseIds.PROJECTROOT` declaration, populated
-  from `--sarif-srcroot` when set, empty placeholder URI
-  when not.
-
-#### What the document does not include
-
-- Argument values to dangerous calls. The message text
-  describes what was called (`subprocess.run()`,
-  `urllib.request.urlopen()`) but not what was passed (no
-  URLs, no command lines, no literal payload bytes). SARIF
-  documents flow into CI logs, code scanning UIs, and
-  artifact downloads; embedding payload content there
-  would replicate the exact threat the analyzer is
-  detecting.
-- Embedded source content under `artifacts[]`. The
-  document references locations but does not include
-  source bodies.
-- CWE taxonomy mappings. Each rule has descriptive `tags`
-  with the analyzer name; no formal taxonomy reference.
-
-The emission is content-blind by construction: an attacker
-cannot exfiltrate their payload through pydepgate's SARIF
-output even if a defender publishes the document.
-
-#### Validation
-
-The Microsoft SARIF Multitool validates pydepgate's
-emission in CI on every PR. Validation runs against three
-synthetic fixtures (clean scan, scan with findings, scan
-with multi-layer codeFlows) and hard-fails on any warning
-or error. The fixture builder lives at
-`scripts/build_sarif_fixtures.py` and produces wheels with
-benign content that pattern-matches as suspicious to the
-analyzer; no real malware is in the test corpus or the CI
-runner. The local equivalent of the workflow is
-`scripts/validate_sarif.sh`, which runs the same checks
-on a developer's machine given .NET SDK 8.0 or later.
-
-#### Consumption
-
-For ingestion into GitHub Code Scanning, pipe the SARIF
-output to the `github/codeql-action/upload-sarif` action.
-Pydepgate's exit code on findings is non-zero by default,
-so the scan step needs `continue-on-error: true` (or
-equivalent workflow-level handling) for the upload step
-to run. The exact wiring is your call; pydepgate emits the
-document, GitHub or your SARIF consumer ingests it. See
-GitHub's [Uploading a SARIF file to GitHub](https://docs.github.com/en/code-security/code-scanning/integrating-with-code-scanning/uploading-a-sarif-file-to-github)
-for the consumer side.
-
-### Exit codes
-
-- `0` Clean. No findings (or no findings above `--min-severity`).
-- `1` Findings present, but none HIGH or CRITICAL.
-- `2` At least one HIGH or CRITICAL finding.
-- `3` Tool error. pydepgate could not complete the scan.
-
-These are stable as part of the v0.1+ contract.
-
-### Environment variables
- 
-All flags can be set via environment variables. Explicit flags override environment values.
- 
-| Variable | Equivalent flag |
-|---|---|
-| `PYDEPGATE_CI` | `--ci` |
-| `PYDEPGATE_FORMAT` | `--format` |
-| `PYDEPGATE_NO_COLOR` (or `NO_COLOR`) | `--no-color` |
-| `PYDEPGATE_MIN_SEVERITY` | `--min-severity` |
-| `PYDEPGATE_STRICT_EXIT` | `--strict-exit` |
-| `PYDEPGATE_RULES_FILE` | `--rules-file` |
-| `PYDEPGATE_PEEK` | `--peek` |
-| `PYDEPGATE_PEEK_DEPTH` | `--peek-depth` |
-| `PYDEPGATE_PEEK_BUDGET` | `--peek-budget` |
-| `PYDEPGATE_PEEK_CHAIN` | `--peek-chain` |
-| `PYDEPGATE_PEEK_MIN_LENGTH` | `--peek-min-length` |
-| `PYDEPGATE_DECODE_PAYLOAD_DEPTH` | `--decode-payload-depth` |
-| `PYDEPGATE_DECODE_LOCATION` | `--decode-location` |
-| `PYDEPGATE_DECODE_FORMAT` | `--decode-format` |
-| `PYDEPGATE_DECODE_IOCS` | `--decode-iocs` |
-| `PYDEPGATE_DECODE_ARCHIVE_PASSWORD` | `--decode-archive-password` |
-| `PYDEPGATE_SARIF_SRCROOT` | `--sarif-srcroot` |
-
-`--decode-archive-stored` deliberately has no environment variable;
-it is a per-investigation choice (use STORED when byte-verifiable
-archive contents matter for that specific investigation) rather than
-a persistent preference.
+Emits a SARIF 2.1.0 document with codeFlows on decoded-payload findings,
+24-character partial fingerprints for cross-run deduplication, and
+content-blind message text (no payload bytes leak into the document).
+For GitHub Code Scanning integration:
+[docs/guides/sarif-integration.md](https://nuclear-treestump.github.io/pydepgate/guides/sarif-integration).
 
 ## What pydepgate detects
 
-The current analyzer set covers five major classes of suspicious behavior in startup vectors:
+The current analyzer set covers five major classes of suspicious
+behavior in startup vectors. Each analyzer emits raw signals; the rules
+engine maps signals to severity-rated findings based on file kind and
+context.
 
-**Encoding abuse (ENC001, ENC002).** Patterns where encoded content is decoded and executed in a single chain, e.g. `exec(base64.b64decode(payload))`. Catches base64, hex, codec-based, zlib, bz2, lzma, and gzip variants. With `--peek` enabled, ENC002 also fires when the partial-decoder unwrap loop reaches 2+ chain layers or exhausts its configured depth, strong evidence that a literal is intentionally obfuscated rather than a benign encoded blob.
+**Encoding abuse (ENC001, ENC002).** Patterns where encoded content is
+decoded and executed in a single chain, for example
+`exec(base64.b64decode(payload))`. Catches base64, hex, codec-based,
+zlib, bz2, lzma, and gzip variants. With `--peek` enabled, ENC002 fires
+when the partial-decoder unwrap loop reaches 2+ chain layers or
+exhausts its configured depth, strong evidence that a literal is
+intentionally obfuscated rather than a benign encoded blob.
 
-**Dynamic execution (DYN001-007).** Direct calls to `exec`, `eval`, `compile`, or `__import__`; access to exec primitives via `getattr`, `globals()`, `locals()`, `vars()`, or `__builtins__` subscripts; compile-then-exec across the file; and aliased call shapes that catch `e = exec; e(...)` evasions.
+**Dynamic execution (DYN001-007).** Direct calls to `exec`, `eval`,
+`compile`, or `__import__`; access to exec primitives via `getattr`,
+`globals()`, `locals()`, `vars()`, or `__builtins__` subscripts;
+compile-then-exec across the file; and aliased call shapes that catch
+`e = exec; e(...)` evasions.
 
-**String obfuscation (STR001-004).** Obfuscated string expressions that resolve to the names of exec primitives, dangerous stdlib functions, or sensitive module names. Uses a safe partial evaluator that statically computes what string an expression would produce, without executing user code. Catches:
+**String obfuscation (STR001-004).** Obfuscated string expressions
+that resolve to the names of exec primitives or dangerous stdlib
+functions, computed by a safe partial evaluator that never executes
+user code. Catches concatenation (`'ev' + 'al'`), character codes
+(`chr(101) + chr(118) + chr(97) + chr(108)`), slicing (`'lave'[::-1]`),
+`str.join` of literal pieces, `bytes.fromhex(...).decode()`, f-string
+assembly, and single-assignment variables containing obfuscated values.
+The "harder they hide it the stronger the signal" model is realized
+through operation counting.
 
-- Concatenation: `'ev' + 'al'`
-- Character codes: `chr(101) + chr(118) + chr(97) + chr(108)`
-- Slicing: `'lave'[::-1]`
-- `str.join` of literal pieces: `''.join(['e','v','a','l'])`
-- `bytes.fromhex('6576616c').decode()`
-- f-string assembly with literal interpolation
-- Single-assignment variables containing obfuscated values
+**Suspicious stdlib usage (STDLIB001-003).** Calls to stdlib functions
+that are highly unusual in startup vectors: process spawn
+(`STDLIB001`: `os.system`, `subprocess.Popen`, `subprocess.run`,
+`os.exec*`), network operations (`STDLIB002`: `urllib.request.urlopen`,
+`socket.socket`, `http.client`), and native code loading (`STDLIB003`:
+`ctypes.CDLL`, `ctypes.WinDLL`). The rules engine promotes these to
+CRITICAL when they appear in `setup.py` or `.pth` files.
 
-**Suspicious stdlib usage (STDLIB001-003).** Calls to stdlib functions that are highly unusual in startup vectors:
+**Code density (DENS001-051).** A broad layer covering the things
+obfuscated code looks like even when no single primitive call is
+suspicious on its own: high-entropy string literals, base64-alphabet
+strings, machine-generated identifiers, confusable single-character
+names, invisible Unicode characters, Unicode homoglyphs in identifiers,
+disproportionate AST depth, deeply nested lambdas, byte-range integer
+arrays, high-entropy docstrings, and dynamic `__doc__` references
+passed to a callable. Calibrated so the same content scans differently
+depending on file kind: a high-entropy base64 literal in `.pth` is
+CRITICAL, in `__init__.py` is MEDIUM, anywhere else is LOW.
 
-- `STDLIB001`: process spawn (`os.system`, `subprocess.Popen`, `subprocess.run`, `os.exec*`, etc.)
-- `STDLIB002`: network operations (`urllib.request.urlopen`, `socket.socket`, `http.client`, etc.)
-- `STDLIB003`: native code loading (`ctypes.CDLL`, `ctypes.WinDLL`, etc.)
-
-Confidence is `HIGH` by default. The rules engine promotes these to `CRITICAL` when they appear in `setup.py` or in a `.pth` file (where they have no legitimate business existing). This is the rule that fires on LiteLLM 1.82.8.
-
-The "harder they hide it the stronger the signal" model is realized through operation counting: an expression that required many obfuscation operations to assemble a sensitive name is treated as more confidently malicious than one that required few.
-
-**Code density (DENS001-051).** A broad layer that catches the things obfuscated code looks like even when no single primitive call is suspicious on its own. Thirteen distinct signals across five sublayers:
-
-*Lexical (line-shape):*
-
-- `DENS001`: single-line token compression (minification or bundler-mimicry shapes)
-- `DENS002`: semicolon chaining of multiple statements on one line
-
-*String content:*
-
-- `DENS010`: high-entropy string literals (Shannon entropy consistent with base64, compressed, or encrypted content)
-- `DENS011`: literals using only base64-alphabet characters, even without an accompanying decode call
-
-*Identifier shape:*
-
-- `DENS020`: low-vowel-ratio identifiers (machine-generated or deliberately mangled names like `_xkjwbq`)
-- `DENS021`: confusable single-character identifiers (`l`, `O`, `I`)
-
-*Unicode:*
-
-- `DENS030`: invisible Unicode characters in source (zero-width spaces, RTL overrides; the Trojan Source class catalogued as [CVE-2021-42574](https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2021-42574))
-- `DENS031`: Unicode homoglyphs in identifiers (Cyrillic and Greek lookalikes used to evade string-match scanners)
-
-*Structural:*
-
-- `DENS040`: AST depth disproportionate to line count (compression hidden inside expression trees)
-- `DENS041`: deeply nested lambdas or comprehensions (functional-style obfuscation)
-- `DENS042`: large byte-range integer arrays (122-element lists of 0-255 ints, the shellcode-staging shape)
-
-*Docstring:*
-
-- `DENS050`: high-entropy docstrings (the docstring-as-payload smuggling pattern)
-- `DENS051`: dynamic `__doc__` reference passed to a callable (the runtime decode-and-execute half of the smuggling pattern)
-
-The default rule set ships 32 rules covering these signals across five file kinds, calibrated so that the same content scans differently depending on where it lives. A high-entropy base64 literal in `.pth` is `CRITICAL` (no benign use case); the same literal in `__init__.py` is `MEDIUM` (some packages legitimately ship encoded blobs); the same literal anywhere else is `LOW` (UUIDs and hashes happen). `DENS021` is universally `INFO` because PEP-8-style confusables aren't a security finding by themselves; they only matter as a contributing signal when other signals fire.
+Complete signal reference with severity tables per file kind:
+[docs/reference/signals.md](https://nuclear-treestump.github.io/pydepgate/reference/signals).
 
 ## Layered detection in practice
 
@@ -582,7 +257,11 @@ The LiteLLM 1.82.8 `.pth` payload is a single line:
 import base64; exec(base64.b64decode('cHJpbnQoMSkK'))
 ```
 
-A scanner that grepped for `exec` would catch it. A scanner that grepped for `base64.b64decode` would catch it. But an attacker who knew about either of those evasions could trivially defeat both. pydepgate fires five separate findings on this line from four independent analyzers:
+A scanner that grepped for `exec` would catch it. A scanner that
+grepped for `base64.b64decode` would catch it. But an attacker who
+knew about either of those evasions could trivially defeat both.
+pydepgate fires five separate findings on this line from four
+independent analyzers:
 
 - **ENC001** (encoding_abuse): decode-then-execute pattern
 - **DYN002** (dynamic_execution): `exec()` with non-literal argument at module scope
@@ -590,356 +269,129 @@ A scanner that grepped for `exec` would catch it. A scanner that grepped for `ba
 - **DENS010** (code_density): high-entropy string literal
 - **DENS011** (code_density): base64-alphabet string literal
 
-Plus the rule layer promotes all of them to `CRITICAL` because the file is a `.pth`. To evade pydepgate, an attacker has to defeat every analyzer simultaneously while still producing a working `.pth` payload. Each evasion narrows what's possible; the intersection of all evasions is the empty set for any shape that could realistically execute on Python startup.
+Plus the rule layer promotes all of them to `CRITICAL` because the
+file is a `.pth`. To evade pydepgate, an attacker has to defeat every
+analyzer simultaneously while still producing a working `.pth`
+payload. Each evasion narrows what's possible; the intersection of all
+evasions is the empty set for any shape that could realistically
+execute on Python startup.
 
 ## The rules engine
 
-Analyzers emit raw signals. The rules engine maps signals to severity-rated findings using a data-driven rule set. Default rules ship in JSON; users can override or augment them with a `pydepgate.gate` file (TOML or JSON, auto-detected) in the project root, the venv root, or specified via `--rules-file`.
+Analyzers emit raw signals. The rules engine maps signals to
+severity-rated findings using a data-driven rule set. Default rules
+are built into pydepgate; users can override or augment them with a
+`pydepgate.gate` file (TOML or JSON, auto-detected) in the project
+root, the venv root, or specified via `--rules-file`.
 
-A rule is a small structured object:
+A rule has three parts: identity, match conditions, and an effect:
 
-```json
-{
-  "id": "litellm-pth-stdlib",
-  "match": {
-    "signal_id": "STDLIB001",
-    "file_kind": "pth"
-  },
-  "actions": [
-    {"type": "set_severity", "severity": "critical"}
-  ]
-}
-```
-
-Three actions are supported: `set_severity`, `suppress`, and `set_description`. User rules always take precedence over default rules, regardless of specificity. Suppressed findings are tracked separately so users can see what would have fired and why it didn't.
-
-Run `pydepgate explain --list` to see all default rules and signals, with descriptions of what they catch and how rules promote them.
-
-### Payload decoding
- 
-Some attacks bury their payload behind multiple decoding stages. Peek
-shows you what the first decoded layer looks like, but if that layer
-is itself Python source containing another encoded blob, peek treats
-it as a terminal and stops. The decode pass picks up where peek leaves
-off: it takes peek's decoded bytes, re-runs the analyzer engine over
-them, and recurses on any payload-bearing findings the inner scan
-turns up. The result is a tree mirroring the discovery path. Each
-node records what was decoded, what was found inside, and where the
-recursion stopped.
- 
-The pass is opt-in via `--decode-payload-depth=N`. It requires
-`--peek` (the decode driver consumes peek's output, so peek has to be
-running first). All flag values can be set via environment variables
-following the same precedence rules as the existing peek envvars;
-explicit flags override environment values.
- 
-| Flag | Env var | Default | Notes |
-|---|---|---|---|
-| `--decode-payload-depth N` | `PYDEPGATE_DECODE_PAYLOAD_DEPTH` | 3 | Max recursion depth. Floor 1, ceiling 8. Requires `--peek`. |
-| `--decode-location PATH` | `PYDEPGATE_DECODE_LOCATION` | `./decoded/` | Output DIRECTORY. Files inside follow the `{STATUS}_{timestamp}_{target}{ext}` naming convention; the directory is created if it does not exist. |
-| `--decode-format FMT` | `PYDEPGATE_DECODE_FORMAT` | `text` | `text` for the human-readable tree report; `json` for a structured representation suitable for downstream tooling. |
-| `--decode-iocs MODE` | `PYDEPGATE_DECODE_IOCS` | `off` | `off`, `hashes`, or `full`. See below for the full mode matrix. |
-| `--decode-archive-password PASSWORD` | `PYDEPGATE_DECODE_ARCHIVE_PASSWORD` | `infected` | Password for the encrypted archive produced by `--decode-iocs=full`. The default `infected` is a malware-research convention recognized by AV vendors as a do-not-scan marker. ZipCrypto is cryptographically broken; this is not a confidentiality control. |
-| `--decode-archive-stored` | (none) | off | Use STORED compression for the archive instead of DEFLATE. Produces a slightly larger archive but bypasses zlib entirely. Useful when byte-verifiable archive contents matter. |
- 
-#### Output filename convention
- 
-All decode output files use a consistent naming pattern:
- 
-```
-{STATUS}_{timestamp}_{target}{extension}
-```
- 
-`STATUS` is `FINDINGS` when the decoded tree contains nodes,
-`NOFINDINGS` when it does not. `timestamp` is UTC, formatted
-`YYYY-MM-DD_HH-MM-SS` with no `Z` suffix; the format is sortable
-lexicographically and unambiguous about timezone. `target` is the
-basename of the artifact identity (e.g. the wheel filename),
-sanitized to `[A-Za-z0-9._-]` with leading separators stripped.
-`extension` is `.txt` for text output, `.json` for JSON output,
-`.zip` for the encrypted archive, or `.iocs.txt` for the plaintext
-IOC sidecar.
- 
-This convention preserves run history. Re-running the same command
-produces a new file with a new timestamp; the previous file is left
-untouched. Use `ls -t <decode-location>/` to find the most recent
-output.
- 
-#### IOC mode matrix
- 
-The three modes of `--decode-iocs` produce different output shapes:
- 
-**`off` (default).** A single plaintext file containing only the
-tree report. No IOC hashes, no decoded source dumps, no archive.
-When the decoded tree is empty, no file is written; you get a stderr
-note instead. Useful for quick interactive triage.
- 
-**`hashes`.** Two plaintext files: the tree report (same as off
-mode) and a sidecar with the suffix `.iocs.txt` containing
-SHA256/SHA512 hashes of every decoded payload, along with the
-chain summary and location for each. Hash records use a fixed
-two-token line shape (`decoded_sha256  <hex>`) so a one-liner like
-`grep '^decoded_sha256' iocs.txt | awk '{print $2}'` extracts every
-hash for batch lookup. Skipped on empty trees, same as off mode.
- 
-**`full`.** An encrypted ZIP archive plus a plaintext IOC sidecar.
-The archive contains three files inside a subdirectory matching the
-sanitized target name:
- 
-```
-<target>/report.txt    Tree report (same shape as off-mode output)
-<target>/sources.txt   Per-layer decoded source dumps with header
-                       blocks and line-numbered bodies
-<target>/iocs.txt      Hash records (same content as the sidecar)
-```
- 
-The sidecar lives next to the archive, NOT inside it, so you can
-batch-process IOC hashes without unzipping. Unlike off and hashes,
-full mode ALWAYS produces output: an empty tree results in a
-NOFINDINGS stub archive with the same structure but stub markers
-inside. This consistency lets downstream triage tooling rely on
-archive presence as a signal that the scan completed.
- 
-The bare form `--decode-iocs` (no value) is accepted as a
-deprecated synonym for `--decode-iocs=hashes` and emits a
-deprecation warning. Use the explicit form to avoid the warning.
- 
-#### --min-severity interaction
- 
-`--min-severity` is applied as a presentation filter AFTER decoding
-completes. The decode pass itself is NOT gated by severity, because
-a low-severity outer finding can decode to a critical inner one;
-gating at the input layer would skip the outer and lose the
-critical inner. The filter runs once on the resulting tree and
-applies a "keep for context" rule:
- 
-- A node is kept if its own severity meets the threshold, OR if any
-  of its descendants do.
-- Leaf child findings (the non-recursive ones) are filtered
-  strictly: dropped if their own severity is below threshold,
-  regardless of parent.
- 
-So a low-severity outer that decodes to a critical inner stays in
-the report, and the chain showing how you got from the outer to
-the critical inner is preserved. A low-severity outer whose
-descendants are all also low gets dropped.
- 
-#### Worked example
- 
-Scanning the LiteLLM 1.82.8 wheel with the full archive treatment:
- 
-```bash
-pydepgate scan --deep litellm-1.82.8-py3-none-any.whl \
-    --peek --peek-chain \
-    --min-severity high \
-    --decode-payload-depth=4 \
-    --decode-iocs=full \
-    --decode-location ./forensics \
-    --decode-archive-password investigation
-```
- 
-Produces in `./forensics/`:
- 
-```
-FINDINGS_2026-04-29_21-57-15_litellm-1.82.8-py3-none-any.whl.zip
-FINDINGS_2026-04-29_21-57-15_litellm-1.82.8-py3-none-any.whl.iocs.txt
-```
- 
-Verify and inspect:
- 
-```bash
-unzip -P investigation -l ./forensics/FINDINGS_*.zip
-# Should list: <target>/report.txt, <target>/sources.txt, <target>/iocs.txt
- 
-unzip -P investigation -d /tmp/extracted ./forensics/FINDINGS_*.zip
-less /tmp/extracted/litellm-1.82.8-py3-none-any.whl/report.txt
- 
-# Quick hash extraction from the sidecar:
-grep '^decoded_sha256' ./forensics/FINDINGS_*.iocs.txt | awk '{print $2}'
-```
- 
-#### Safety guarantees
- 
-The decode pass inherits all the safety properties of the peek
-enricher (pickle detection without deserialization, decompression-bomb
-budgets, in-flight cap enforcement) and adds two more.
- 
-**The encrypted archive is for AV-friendliness, not
-confidentiality.** ZipCrypto is cryptographically broken (known
-plaintext attacks recover the password in seconds). The default
-password `infected` is the malware-research convention; AV vendors
-recognize archives with that password as do-not-scan and will not
-quarantine them mid-investigation. The encryption protects you from
-your own AV, not from any other adversary. Treat the archive
-contents as you would any malware sample.
- 
-**The decode pass never executes decoded content.** Re-scanning
-decoded bytes goes through the same engine path as scanning the
-original artifact, and that engine has been the same read-only
-analyzer pipeline since v0.1. Decoded Python source is parsed via
-`ast.parse` (no compile, no exec), and any signal-bearing literals
-inside it are themselves treated as data, not code, regardless of
-how many decode layers deep we are.
-
-## Writing rules
- 
-Rules live in `pydepgate.gate` files. The format is either TOML or
-JSON; pydepgate auto-detects from content. A rule has three parts:
-identity (an `id`), a match (which signals it applies to), and an
-action (what to do when matched).
- 
-### Discovery
- 
-When you run `pydepgate scan`, rules are loaded from the first match
-of:
- 
-1. The `--rules-file` CLI flag, if given.
-2. The `PYDEPGATE_RULES_FILE` environment variable.
-3. `./pydepgate.gate` in the current directory.
-4. `<venv>/pydepgate.gate` in the active virtualenv, if any.
-If multiple files exist, only the first is loaded. The others are
-listed in the scan summary so you can see what was skipped.
- 
-### Minimal rule (TOML)
- 
 ```toml
 [[rule]]
-id = "my-package-uses-large-base64"
-signal_id = "DENS010"
-path_glob = "my_package/embedded/*.py"
-action = "suppress"
-explain = "We legitimately ship a 200KB embedded model in this dir."
-```
- 
-The `id` is yours. `signal_id` is what to match (see
-`pydepgate explain --list` for the catalogue). `path_glob` is an
-fnmatch-style pattern matched against the internal path of the file.
-`action` is one of `set_severity`, `suppress`, or `set_description`.
-`explain` is optional but encouraged: it shows up in
-`pydepgate explain --rule USER_my-package-uses-large-base64`.
- 
-### Match conditions
- 
-All non-empty match fields must be satisfied for a rule to apply.
-The supported fields:
- 
-| Field                | Matches against                                      |
-|----------------------|------------------------------------------------------|
-| `signal_id`          | `Signal.signal_id` (e.g. `"DENS010"`)                |
-| `analyzer`           | `Signal.analyzer` (e.g. `"code_density"`)            |
-| `file_kind`          | The triage decision: `pth`, `setup_py`, `init_py`, `sitecustomize`, `library_py`, etc. |
-| `scope`              | `Signal.scope`: `module`, `function`, `class`        |
-| `path_glob`          | fnmatch pattern against the file's internal path     |
-| `context_contains`   | Dict of `{key: value}` pairs that must appear in `Signal.context` with strict equality |
-| `context_predicates` | Dict of `{key: {operator: value}}` pairs evaluated against `Signal.context` (richer than `context_contains`, see below) |
- 
-### Context predicates
- 
-`context_predicates` extends `context_contains` with comparison
-operators. Each predicate takes the form `{field: {op: value}}`. The
-inner dict has exactly one operator key. Multiple predicates on
-different fields are AND-ed.
- 
-```toml
-# Block any base64-shaped string of 10KB or larger anywhere
-[[rule]]
-id = "block-large-base64"
-signal_id = "DENS010"
-context_predicates = { length = { gte = 10240 } }
+id = "litellm-pth-stdlib"
+signal_id = "STDLIB001"
+file_kind = "pth"
 action = "set_severity"
 severity = "critical"
- 
-# Suppress confusable single-char identifiers in test files only
-[[rule]]
-id = "ignore-confusables-in-tests"
-signal_id = "DENS021"
-path_glob = "tests/**/*.py"
-context_predicates = { identifier = { in = ["l", "O", "I"] } }
-action = "suppress"
+explain = "subprocess calls in .pth files have no legitimate use case."
 ```
- 
-Available operators:
- 
-| Category   | Operators                                  | Value type             |
-|------------|--------------------------------------------|------------------------|
-| Numeric    | `eq`, `ne`, `gt`, `gte`, `lt`, `lte`       | int or float           |
-| String     | `eq`, `ne`, `contains`, `startswith`, `endswith` | string         |
-| Collection | `in`, `not_in`                             | list, tuple, or set    |
- 
-Type mismatches (e.g. `gte` against a string) cause the predicate to
-silently fail to match rather than error. To AND multiple conditions
-on the same field, write multiple rules.
- 
-### Equivalent JSON
- 
-```json
-{
-  "_pydepgate_format": "json",
-  "_pydepgate_version": 1,
-  "rules": [
-    {
-      "id": "block-large-base64",
-      "signal_id": "DENS010",
-      "context_predicates": {"length": {"gte": 10240}},
-      "action": "set_severity",
-      "severity": "critical"
-    }
-  ]
-}
-```
- 
-### Actions
- 
-- **`set_severity`**: requires a `severity` field
-  (`info`, `low`, `medium`, `high`, `critical`).
-- **`suppress`**: drop the finding from the scan output. The
-  suppression is still recorded; `pydepgate scan -v` shows what was
-  suppressed and which rule did it.
-- **`set_description`**: requires a `description` field; replaces the
-  finding's text.
-### Precedence
- 
-When multiple rules match a signal, pydepgate picks one winner using
-this order:
- 
-1. Source priority: user rules win over system rules win over
-   defaults, regardless of specificity.
-2. Specificity: among rules of the same source, more match fields
-   wins. Each `context_predicates` entry counts as one match field.
-3. Load order: among ties on source and specificity, the earlier
-   rule wins.
-This means a user `[[rule]]` with the same shape as a default rule
-always wins. If you want your rule to lose to a more-specific default,
-add fewer match fields than the rule you want to override.
- 
-### Validation
- 
-Rules are validated when loaded. Errors are accumulated and reported
-together; if any rule fails validation, the entire file is rejected
-(no rules loaded). Common errors:
- 
-- Unknown field name: `Did you mean 'context_contains'?`
-- Unknown operator: `Did you mean 'gte'?`
-- Multiple operators in one predicate: must be exactly one per field.
-- Missing `severity` for `set_severity` action.
-Run `pydepgate scan --rules-file my.gate` once after editing to
-confirm everything parses.
+
+Three actions are supported: `set_severity`, `suppress`, and
+`set_description`. User rules always take precedence over default
+rules, regardless of specificity. Suppressed findings are tracked
+separately so users can see what would have fired and why it didn't.
+
+Run `pydepgate explain --list` to see all default rules and signals
+with descriptions. Complete rules file specification:
+[docs/reference/rules-file.md](https://nuclear-treestump.github.io/pydepgate/reference/rules-file). Worked
+walkthroughs of common rule-writing tasks:
+[docs/guides/custom-rules.md](https://nuclear-treestump.github.io/pydepgate/guides/custom-rules).
+
+## Status
+
+**Static analysis is functional end-to-end.** pydepgate can statically
+analyze wheels, sdists, installed packages, and single loose files for
+the patterns used in real-world Python supply-chain attacks.
+
+Stable today:
+
+- Static analysis of `.whl` files, sdists, installed packages by name,
+  and individual loose files via `--single`.
+- Five production analyzers (`encoding_abuse`, `dynamic_execution`,
+  `string_ops`, `suspicious_stdlib`, `code_density`).
+- A rules engine with file-kind-aware severity promotion, fully
+  data-driven via TOML or JSON `pydepgate.gate` files. The default
+  rule set includes 32 rules dedicated to density-layer signals alone.
+- A safe partial evaluator that resolves obfuscated string expressions
+  without executing user code.
+- An optional payload-peek enricher (`--peek`) with bounded multi-layer
+  decode, content classification, decompression-bomb budgets, and
+  pickle detection without deserialization.
+- A recursive decode pipeline (`--decode-payload-depth=N`) that
+  re-scans decoded payloads and produces a tree-shaped attack-chain
+  report, with optional encrypted-archive IOC output.
+- An SSH-randomart-style finding-distribution map rendered inline with
+  human-readable scan output.
+- Three output formats: human-readable terminal, JSON (schema v2), and
+  SARIF 2.1.0 with codeFlow encoding, GitHub-compatible severity
+  mapping, partial fingerprints, and content-blind message text.
+  Validated in CI against the Microsoft SARIF Multitool.
+- Pre-commit hook integration via `pydepgate` and `pydepgate-pth` hook
+  IDs.
+- Official Docker image at `ghcr.io/nuclear-treestump/pydepgate`.
+  Multi-stage Alpine build under 50 MB, runs as non-root (uid 1000),
+  published for `linux/amd64` and `linux/arm64`.
+- Shell tab completion for bash, zsh, and fish.
+
+In active development:
+
+- The `comment_analysis` analyzer.
+- Runtime interdiction (`exec` mode).
+- Environment auditing (`preflight` mode).
+- Aliased import resolution (`from subprocess import Popen as P`).
+- A pip-wrapper / transitive-dependency `audit` subcommand.
+
+## Documentation
+
+| Section | Contents |
+|---|---|
+| [Getting Started](https://nuclear-treestump.github.io/pydepgate/index) | First scan, reading output, using `explain` |
+| [CLI Reference](https://nuclear-treestump.github.io/pydepgate/cli/index) | All subcommands, all flags, environment variables |
+| [Signals Reference](https://nuclear-treestump.github.io/pydepgate/reference/signals) | Every signal ID with severity tables per file kind |
+| [Rules File](https://nuclear-treestump.github.io/pydepgate/reference/rules-file) | `pydepgate.gate` format specification |
+| [Exit Codes](https://nuclear-treestump.github.io/pydepgate/reference/exit-codes) | Exit code contract and CI implications |
+| [Output Formats](https://nuclear-treestump.github.io/pydepgate/reference/output-formats) | Human, JSON, SARIF schemas |
+| [Guide: CI Integration](https://nuclear-treestump.github.io/pydepgate/guides/ci-integration) | GitHub Actions, GitLab CI, pre-commit, Docker |
+| [Guide: Custom Rules](https://nuclear-treestump.github.io/pydepgate/guides/custom-rules) | Suppressing false positives, scoping rules |
+| [Guide: Decode Payloads](https://nuclear-treestump.github.io/pydepgate/guides/decode-payloads) | Recursive decode, IOC sidecars, encrypted archives |
+| [Guide: SARIF Integration](https://nuclear-treestump.github.io/pydepgate/guides/sarif-integration) | GitHub Code Scanning ingestion |
 
 ## Design constraints
 
-- **Zero runtime dependencies.** Standard library only. This is a load-bearing design constraint, not a stylistic preference: every additional dependency is a supply-chain attack surface for a tool whose job is to defend against supply-chain attacks.
-- **Safe by construction.** Parsers and the partial evaluator never execute, compile, or import input content. Every operation modeled by the resolver is reimplemented from scratch using only Python builtins on values the resolver itself produced.
-- **Self-integrity at bootstrap.** Critical stdlib references are captured into locals before any untrusted code runs (relevant when the runtime engine ships in v0.4).
-- **Lightweight.** The full test suite runs in roughly seven seconds on a modern laptop, including subprocess-based CLI tests against installed packages.
+- **Zero runtime dependencies.** Standard library only. This is a
+  load-bearing design constraint, not a stylistic preference: every
+  additional dependency is a supply-chain attack surface for a tool
+  whose job is to defend against supply-chain attacks.
+- **Safe by construction.** Parsers and the partial evaluator never
+  execute, compile, or import input content. Every operation modeled
+  by the resolver is reimplemented from scratch using only Python
+  builtins on values the resolver itself produced.
+- **Self-integrity at bootstrap.** Critical stdlib references are
+  captured into locals before any untrusted code runs (relevant when
+  the runtime engine ships in v0.4).
+- **Lightweight.** The full test suite runs in roughly twenty seconds
+  on the lowest available options in Codespaces, including
+  subprocess-based CLI tests against installed packages.
 
 ## Relationship to PyDepGuard
 
 pydepgate is a narrow, single-purpose tool focused on startup-vector
-interdiction. [PyDepGuard](https://github.com/nuclear-treestump/pylock-dependency-lockfile)
-is a broader Python security framework covering runtime sandboxing, 
-and dependency management. The startup-vector engine developed in pydepgate 
-is intended to eventually integrate with PyDepGuard as a subsystem; until then,
-the two projects are developed independently.
+interdiction.
+[PyDepGuard](https://github.com/nuclear-treestump/pydepguard) is a
+broader Python security framework covering runtime sandboxing and
+dependency management. The startup-vector engine developed in
+pydepgate is intended to eventually integrate with PyDepGuard as a
+subsystem; until then, the two projects are developed independently.
 
 Users who need only startup-vector protection should use pydepgate.
 Users who need the full runtime security model should use PyDepGuard
@@ -962,36 +414,46 @@ analyzers/         structured representations -> raw signals
   suspicious_stdlib   STDLIB001-003
   density_analyzer    DENS001-051
 enrichers/         signal hints -> enriched signal context
-  _magic.py           magic-byte tables and ASCII-alphabet predicates
-  _unwrap.py          bounded multi-layer decode/decompress loop
   payload_peek        ENC002 emission and decoded context block
 rules/             signals + context -> severity-rated findings
-  base.py             rule data model and matching logic
-  defaults.py         default rule set (90+ rules across all signals)
-  loader.py           TOML/JSON parser with validation and typo suggestions
-  explanations.py     structured explain-output content
 engines/           orchestration (currently: static)
 visualizers/       inline rendering helpers for the human reporter
-  density_map         SSH-randomart-style finding-distribution renderer
 cli/               argparse, dispatch, reporters, explain subcommand
 ```
 
-Analyzers do not see raw bytes. They walk parsed representations and emit `Signal` objects. The rules engine wraps signals with severity to produce `Finding` objects, applying user and default rules in priority order. The CLI renders findings in human, JSON, or SARIF format.
+Analyzers do not see raw bytes. They walk parsed representations and
+emit `Signal` objects. The rules engine wraps signals with severity to
+produce `Finding` objects, applying user and default rules in priority
+order. The CLI renders findings in human, JSON, or SARIF format.
 
-The `_resolver.py` module is reusable infrastructure for any analyzer that needs to know what an expression evaluates to. It returns structured `ResolutionResult` objects with success/failure status, operation counts, partial values, and resolved fragment lists.
+The `_resolver.py` module is reusable infrastructure for any analyzer
+that needs to know what an expression evaluates to. It returns
+structured `ResolutionResult` objects with success/failure status,
+operation counts, partial values, and resolved fragment lists.
 
-The static engine exposes three entry points for single-file analysis. `scan_file(path)` reads bytes and routes through triage by filename. `scan_bytes(content, internal_path, ...)` is the per-file workhorse that artifact enumerators (wheel, sdist, installed) call once per in-scope file. `scan_loose_file_as(path, file_kind)` bypasses triage entirely and forces a file kind, preserving the real path through to finding contexts; this is the entry point used by `pydepgate scan --single`.
+The static engine exposes three entry points for single-file analysis.
+`scan_file(path)` reads bytes and routes through triage by filename.
+`scan_bytes(content, internal_path, ...)` is the per-file workhorse
+that artifact enumerators (wheel, sdist, installed) call once per
+in-scope file. `scan_loose_file_as(path, file_kind)` bypasses triage
+entirely and forces a file kind, preserving the real path through to
+finding contexts; this is the entry point used by
+`pydepgate scan --single`.
 
 ## Development
 
 ```bash
-git clone https://github.com/nuclear-treestump/pydep-vector-runner
-cd pydep-vector-runner
+git clone https://github.com/nuclear-treestump/pydepgate
+cd pydepgate
 pip install -e .
 python -m unittest discover tests -v
 ```
 
-The test suite has grown to approximately 500 tests as the analyzer set has expanded. Tests are organized by module and include happy-path coverage, evasion batteries, false-positive batteries, robustness checks against adversarial inputs, integration tests against synthetic wheels and sdists, and CLI tests via subprocess.
+The test suite has grown to approximately 500 tests as the analyzer
+set has expanded. Tests are organized by module and include happy-path
+coverage, evasion batteries, false-positive batteries, robustness
+checks against adversarial inputs, integration tests against synthetic
+wheels and sdists, and CLI tests via subprocess.
 
 To regenerate the binary `.pth` test fixtures after editing them:
 
@@ -999,29 +461,51 @@ To regenerate the binary `.pth` test fixtures after editing them:
 python scripts/generate_fixtures.py
 ```
 
+Contributors: see [CONTRIBUTING.md](CONTRIBUTING.md) for the issue
+process, sign-off requirements, and contribution scope.
+
 ## Safety notes
 
-This project builds tooling to defend against Python supply-chain attacks. The test fixtures in `tests/fixtures/` and the synthetic samples used in integration tests model the *structural shape* of known attacks (LiteLLM 1.82.8, Trojan Source CVE-2021-42574, others catalogued under T1546.018) but contain only inert payloads. No actual malicious code is present in this repository.
+This project builds tooling to defend against Python supply-chain
+attacks. The test fixtures in `tests/fixtures/` and the synthetic
+samples used in integration tests model the *structural shape* of
+known attacks (LiteLLM 1.82.8, Trojan Source CVE-2021-42574, others
+catalogued under T1546.018) but contain only inert payloads. No
+actual malicious code is present in this repository.
 
-For regression testing against real malicious samples, use the [OSSF malicious-packages](https://github.com/ossf/malicious-packages), [Datadog malicious-software-packages-dataset](https://github.com/DataDog/malicious-software-packages-dataset), or [lxyeternal/pypi_malregistry](https://github.com/lxyeternal/pypi_malregistry) datasets. Do so in disposable VMs or containers, and do not commit samples to this repository.
+For regression testing against real malicious samples, use the
+[OSSF malicious-packages](https://github.com/ossf/malicious-packages),
+[Datadog malicious-software-packages-dataset](https://github.com/DataDog/malicious-software-packages-dataset),
+or [lxyeternal/pypi_malregistry](https://github.com/lxyeternal/pypi_malregistry)
+datasets. Do so in disposable VMs or containers, and do not commit
+samples to this repository.
 
 ## Known limitations
 
-pydepgate's static analysis is honest about what it can and cannot catch. Documented gaps include:
+pydepgate's static analysis is honest about what it can and cannot
+catch. Documented gaps include:
 
 **Analysis gaps:**
 
-- Function return tracking. `code = make_payload()` where `make_payload()` internally calls `compile(...)` is not flagged.
+- Function return tracking. `code = make_payload()` where
+  `make_payload()` internally calls `compile(...)` is not flagged.
 - `__builtins__` as a Name subscript (rather than via a function call).
-- Tuple unpacking, augmented assignment, and conditional assignments in the resolver's variable tracking.
+- Tuple unpacking, augmented assignment, and conditional assignments
+  in the resolver's variable tracking.
 - Lambda scope precision (lambdas count as their enclosing scope).
 - Aliased stdlib imports such as `from subprocess import Popen as P`.
-  - For now. I will add this soon enough.
 
 **Density-layer caveats:**
 
-- `DENS020` (low-vowel-ratio identifiers) and `DENS040` (AST depth) both produce false positives on legitimate machine-generated code (Cython output, parser tables, generated configuration). They ship at `LOW` severity outside startup vectors so they surface as contributing signals rather than standalone alerts.
-- `DENS031` (homoglyphs) can fire on legitimate non-English variable names in non-Latin codebases. The default rule keeps it at `HIGH` rather than `CRITICAL` outside startup vectors so users with intentional non-Latin naming can suppress with a single user rule.
+- `DENS020` (low-vowel-ratio identifiers) and `DENS040` (AST depth)
+  both produce false positives on legitimate machine-generated code
+  (Cython output, parser tables, generated configuration). They ship
+  at `LOW` severity outside startup vectors so they surface as
+  contributing signals rather than standalone alerts.
+- `DENS031` (homoglyphs) can fire on legitimate non-English variable
+  names in non-Latin codebases. The default rule keeps it at `HIGH`
+  rather than `CRITICAL` outside startup vectors so users with
+  intentional non-Latin naming can suppress with a single user rule.
 
 ## Author
 
