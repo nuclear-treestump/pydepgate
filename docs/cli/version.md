@@ -1,3 +1,8 @@
+---
+title: Version
+parent: CLI
+nav_order: 4
+---
 # pydepgate version
 
 Print the installed pydepgate version.

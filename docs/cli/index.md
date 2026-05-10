@@ -1,3 +1,9 @@
+---
+title: CLI
+nav_order: 2
+has_children: true
+---
+
 # CLI Reference
 
 pydepgate is invoked as:
@@ -45,7 +51,7 @@ the subcommand name.
 | Flag | Values | Default | Env variable | Description |
 |---|---|---|---|---|
 | `--min-severity` | `info`, `low`, `medium`, `high`, `critical` | `info` | `PYDEPGATE_MIN_SEVERITY` | Suppress findings below this severity in output |
-| `--ci` | | `false` | `PYDEPGATE_CI` | Implies `--min-severity high --no-color`. Shorthand for CI pipelines. |
+| `--ci` | | `false` | `PYDEPGATE_CI` | CI mode: if `--format` is not set, forces `json`; if `--color` is `auto`, forces `never`. Does not change `--min-severity`. |
 | `--strict-exit` | | `false` | `PYDEPGATE_STRICT_EXIT` | Compute exit code from all findings regardless of `--min-severity`. Use when you want filtered display but unfiltered exit behavior. |
 
 ### Rules
@@ -59,21 +65,21 @@ the subcommand name.
 | Flag | Values | Default | Env variable | Description |
 |---|---|---|---|---|
 | `--peek` | | `false` | `PYDEPGATE_PEEK` | Enable the payload-peek enricher. Required for `--decode-payload-depth` to produce output. |
-| `--peek-depth` | integer | `5` | `PYDEPGATE_PEEK_DEPTH` | Maximum decode depth in the enricher pass. Capped at 10. |
-| `--peek-budget` | integer (bytes) | `10485760` | `PYDEPGATE_PEEK_BUDGET` | In-flight byte budget. Bounds decompression bomb exposure. |
-| `--peek-min-length` | integer | `64` | `PYDEPGATE_PEEK_MIN_LENGTH` | Minimum literal length to attempt decoding |
+| `--peek-depth` | integer | `3` | `PYDEPGATE_PEEK_DEPTH` | Maximum decode depth in the enricher pass. Floor 1, ceiling 10. |
+| `--peek-budget` | integer (bytes) | `524288` (512 KB) | `PYDEPGATE_PEEK_BUDGET` | Cumulative byte budget across all unwrap layers. Floor 1024. |
+| `--peek-min-length` | integer | `1024` | `PYDEPGATE_PEEK_MIN_LENGTH` | Minimum literal length, in bytes, before the enricher attempts to decode it. Floor 16. |
 | `--peek-chain` | | `false` | `PYDEPGATE_PEEK_CHAIN` | Print verbose per-layer hex dumps in the enricher output |
 
 ### Decode pipeline
 
 | Flag | Values | Default | Env variable | Description |
 |---|---|---|---|---|
-| `--decode-payload-depth` | integer | `0 (off)` | `PYDEPGATE_DECODE_PAYLOAD_DEPTH` | Maximum recursion depth for the decode pipeline. `0` disables decoding. Requires `--peek`. |
-| `--decode-iocs` | `off`, `hashes`, `full` | `off` | `PYDEPGATE_DECODE_IOCS` | IOC sidecar output mode. See [Decode Payloads](../guides/decode-payloads.md). |
-| `--decode-location` | path | current dir | `PYDEPGATE_DECODE_LOCATION` | Directory for sidecar and archive output |
+| `--decode-payload-depth` | integer | unset (decode disabled) | `PYDEPGATE_DECODE_PAYLOAD_DEPTH` | Maximum recursion depth for the decode pipeline. Must be in `[1, 8]` when enabled. Requires `--peek`. |
+| `--decode-location` | path | `./decoded/` | `PYDEPGATE_DECODE_LOCATION` | Output directory for decode reports, sidecars, and archives. Created if missing. |
+| `--decode-format` | `text`, `json` | `text` | `PYDEPGATE_DECODE_FORMAT` | Format of the decode-pipeline report. `text` for a human-readable tree; `json` for structured downstream tooling. |
+| `--decode-iocs` | `off`, `hashes`, `full` | `off` | `PYDEPGATE_DECODE_IOCS` | IOC sidecar mode. See [Decode Payloads](../guides/decode-payloads.md). |
 | `--decode-archive-password` | string | `infected` | `PYDEPGATE_DECODE_ARCHIVE_PASSWORD` | Password for the `full` mode encrypted archive |
-| `--decode-archive-stored` | | `false` | (none) | Use STORED compression instead of DEFLATE for the `full` mode archive. No env variable by design; this is a per-investigation choice. |`PYDEPGATE_DECODE_ARCHIVE_COMPRESSION` | Archive compression mode. Use `stored` for byte-verifiable forensic archives. |
-| `--decode-format` | `text`, `json` | `text` | `PYDEPGATE_DECODE_FORMAT` | Output format for the decode report written to `--decode-location`. `text` is the human-readable tree; `json` is structured for downstream tooling. |
+| `--decode-archive-stored` | | `false` | (none) | Use STORED compression instead of DEFLATE for the `full` mode archive. Slightly larger archive but bypasses zlib entirely. Useful when byte-verifiable archive contents matter. |
 
 ### SARIF
 

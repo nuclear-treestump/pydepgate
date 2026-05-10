@@ -1,3 +1,8 @@
+---
+title: Decode Payloads
+parent: Guides
+nav_order: 3
+---
 # Decode Payloads
 
 pydepgate's decode pipeline recursively unwraps encoded payloads found during
@@ -23,9 +28,10 @@ safely partial-decodes encoded literals, classifies the terminal content,
 and emits `ENC002` when an unwrap chain is nested.
 
 `--decode-payload-depth N` enables the recursive decode pipeline with a
-maximum recursion depth of N. A depth of 0 (the default) disables decoding
-entirely. A depth of 4 is sufficient for most real-world attacks; the LiteLLM
-1.82.8 attack chain terminates at depth 3.
+maximum recursion depth of N. N must be in `[1, 8]`. When the flag is
+unset (the default), the decode pipeline is disabled. A depth of 4 is
+sufficient for most real-world attacks; the LiteLLM 1.82.8 attack chain
+terminates at depth 3.
 
 ### Peek-only mode
 
@@ -41,49 +47,55 @@ pydepgate scan --peek some-package.whl
 ## The decoded-payload tree
 
 When `--decode-payload-depth` is set, the report includes a tree-shaped
-section below the main findings showing each decode step:
-
-```
-Decoded payload tree
-
-  setup.py :: ENC001 @ line 12
-  └── [layer 0] base64 -> python_source (1.2 KB)
-      └── [layer 1] base64 -> python_source (980 B)
-          └── [layer 2] python_source
-              ├── DYN002  exec() called with a non-literal argument
-              └── STDLIB001  subprocess.Popen() called
-```
-
-Each node shows the decode transform applied, the classified terminal type,
-the size of the decoded content, and any signals found inside it. The tree
-preserves the full chain from the outer literal down to the innermost payload.
+section showing each decode step. Each node shows the decode transform
+applied, the classified terminal type, the size of the decoded content, and
+any signals found inside it. The tree preserves the full chain from the outer
+literal down to the innermost payload.
 
 ### Severity filter on the decoded tree
 
 `--min-severity` applies to the decoded tree as a presentation filter.
-Decoding itself runs over every payload-bearing finding regardless of severity.
-A low-severity outer finding that decodes to a critical inner one is still
-captured. The filter preserves chain context: a low-severity ancestor with a
-high-severity descendant is kept so the chain remains readable.
+Decoding itself runs over every payload-bearing finding regardless of
+severity. A low-severity outer finding that decodes to a critical inner one
+is still captured. The filter preserves chain context with a "keep for
+context" rule: a node stays if its own severity meets the threshold OR if
+any of its descendants do, so chains are not broken when only the inner
+finding is severe. Leaf child findings (the non-recursive ones at the bottom
+of a chain) are filtered strictly, dropped if their own severity is below
+threshold.
 
 ## IOC output modes
 
 `--decode-iocs` controls whether pydepgate writes sidecar files alongside the
 report. It accepts three values:
 
-**`off`** (default): No sidecar files. The decoded tree appears in the report
-only.
+**`off`** (default). A single plaintext file containing only the tree report.
+When the decoded tree is empty, no file is written; a stderr note is written
+instead.
 
-**`hashes`**: Writes a plaintext `.iocs.txt` sidecar file next to the scanned
-artifact (or at the path given to `--decode-location`). The sidecar contains
-hash records: SHA256 and SHA512 of each decoded payload layer, with the
-containing file hash and artifact hash for forensic chaining.
+**`hashes`**. Two plaintext files: the tree report plus a `.iocs.txt`
+sidecar containing SHA256 and SHA512 hashes of every decoded payload, with
+the chain summary and location for each. Hash records use a fixed two-token
+line shape (`decoded_sha256  <hex>`) so a one-liner like
+`grep '^decoded_sha256' iocs.txt | awk '{print $2}'` extracts every hash for
+batch lookup. Skipped on empty trees, same as `off` mode.
 
-**`full`**: Writes a ZipCrypto-encrypted `.zip` archive containing three files:
-`report.txt`, `sources.txt`, and `iocs.txt`. Also writes a plaintext `.iocs.txt`
-sidecar adjacent to the archive. The archive is always produced, including a
-`NOFINDINGS_` stub when no payloads are found, so downstream tooling can rely
-on archive presence as a signal.
+**`full`**. A ZipCrypto-encrypted `.zip` archive plus a plaintext `.iocs.txt`
+sidecar. The archive contains three files inside a subdirectory matching the
+sanitized target name:
+
+```
+<target>/report.txt    Tree report (same shape as off-mode output)
+<target>/sources.txt   Per-layer decoded source dumps with header
+                       blocks and line-numbered bodies
+<target>/iocs.txt      Hash records (same content as the sidecar)
+```
+
+The sidecar lives next to the archive, not inside it, so you can batch-process
+IOC hashes without unzipping. Unlike `off` and `hashes`, `full` mode always
+produces output: an empty tree results in a `NOFINDINGS_` stub archive with
+the same structure but stub markers inside. This consistency lets downstream
+triage tooling rely on archive presence as a signal that the scan completed.
 
 ```bash
 pydepgate scan --peek --decode-payload-depth 4 \
@@ -91,24 +103,38 @@ pydepgate scan --peek --decode-payload-depth 4 \
     some-package.whl
 ```
 
-### Archive naming
+### Output filename convention
 
-Archives are named using the artifact identity, a UTC timestamp, and a status
-prefix:
+All decode output files use a consistent naming pattern:
 
 ```
-FINDINGS_some-package-1.0.0-py3-none-any_20260510T143022Z.zip
-NOFINDINGS_some-package-1.0.0-py3-none-any_20260510T143022Z.zip
+{STATUS}_{timestamp}_{target}{extension}
 ```
 
-The `FINDINGS_` / `NOFINDINGS_` prefix makes downstream filtering trivial.
+`STATUS` is `FINDINGS` when the decoded tree contains nodes, `NOFINDINGS`
+when it does not. `timestamp` is UTC, formatted `YYYY-MM-DD_HH-MM-SS` (no
+`Z` suffix). `target` is the basename of the artifact identity, sanitized
+to `[A-Za-z0-9._-]` with leading separators stripped. `extension` is `.txt`
+for text output, `.json` for JSON, `.zip` for the encrypted archive, or
+`.iocs.txt` for the plaintext IOC sidecar.
+
+Example:
+
+```
+FINDINGS_2026-04-29_21-57-15_litellm-1.82.8-py3-none-any.whl.zip
+FINDINGS_2026-04-29_21-57-15_litellm-1.82.8-py3-none-any.whl.iocs.txt
+```
+
+Re-running the same command produces a new file with a new timestamp; the
+previous file is left untouched.
 
 ### Archive password
 
 The archive uses ZipCrypto encryption with the default password `infected`,
-following the malware research community convention. This is an
-AV-friendliness measure, not a confidentiality mechanism. ZipCrypto is
-cryptographically broken; the archive is not a secure container.
+following the malware research community convention. AV vendors recognize
+archives with that password as do-not-scan and will not quarantine them
+mid-investigation. ZipCrypto is cryptographically broken; this is an
+AV-friendliness measure, not a confidentiality mechanism.
 
 Override the password:
 
@@ -126,22 +152,28 @@ PYDEPGATE_DECODE_ARCHIVE_PASSWORD="my-password" \
     pydepgate scan --peek --decode-payload-depth 4 --decode-iocs full some-package.whl
 ```
 
-### Compression mode
+### Archive compression
 
-Archives use DEFLATE compression by default. Use `STORED` for forensic-grade
-preservation (no compression, exact byte-for-byte representation):
+Archives use DEFLATE compression by default. The `--decode-archive-stored`
+boolean flag switches the archive to STORED compression instead (no zlib
+involvement). The archive is slightly larger but byte-verifiable, which is
+useful when forensic preservation matters:
 
 ```bash
 pydepgate scan --peek --decode-payload-depth 4 \
     --decode-iocs full \
-    --decode-archive-compression stored \
+    --decode-archive-stored \
     some-package.whl
 ```
 
+`--decode-archive-stored` deliberately has no environment-variable
+equivalent. It is a per-investigation choice, not a persistent preference.
+
 ### Output location
 
-By default, sidecar files and archives land in the current directory. Specify
-a different directory with `--decode-location`:
+By default, sidecar files and archives land in `./decoded/` relative to the
+current working directory. The directory is created if it does not exist.
+Specify a different directory with `--decode-location`:
 
 ```bash
 pydepgate scan --peek --decode-payload-depth 4 \
@@ -150,22 +182,24 @@ pydepgate scan --peek --decode-payload-depth 4 \
     some-package.whl
 ```
 
-The directory must exist. The filename within it is generated automatically.
+The filename within the directory follows the `{STATUS}_{timestamp}_{target}`
+pattern described above.
 
 ## All decode flags
 
 | Flag | Env variable | Default | Description |
 |---|---|---|---|
 | `--peek` | `PYDEPGATE_PEEK` | off | Enable the payload-peek enricher |
-| `--peek-depth` | `PYDEPGATE_PEEK_DEPTH` | 5 | Max decode depth in the enricher pass |
-| `--peek-budget` | `PYDEPGATE_PEEK_BUDGET` | 10 MB | In-flight byte budget; bounds decompression |
-| `--peek-min-length` | `PYDEPGATE_PEEK_MIN_LENGTH` | 64 | Minimum literal length to attempt decoding |
+| `--peek-depth` | `PYDEPGATE_PEEK_DEPTH` | `3` | Max decode depth in the enricher pass. Floor 1, ceiling 10. |
+| `--peek-budget` | `PYDEPGATE_PEEK_BUDGET` | `524288` (512 KB) | Cumulative byte budget across unwrap layers. Floor 1024. |
+| `--peek-min-length` | `PYDEPGATE_PEEK_MIN_LENGTH` | `1024` | Minimum literal length to attempt decoding. Floor 16. |
 | `--peek-chain` | `PYDEPGATE_PEEK_CHAIN` | off | Verbose per-layer hex dumps in the enricher output |
-| `--decode-payload-depth` | `PYDEPGATE_DECODE_PAYLOAD_DEPTH` | 3 (disabled when unset) | Max recursion depth for the decode pipeline |
+| `--decode-payload-depth` | `PYDEPGATE_DECODE_PAYLOAD_DEPTH` | unset (decode disabled) | Max recursion depth for the decode pipeline. Must be in `[1, 8]` when enabled. Requires `--peek`. |
+| `--decode-location` | `PYDEPGATE_DECODE_LOCATION` | `./decoded/` | Output directory. Created if missing. |
+| `--decode-format` | `PYDEPGATE_DECODE_FORMAT` | `text` | `text` for the human-readable tree report; `json` for structured downstream tooling. |
 | `--decode-iocs` | `PYDEPGATE_DECODE_IOCS` | `off` | IOC output mode: `off`, `hashes`, `full` |
-| `--decode-location` | `PYDEPGATE_DECODE_LOCATION` | current dir | Directory for sidecar and archive output |
 | `--decode-archive-password` | `PYDEPGATE_DECODE_ARCHIVE_PASSWORD` | `infected` | Archive password |
-| `--decode-archive-stored` | (none) | `False` | Applies Stored compression instead of Deflate |
+| `--decode-archive-stored` | (none) | off | Use STORED compression instead of DEFLATE for the `full` mode archive |
 
 CLI flags take precedence over environment variables when both are set.
 
@@ -174,8 +208,8 @@ CLI flags take precedence over environment variables when both are set.
 When `--format sarif` and `--decode-payload-depth` are both set, the decoded
 tree is threaded into the SARIF renderer. Findings reached through the decode
 pipeline appear as SARIF results with `codeFlows` encoding the attack chain.
-The scan computes the decoded tree once and reuses it for both the SARIF output
-and the file-writing decode pass; you do not pay the cost of running the decode
-driver twice.
+The scan computes the decoded tree once and reuses it for both the SARIF
+output and the file-writing decode pass; you do not pay the cost of running
+the decode driver twice.
 
 See [SARIF Integration](sarif-integration.md) for the consumer side.

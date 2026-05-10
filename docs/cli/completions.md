@@ -1,3 +1,8 @@
+---
+title: Tab Completions
+parent: CLI
+nav_order: 1
+---
 # pydepgate completions
 
 Generate shell tab-completion scripts for bash, zsh, or fish.
@@ -8,41 +13,46 @@ pydepgate completions <shell>
 
 Supported shells: `bash`, `zsh`, `fish`.
 
+Running this command alone does not install completion; you have to do
+something with its output. When run interactively (stdout is a TTY), the
+command writes install instructions to stderr after the script so you see
+guidance alongside the script content.
+
 ## Setup
 
 ### bash
 
-Add to your `~/.bashrc`:
+For the current shell only (forgotten when you close it):
 
 ```bash
 eval "$(pydepgate completions bash)"
 ```
 
-Or source it from a file:
+For all future bash sessions:
 
 ```bash
-pydepgate completions bash > ~/.config/pydepgate/completions.bash
-echo 'source ~/.config/pydepgate/completions.bash' >> ~/.bashrc
+pydepgate completions bash >> ~/.bashrc
 ```
 
 Reload your shell or run `source ~/.bashrc`.
 
 ### zsh
 
-Add to your `~/.zshrc`:
+For the current shell only:
 
 ```zsh
 eval "$(pydepgate completions zsh)"
 ```
 
-Or source it from a file:
+For all future zsh sessions:
 
 ```zsh
-pydepgate completions zsh > ~/.config/pydepgate/completions.zsh
-echo 'source ~/.config/pydepgate/completions.zsh' >> ~/.zshrc
+pydepgate completions zsh >> ~/.zshrc
 ```
 
-If you use `compinit`, ensure it runs before sourcing the completions file.
+The zsh script uses `bashcompinit` to bridge bash-style completion into
+zsh's completion system. If you use `compinit`, ensure it runs before
+sourcing the completions output.
 
 ### fish
 
@@ -53,6 +63,12 @@ pydepgate completions fish > ~/.config/fish/completions/pydepgate.fish
 Fish sources completions automatically from that directory. No further
 configuration needed.
 
+Alternatively, for the current session only:
+
+```fish
+pydepgate completions fish | source
+```
+
 ## What completes
 
 - Subcommand names
@@ -61,9 +77,22 @@ configuration needed.
   `--color`, `--min-severity`, `--as`, and others)
 - Signal IDs and rule IDs as positional arguments to `pydepgate explain`,
   including user-defined rules from a loaded rules file
-- Shell filesystem completion for path-type flags (`--single`,
-  `--rules-file`, `--decode-location`, and others)
+- Shell filesystem completion as a fallback for path-type flags
+  (`--single`, `--rules-file`, `--decode-location`, and others)
 
-The completion engine is implemented in `pydepgate._complete` and delegates
-all candidate computation to Python, so the completions stay in sync with
-the CLI without requiring shell-side maintenance.
+## How it works
+
+The shell glue emitted by `pydepgate completions <shell>` calls back into
+`pydepgate _complete` on every TAB press. `_complete` is a hidden
+subcommand whose job is to receive the current command-line state from the
+shell and write candidate completions to stdout, one per line. The shell
+turns that list into completion suggestions.
+
+The candidate-computation engine lives in `pydepgate.cli.completion` (a
+plain Python module with no argparse dependency). The argparse glue for
+`completions` and `_complete` lives in
+`pydepgate.cli.subcommands.completion`. Both keep the completion logic in
+sync with the CLI without requiring shell-side maintenance.
+
+When `_complete` returns no candidates (for example, a path argument), the
+shell glue falls through to ordinary filesystem completion.

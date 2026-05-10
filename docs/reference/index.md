@@ -1,3 +1,8 @@
+---
+title: Reference
+nav_order: 4
+has_children: true
+---
 # Reference
 
 Authoritative specification for pydepgate's contracts, schemas, and

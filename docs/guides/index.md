@@ -1,3 +1,8 @@
+---
+title: Guides
+nav_order: 3
+has_children: true
+---
 # Guides
 
 Task-oriented walkthroughs for specific use cases. Each guide covers one

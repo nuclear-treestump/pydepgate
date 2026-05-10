@@ -1,3 +1,8 @@
+---
+title: SARIF Integration
+parent: Guides
+nav_order: 4
+---
 # SARIF Integration
 
 pydepgate emits SARIF 2.1.0 documents compatible with GitHub Code Scanning,

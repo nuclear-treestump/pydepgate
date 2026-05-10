@@ -1,3 +1,8 @@
+---
+title: NYI - Preflight
+parent: CLI
+nav_order: 6
+---
 # pydepgate preflight
 
 Walk an installed Python environment and scan every package for startup-vector

@@ -1,3 +1,8 @@
+---
+title: CI Integration
+parent: Guides
+nav_order: 1
+---
 # CI Integration
 
 pydepgate integrates with CI pipelines in three ways: direct invocation via
@@ -49,13 +54,14 @@ jobs:
         run: pip install pydepgate
 
       - name: Scan wheel
-        run: pydepgate scan --ci dist/*.whl
+        run: pydepgate scan --ci --min-severity high dist/*.whl
 ```
 
-`--ci` is equivalent to `--min-severity high --no-color`. It filters out
-informational and low-severity signals that are too noisy for automated blocking
-while still catching everything HIGH and CRITICAL. Adjust `--min-severity` if
-your threshold differs.
+`--ci` is a CI-output mode flag, not a severity filter. When set, it forces
+`--format json` if format is not already set, and forces `--color never` if
+color is currently `auto`. It does not change `--min-severity`. Pair it with
+`--min-severity high` (as above) when you want CI to block only on HIGH and
+CRITICAL findings.
 
 To scan an installed package instead of a wheel:
 
@@ -64,7 +70,7 @@ To scan an installed package instead of a wheel:
         run: pip install some-package
 
       - name: Scan installed package
-        run: pydepgate scan --ci some-package
+        run: pydepgate scan --ci --min-severity high some-package
 ```
 
 ### GitLab CI
@@ -89,7 +95,7 @@ scan-wheel:
   image: python:3.12-slim
   script:
     - pip install pydepgate
-    - pydepgate scan --ci dist/*.whl
+    - pydepgate scan --ci --min-severity high dist/*.whl
   dependencies:
     - build-wheel
 ```
@@ -112,7 +118,7 @@ Scan a wheel from the host filesystem:
 docker run --rm \
     -v "$(pwd):/scan" \
     ghcr.io/nuclear-treestump/pydepgate:latest \
-    scan --ci some-package.whl
+    scan --ci --min-severity high some-package.whl
 ```
 
 The container's working directory is `/scan`, so paths are resolved against
@@ -126,7 +132,7 @@ the bind-mounted directory.
           docker run --rm \
             -v "${{ github.workspace }}/dist:/scan" \
             ghcr.io/nuclear-treestump/pydepgate:0.4 \
-            scan --ci /scan/*.whl
+            scan --ci --min-severity high /scan/*.whl
 ```
 
 Or using the container directive:
@@ -135,7 +141,7 @@ Or using the container directive:
       - name: Scan wheel with pydepgate
         uses: docker://ghcr.io/nuclear-treestump/pydepgate:0.4
         with:
-          args: scan --ci dist/*.whl
+          args: scan --ci --min-severity high dist/*.whl
 ```
 
 ### GitLab CI with Docker
@@ -147,7 +153,7 @@ scan-wheel:
     name: ghcr.io/nuclear-treestump/pydepgate:0.4
     entrypoint: [""]
   script:
-    - pydepgate scan --ci dist/*.whl
+    - pydepgate scan --ci --min-severity high dist/*.whl
   dependencies:
     - build-wheel
 ```
@@ -168,7 +174,7 @@ RUN pip install build && python -m build --wheel
 
 FROM ghcr.io/nuclear-treestump/pydepgate:0.4 AS scan
 COPY --from=build /src/dist/*.whl /scan/
-RUN pydepgate scan --ci /scan/*.whl
+RUN pydepgate scan --ci --min-severity high /scan/*.whl
 ```
 
 The pydepgate stage fails the build if blocking findings are present, stopping
@@ -270,9 +276,9 @@ pre-commit:
 
 | Context | Recommended flag | Rationale |
 |---|---|---|
-| CI artifact scan | `--min-severity high` or `--ci` | Blocks on the patterns that indicate real malware |
+| CI artifact scan | `--ci --min-severity high` | JSON output, no color, blocking only on HIGH/CRITICAL |
 | pre-commit `.py` hook | `--min-severity high` | Avoids blocking commits on density informational signals |
-| pre-commit `.pth` hook | (none) | All findings on `.pth` files warrant review |
+| pre-commit `.pth` hook | (no filter) | All findings on `.pth` files warrant review |
 | Interactive investigation | `--min-severity low` or no filter | Full signal visibility |
 | Strict CI (zero tolerance) | `--strict-exit` | Any finding blocks the build |
 

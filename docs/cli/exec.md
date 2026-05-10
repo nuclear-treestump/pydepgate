@@ -1,3 +1,8 @@
+---
+title: NYI - Exec
+parent: CLI
+nav_order: 5
+---
 # pydepgate exec
 
 Run a Python script with runtime interdiction active, blocking suspicious

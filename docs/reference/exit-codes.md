@@ -1,3 +1,8 @@
+---
+title: Exit Codes
+parent: Reference
+nav_order: 2
+---
 # Exit Codes
 
 pydepgate returns one of four exit codes on every invocation. These codes are
@@ -14,19 +19,22 @@ explicit migration note.
 | `2` | `FINDINGS_BLOCKING` | At least one HIGH or CRITICAL finding is present. |
 | `3` | `TOOL_ERROR` | pydepgate could not complete the scan. |
 
+The constants are defined in `src/pydepgate/cli/exit_codes.py`.
+
 ## Code 0: CLEAN
 
 The scan completed and produced no findings at or above the active
 `--min-severity` threshold. This is the expected result for a clean package.
 
-Note that `--min-severity` affects what is considered a finding for exit code
-purposes by default. A package with only LOW findings exits `0` when
-`--min-severity high` is set, because no findings met the threshold.
+`--min-severity` filters findings before the exit code is computed (unless
+`--strict-exit` is also set; see below). A package with only LOW findings
+exits `0` when `--min-severity high` is set, because no findings met the
+threshold.
 
 ## Code 1: FINDINGS_BELOW_BLOCKING
 
-Findings were produced, but none are HIGH or CRITICAL. The package is
-suspicious but does not meet the blocking threshold.
+Findings were produced, but none are HIGH or CRITICAL. The package has
+something worth looking at but does not meet the blocking threshold.
 
 In most CI configurations this is a non-failing result. The findings are still
 present in the output and warrant review.
@@ -42,9 +50,9 @@ pydepgate scan package.whl
 # exit 0 means clean.
 ```
 
-`--ci` is shorthand for `--min-severity high --no-color`. When `--min-severity
-high` is set, any finding in the output is HIGH or CRITICAL by definition, so
-exit code 1 cannot occur and the only non-zero result is 2.
+When `--min-severity high` is set explicitly, any finding in the output is
+HIGH or CRITICAL by definition, so exit code 1 cannot occur and the only
+non-zero result with findings is 2.
 
 ## Code 3: TOOL_ERROR
 

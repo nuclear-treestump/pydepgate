@@ -1,7 +1,7 @@
 ---
-layout: page
-title: pydepgate Home
-navigation: 1
+title: Home
+layout: home
+nav_order: 1
 ---
 # pydepgate
 

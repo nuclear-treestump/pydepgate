@@ -10,4 +10,7 @@ color_scheme: dark
 search_enabled: true
 enable_copy_code_button: true
 
+aux_links:
+  "View on GitHub":
+    - "https://github.com/nuclear-treestump/pydepgate"
 

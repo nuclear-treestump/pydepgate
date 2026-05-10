@@ -1,3 +1,8 @@
+---
+title: Output Formats
+parent: Reference
+nav_order: 3
+---
 # Output Formats
 
 pydepgate produces output in three formats, selected with `--format`:
@@ -8,36 +13,19 @@ a fourth document type is produced: the decoded-tree JSON report.
 
 The human format is the default. It renders to stdout with ANSI color when
 stdout is a TTY. Color is controlled by `--color` and disabled by `--no-color`
-or `--ci`.
+or by CI mode.
 
-A report with findings has this structure:
+A clean scan in human format writes `No findings` to stdout and exits with
+code `0`. A scan with findings writes a structured report listing each
+finding with its severity, signal ID, source location, and the rule that
+promoted the signal. The finding-distribution map (an SSH-randomart-style
+rendering showing where findings cluster across each file) is included
+unless suppressed with `--no-map`.
 
-```
-<artifact name>
-
-  <internal file path> [<highest severity in file>]
-
-    [<SEVERITY>] <signal_id> <analyzer> — <description>
-      Line <N>: <source line>
-      Rule: <rule_id>
-
-    [<SEVERITY>] ...
-
-  <finding-distribution map>
-  <N> findings  (<counts by severity>)
-
-Artifact SHA256: <hex>
-Artifact SHA512: <hex>
-```
-
-A clean scan produces no output and exits with code `0`.
-
-### Finding-distribution map
-
-The map is an SSH-randomart-style rendering that shows where findings cluster
-across each scanned file and at what severity. Each character in the map
-represents a region of the file; the density of characters and their visual
-weight indicates finding concentration. Suppress it with `--no-map`.
+For the exact format, run pydepgate on a fixture file and inspect the
+output. The human format is intended for terminal viewing and is not a
+stable contract; use `--format json` or `--format sarif` for downstream
+processing.
 
 ## JSON format
 
@@ -46,10 +34,14 @@ weight indicates finding concentration. Suppress it with `--no-map`.
 ### Schema version
 
 The current schema version is **3**. Consumers should branch on the
-`schema_version` field rather than testing for field presence. The schema
-version is bumped on any change to the shape of the object; additive changes
-(new nullable fields) are considered minor bumps, structural changes are
-major.
+`schema_version` field rather than testing for field presence. The
+`schema_version` is bumped on any change to the shape of the object.
+
+Schema version 3 added two purely-additive groups of nullable fields to
+schema version 2: `artifact.sha256` and `artifact.sha512`, plus
+`file_sha256` and `file_sha512` on each finding. Consumers built against
+schema version 2 continue to read schema version 3 documents correctly
+because the new fields are ignorable.
 
 ### Top-level structure
 
@@ -71,7 +63,7 @@ major.
 ```json
 "artifact": {
   "identity": "<string>",
-  "kind": "<string>",
+  "kind": "<wheel|sdist|installed_env|loose_file>",
   "sha256": "<64-char lowercase hex string or null>",
   "sha512": "<128-char lowercase hex string or null>"
 }
@@ -79,9 +71,10 @@ major.
 
 `identity` is the artifact name as passed to the scanner (wheel filename,
 package name, or path). `kind` is one of `wheel`, `sdist`, `installed_env`,
-`loose_file`. `sha256` and `sha512` are null for installed-package scans,
-since there is no single-file representation of an installed environment.
-Hashes use lowercase hex with no separators.
+`loose_file` (the lowercase string values of `ArtifactKind`). `sha256` and
+`sha512` are null for installed-package scans, since there is no
+single-file representation of an installed environment. Hashes use
+lowercase hex with no separators.
 
 ### `findings` array
 
@@ -106,10 +99,14 @@ Each entry in `findings` represents one finding:
 }
 ```
 
+`severity` is the lowercase enum value. `confidence` is the integer
+underlying the `Confidence` enum. `scope` is the lowercased name of the
+`Scope` enum member (for example `module`, `function`, `class_body`).
+
 `file_sha256` and `file_sha512` are the hashes of the specific file within
 the artifact that contained this finding. For single-file scans these are
-identical to the artifact hashes. For wheel/sdist scans they identify the
-specific internal file.
+identical to the artifact hashes. For wheel and sdist scans they identify
+the specific internal file.
 
 `context` contains signal-specific data from the analyzer. Keys beginning
 with `_` are internal pipeline fields and are omitted. All other keys and
@@ -117,8 +114,9 @@ values are stable for a given `signal_id` within a schema version.
 
 ### `suppressed_findings` array
 
-Findings that fired but were suppressed by a rule. Present when a user rules
-file suppresses a signal that would otherwise have produced a finding:
+Findings that fired but were suppressed by a rule. Present when a user
+rules file suppresses a signal that would otherwise have produced a
+finding:
 
 ```json
 {
@@ -160,45 +158,41 @@ Files in the artifact that triage excluded from analysis:
 ### `diagnostics` array
 
 A list of strings describing non-fatal issues encountered during the scan:
-parser failures, analyzer warnings, enricher errors. An empty array is normal.
-A non-empty array does not change the exit code unless the scan could not
-complete at all (which produces exit code 3 instead).
-
-### Schema version history
-
-| Version | Change |
-|---|---|
-| `1` | Initial schema |
-| `2` | Added artifact-level fields |
-| `3` | Added nullable `sha256` and `sha512` to `artifact` block; added nullable `file_sha256` and `file_sha512` to each finding. Purely additive; consumers built against v2 continue to work. |
+parser failures, analyzer warnings, enricher errors. An empty array is
+normal. A non-empty array does not change the exit code unless the scan
+could not complete at all (which produces exit code 3 instead).
 
 ## SARIF 2.1.0 format
 
 `--format sarif` emits a SARIF 2.1.0 document to stdout. The document is
 compatible with GitHub Code Scanning, Azure DevOps, and any consumer that
-follows the OASIS SARIF 2.1.0 spec. It is validated on every PR in CI against
-the Microsoft SARIF Multitool.
+follows the OASIS SARIF 2.1.0 spec. It is validated on every PR in CI
+against the Microsoft SARIF Multitool.
 
 ### Document structure
 
 Each scan produces a single run inside the document. The run contains:
 
-- `tool.driver.rules`: the full rules catalog, regardless of which rules fired.
-  Every rule pydepgate could emit is present so consumers can build UI for any
-  signal.
+- `tool.driver.rules`: the full rules catalog, regardless of which rules
+  fired. Every signal pydepgate could emit is present so consumers can
+  build UI for any rule.
 - `results`: one entry per finding.
-- `invocation`: execution metadata including `executionSuccessful: true` on the
-  happy path, and `toolExecutionNotifications` for any non-fatal diagnostics.
-- `automationDetails.id`: of the form `pydepgate/{artifact_kind}/`, e.g.
-  `pydepgate/wheel/`. Deep scans (`--deep`) suffix `_deep` to the artifact
-  kind: `pydepgate/wheel_deep/`. This is used by GitHub Code Scanning to group
-  results across runs of the same scan type.
-- `originalUriBaseIds.PROJECTROOT`: populated from `--sarif-srcroot` when set;
-  an empty placeholder URI when not set.
+- `invocation`: execution metadata. `executionSuccessful` is `true` on the
+  happy path. Non-fatal diagnostics are surfaced as
+  `toolExecutionNotifications` with level `warning`.
+- `automationDetails.id`: of the form `pydepgate/{artifact_kind}/`, where
+  `artifact_kind` is one of `wheel`, `sdist`, `installed_env`, `loose_file`.
+  Deep scans (`--deep`) suffix `_deep` to the artifact kind:
+  `pydepgate/wheel_deep/`. Used by GitHub Code Scanning to group results
+  across runs of the same scan type.
+- `originalUriBaseIds.PROJECTROOT`: populated from `--sarif-srcroot` when
+  set; an empty placeholder URI when not set.
 
 ### Severity mapping
 
-pydepgate's five severity levels map to SARIF as follows:
+pydepgate's five severity levels map to SARIF as follows. The numeric
+`security-severity` values are taken directly from
+`pydepgate.reporters.sarif.severity`:
 
 | pydepgate severity | SARIF `level` | GitHub `security-severity` | GitHub display band |
 |---|---|---|---|
@@ -208,22 +202,28 @@ pydepgate's five severity levels map to SARIF as follows:
 | `LOW` | `note` | `2.0` | Low |
 | `INFO` | `note` | `0.5` | Low |
 
-`security-severity` values are strings as required by the SARIF spec. CRITICAL
-and HIGH share the SARIF level `error` because SARIF has only three useful
-levels; the distinction is preserved in the numeric `security-severity` score,
-which places each within its correct GitHub display band.
+`security-severity` values are strings as required by the SARIF spec.
+CRITICAL and HIGH share the SARIF level `error` because SARIF has only
+three useful levels for code scanning; the distinction is preserved in the
+numeric `security-severity` score, which places each within its correct
+GitHub display band.
 
 ### Partial fingerprints
 
 Each result carries a `primaryLocationLineHash` partial fingerprint used by
-GitHub Code Scanning to deduplicate alerts across runs. Two scans of the same
-artifact that find the same signal at the same location produce the same
-fingerprint and are treated as the same alert. Two scans of different artifacts
-produce different fingerprints.
+GitHub Code Scanning to deduplicate alerts across runs. The format is
+`{24hex}:1`: 24 hexadecimal characters from a SHA-256 digest, followed by
+`:1` as the algorithm version. The hash is computed over the rule ID, a
+normalized internal path, the line number, and a short context hash
+derived from the matched literal value (`signal.context['_full_value']`
+when populated, falling back to the finding description).
 
-Fingerprints are 24 characters, derived from the signal ID, internal file
-path, line number, and matched content (the `_full_value` context field when
-populated, falling back to the signal description).
+Two scans of the same artifact that find the same signal at the same
+location produce the same fingerprint and are treated as the same alert.
+Two scans of different artifacts produce different fingerprints. The
+fingerprint survives whitespace edits to unrelated lines but does not
+survive edits to the matched line itself, renames of the containing file,
+or changes to the rule ID.
 
 ### Per-result properties
 
@@ -238,35 +238,38 @@ Each result carries a `properties` block with pydepgate-specific metadata:
 }
 ```
 
-These are not displayed prominently in GitHub's UI but are present in the
-SARIF JSON for offline analysis.
+`pydepgate.confidence` and `pydepgate.scope` are the enum member names
+(uppercase, for example `HIGH`, `MODULE`), not the lowercase values used
+in the JSON format. This is the documented behavior of the SARIF reporter.
 
 ### codeFlows for decoded payloads
 
-When `--decode-payload-depth` is active alongside `--format sarif`, findings
-reached through the decode pipeline are emitted as SARIF results with
-`codeFlows`. Each `threadFlow` walks from the outer high-entropy literal on
-disk through each decode layer to the innermost detection. Multi-layer payloads
-produce nested `threadFlow` encoding with `nestingLevel` reflecting decode
-depth. In GitHub's UI this appears as "Show paths" on the finding.
+When `--decode-payload-depth` is active alongside `--format sarif`,
+findings reached through the decode pipeline are emitted as SARIF results
+with `codeFlows`. Each `threadFlow` walks from the outer high-entropy
+literal on disk through each decode layer to the innermost detection.
+Multi-layer payloads produce nested `threadFlow` encoding with
+`nestingLevel` reflecting decode depth. In GitHub's UI this appears as
+"Show paths" on the finding.
 
 ### Content-blind emission
 
 The SARIF document describes what was called, not what was passed. Message
 text identifies the dangerous call (`subprocess.run()`,
-`urllib.request.urlopen()`) without including arguments, URLs, command lines,
-or payload bytes. The `artifacts[]` array references file locations but does
-not embed source content. No CWE taxonomy mappings are present; rules carry
-descriptive `tags` with the analyzer name.
+`urllib.request.urlopen()`) without including arguments, URLs, command
+lines, or payload bytes. The `artifacts[]` array references file locations
+but does not embed source content. No CWE taxonomy mappings are present;
+rules carry descriptive `tags` with the analyzer name.
 
-This is by construction, not convention. An attacker cannot exfiltrate payload
-content through pydepgate's SARIF output even if the document is published.
+This is by construction, not convention. An attacker cannot exfiltrate
+payload content through pydepgate's SARIF output even if the document is
+published.
 
 ## Decoded-tree JSON format
 
-When `--decode-payload-depth` is active and `--decode-format json` is set, a
-separate decoded-tree JSON document is written to the decode output location.
-This is distinct from the main scan JSON output.
+When `--decode-payload-depth` is active and `--decode-format json` is set,
+a separate decoded-tree JSON document is written to the decode output
+location. This is distinct from the main scan JSON output.
 
 ### Schema version
 
@@ -286,8 +289,9 @@ The current decoded-tree schema version is **1**.
 }
 ```
 
-Each node in `nodes` represents one payload-bearing finding that was processed
-by the decode pipeline, along with its decode chain and any inner findings:
+Each node in `nodes` represents one payload-bearing finding that was
+processed by the decode pipeline, along with its decode chain and any
+inner findings:
 
 ```json
 {

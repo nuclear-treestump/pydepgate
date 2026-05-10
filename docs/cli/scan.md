@@ -1,3 +1,8 @@
+---
+title: Scan
+parent: CLI
+nav_order: 3
+---
 # pydepgate scan
 
 Scan a Python package or file for supply-chain malware patterns in startup vectors.
@@ -134,9 +139,14 @@ computation. Accepted values: `info`, `low`, `medium`, `high`, `critical`.
 pydepgate scan --ci package.whl
 ```
 
-Implies `--min-severity high --no-color`. Standard shorthand for CI
-pipelines. Suppresses informational signals that are too noisy for
-automated blocking while preserving everything HIGH and CRITICAL.
+CI mode. If `--format` is not explicitly set, it is forced to `json`. If
+`--color` is currently `auto`, it is forced to `never`. CI mode does not
+change `--min-severity`. Combine with `--min-severity high` when you want
+to block only on HIGH and CRITICAL findings in CI:
+
+```bash
+pydepgate scan --ci --min-severity high package.whl
+```
 
 ### `--strict-exit`
 
@@ -202,7 +212,7 @@ pydepgate scan package-1.0.0-py3-none-any.whl
 Scan a wheel in CI, fail on HIGH or CRITICAL:
 
 ```bash
-pydepgate scan --ci package-1.0.0-py3-none-any.whl
+pydepgate scan --ci --min-severity high package-1.0.0-py3-none-any.whl
 ```
 
 Scan and emit JSON for downstream processing:
