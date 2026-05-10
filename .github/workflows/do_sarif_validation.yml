@@ -1,0 +1,163 @@
+name: SARIF validation
+
+# Validates pydepgate's SARIF 2.1.0 emission against the Microsoft
+# SARIF Multitool. Catches structural regressions before they ship,
+# matching what GitHub code scanning's ingestion would do.
+#
+# Two trigger modes:
+#   pull_request:     runs against the synthesized fixtures.
+#   workflow_dispatch: optionally accepts a target file path; when
+#                     provided, scans that target and validates the
+#                     emitted SARIF instead of the fixtures. Useful
+#                     for verifying SARIF output against a specific
+#                     wheel without local .NET setup.
+#
+# The workflow does NOT scan real malware. The fixtures are
+# synthesized from scripts/build_sarif_fixtures.py and contain
+# benign content that pattern-matches as suspicious to pydepgate's
+# analyzers (high-entropy literals, base64 chains decoding to a
+# harmless echo command). This keeps CI artifacts safe to share
+# and avoids any risk of the workflow downloading or processing
+# actual malicious code.
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Optional scan target relative to repo root. Empty = use synthesized fixtures.'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate SARIF output against Microsoft SARIF Multitool
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      # Pinned to a specific Multitool version so CI is
+      # reproducible. The Multitool is on NuGet:
+      # https://www.nuget.org/packages/Sarif.Multitool
+      # Bump the version line below when reviewing the pin
+      # (recommended quarterly). Keep in lockstep with the
+      # MULTITOOL_VERSION constant in scripts/validate_sarif.sh.
+      - name: Install Sarif.Multitool
+        run: |
+          dotnet tool install -g Sarif.Multitool --version 4.6.3
+          echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
+
+      - name: Install pydepgate
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+
+      - name: Prepare working directories
+        run: |
+          mkdir -p /tmp/sarif-fixtures
+          mkdir -p /tmp/sarif-output
+
+      # When the workflow_dispatch input 'target' is empty we run
+      # against the three synthesized fixtures. When it is set we
+      # scan that single file. The two paths emit to the same
+      # output directory so the validation step is identical.
+      - name: Build fixtures and scan
+        if: github.event.inputs.target == ''
+        run: |
+          python scripts/build_sarif_fixtures.py /tmp/sarif-fixtures
+
+          # Clean fixture: no decode flags.
+          pydepgate scan \
+            /tmp/sarif-fixtures/pydepgate-clean-fixture-1.0.0-py3-none-any.whl \
+            --format sarif \
+            > /tmp/sarif-output/clean.sarif || true
+
+          # With-findings fixture: no decode flags.
+          pydepgate scan \
+            /tmp/sarif-fixtures/pydepgate-with-findings-fixture-1.0.0-py3-none-any.whl \
+            --format sarif \
+            > /tmp/sarif-output/with_findings.sarif || true
+
+          # With-codeflows fixture: scanned both ways. Without
+          # decode for Phase C-only validation; with decode for
+          # the Phase D codeFlow validation.
+          pydepgate scan \
+            /tmp/sarif-fixtures/pydepgate-with-codeflows-fixture-1.0.0-py3-none-any.whl \
+            --format sarif \
+            > /tmp/sarif-output/with_codeflows_no_decode.sarif || true
+
+          pydepgate scan \
+            /tmp/sarif-fixtures/pydepgate-with-codeflows-fixture-1.0.0-py3-none-any.whl \
+            --format sarif \
+            --peek \
+            --decode-payload-depth=4 \
+            > /tmp/sarif-output/with_codeflows_decoded.sarif || true
+
+      - name: Scan custom target
+        if: github.event.inputs.target != ''
+        run: |
+          target="${{ github.event.inputs.target }}"
+          if [ ! -f "$target" ]; then
+            echo "Error: target file not found at $target" >&2
+            exit 1
+          fi
+          # Scan with all the flags that exercise the most SARIF
+          # surface, but suppress non-zero exit (findings are
+          # expected; we only care about the SARIF document
+          # validating).
+          pydepgate scan "$target" \
+            --format sarif \
+            --peek \
+            --decode-payload-depth=4 \
+            > /tmp/sarif-output/custom.sarif || true
+
+      # Run sarif validate on every SARIF document we emitted.
+      # The Multitool exits non-zero when ANY rule fires above
+      # the warning threshold, which combined with our 'set -e'
+      # below fails the job. This implements the Q3 lock:
+      # hard-fail on warnings and errors.
+      - name: Validate SARIF documents
+        run: |
+          set -e
+          shopt -s nullglob
+          documents=(/tmp/sarif-output/*.sarif)
+          if [ ${#documents[@]} -eq 0 ]; then
+            echo "Error: no SARIF documents to validate" >&2
+            exit 1
+          fi
+          for sarif in "${documents[@]}"; do
+            echo
+            echo "===> Validating $sarif"
+            sarif validate "$sarif"
+            echo "OK: $(basename "$sarif")"
+          done
+          echo
+          echo "All SARIF documents validated successfully."
+
+      # Always upload artifacts, even on failure, so the user can
+      # download and inspect the SARIF that failed validation. 7
+      # days is long enough for a workflow-debug session and
+      # short enough not to accumulate.
+      - name: Upload SARIF documents
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sarif-documents
+          path: /tmp/sarif-output/*.sarif
+          retention-days: 7
+          if-no-files-found: warn
