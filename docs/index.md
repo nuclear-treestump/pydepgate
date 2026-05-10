@@ -1,3 +1,7 @@
+---
+layout: home
+title: pydepgate
+---
 # pydepgate
 
 pydepgate is a static analyzer for Python supply-chain malware that exploits
