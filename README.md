@@ -509,7 +509,11 @@ catch. Documented gaps include:
 
 ## Author
 
-Ikari ([@0xIkari](https://github.com/0xIkari))
+Built by Ikari ([@0xIkari](https://github.com/0xIkari)) - Python and 
+security engineering. Available for security engineering roles.
+
+- LinkedIn: [zmillersecengineer](https://www.linkedin.com/in/zmillersecengineer/)
+- Email: ikari@nuclear-treestump.com
 
 ## License
 
