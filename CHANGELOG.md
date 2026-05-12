@@ -400,8 +400,9 @@ issues will land in [ROADMAP.md](ROADMAP.md):
   meaningful speedups on multi-megabyte wheels with thousands
   of files.
 
-[Unreleased]: https://github.com/nuclear-treestump/pydep-vector-runner/compare/v0.3.3...HEAD
-[0.3.3]: https://github.com/nuclear-treestump/pydep-vector-runner/compare/v0.3.2...v0.3.3
-[0.3.2]: https://github.com/nuclear-treestump/pydep-vector-runner/compare/v0.3.1...v0.3.2
-[0.3.1]: https://github.com/nuclear-treestump/pydep-vector-runner/compare/v0.3.0...v0.3.1
-[0.3.0]: https://github.com/nuclear-treestump/pydep-vector-runner/releases/tag/v0.3.0
+[Unreleased]: https://github.com/nuclear-treestump/pydepgate/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/nuclear-treestump/pydepgate/compare/v0.3.3...v0.4.0
+[0.3.3]: https://github.com/nuclear-treestump/pydepgate/compare/v0.3.2...v0.3.3
+[0.3.2]: https://github.com/nuclear-treestump/pydepgate/compare/v0.3.1...v0.3.2
+[0.3.1]: https://github.com/nuclear-treestump/pydepgate/compare/v0.3.0...v0.3.1
+[0.3.0]: https://github.com/nuclear-treestump/pydepgate/releases/tag/v0.3.0
