@@ -18,7 +18,7 @@ what counts as a vulnerability, and what to expect after reporting.
 
 The preferred channel is GitHub's private vulnerability reporting:
 
-1. Go to https://github.com/nuclear-treestump/pydep-vector-runner/security
+1. Go to https://github.com/nuclear-treestump/pydepgate/security
 2. Click "Report a vulnerability"
 3. Fill out the form
 
