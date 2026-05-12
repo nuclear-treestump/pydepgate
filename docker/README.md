@@ -7,8 +7,8 @@ Container Registry on every release tag.
 ## Pulling
 
     docker pull ghcr.io/nuclear-treestump/pydepgate:latest
-    docker pull ghcr.io/nuclear-treestump/pydepgate:0.2.0
-    docker pull ghcr.io/nuclear-treestump/pydepgate:0.2
+    docker pull ghcr.io/nuclear-treestump/pydepgate:0.4.0
+    docker pull ghcr.io/nuclear-treestump/pydepgate:0.4
 
 The image supports both `linux/amd64` and `linux/arm64`, so it works
 on Intel CI runners, GitHub-hosted runners, and Apple Silicon
