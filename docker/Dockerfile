@@ -33,7 +33,7 @@ FROM python:3.12-alpine AS builder
 # build-base or libffi-dev or any of the usual Alpine compile packages.
 # The pure-Python install completes against the standard library only.
 
-ARG PYDEPGATE_VERSION=0.2.2
+ARG PYDEPGATE_VERSION=0.4.0
 
 RUN python -m venv /opt/pydepgate-venv \
     && /opt/pydepgate-venv/bin/pip install --no-cache-dir --upgrade pip \
