@@ -25,10 +25,6 @@ on:
   push:
     tags:
       - "v*.*.*"
-  pull_request:
-    paths:
-      - "docker/**"
-      - ".github/workflows/docker-publish.yml"
   workflow_dispatch:
     inputs:
       version:
