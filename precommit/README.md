@@ -24,8 +24,8 @@ pydepgate detects, so even an INFO finding there is unusual.
 In your project's `.pre-commit-config.yaml`:
 
     repos:
-      - repo: https://github.com/nuclear-treestump/pydep-vector-runner
-        rev: v0.2.0
+      - repo: https://github.com/nuclear-treestump/pydepgate
+        rev: v0.4.0
         hooks:
           - id: pydepgate
           - id: pydepgate-pth
