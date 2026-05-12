@@ -9,7 +9,7 @@ silently at interpreter startup. This was the attack class used by the
 March 2026 LiteLLM supply-chain compromise and catalogued as
 [MITRE ATT&CK T1546.018](https://attack.mitre.org/techniques/T1546/018/).
 
-<img width="1086" height="720" alt="Screen Recording 2026-04-28 091139" src="https://github.com/user-attachments/assets/28a737fd-4ba0-4401-b49e-5d84703cad25" />
+<img width="1091" height="784" alt="demo2" src="https://github.com/user-attachments/assets/a57ed511-8149-445a-880b-b597dc1b61c0" />
 
 [Available on PyPI as pydepgate](https://pypi.org/project/pydepgate/).
 
