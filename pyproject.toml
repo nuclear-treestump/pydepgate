@@ -5,17 +5,17 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pydepgate"
-version = "0.4.0"
-description = "Lightweight Python runner that interdicts suspicious startup behavior."
+version = "0.4.1"
+description = "A zero dependency lightweight static analyzer that detects weird startup behaviors in python."
 requires-python = ">=3.11"
 readme = "README.md"
 license = "Apache-2.0"
 authors = [
     { name = "Ikari", email = "ikari@nuclear-treestump.com" }
 ]
-keywords = ["security", "supply-chain", "python", "startup", "analysis"]
+keywords = ["security", "supply-chain", "python", "startup", "analysis", "static-analyzer"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Environment :: Console",
     "Intended Audience :: Developers",
     "Natural Language :: English",
@@ -28,7 +28,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries",
     "Topic :: System :: Monitoring",
 ]
-urls = { Homepage = "https://github.com/nuclear-treestump/pydep-vector-runner", Repository = "https://github.com/nuclear-treestump/pydep-vector-runner" }
+urls = { Homepage = "https://github.com/nuclear-treestump/pydepgate", Repository = "https://github.com/nuclear-treestump/pydepgate" }
 
 [project.scripts]
 pydepgate = "pydepgate.cli.main:main"
