@@ -13,7 +13,7 @@
 # directory for example workflows.
 #
 # Build:
-#   docker build -t pydepgate:0.2.0 .
+#   docker build -t pydepgate:0.4.0 .
 #
 # Use:
 #   docker run --rm -v $(pwd):/scan pydepgate:0.2.0 scan some.whl
@@ -57,12 +57,12 @@ FROM python:3.12-alpine
 # Standard OCI labels so registries and tooling can extract metadata
 # without parsing the README. Version label is filled in by the build
 # arg so it stays in sync with the installed pydepgate.
-ARG PYDEPGATE_VERSION=0.2.2
+ARG PYDEPGATE_VERSION=0.4.0
 
 LABEL org.opencontainers.image.title="pydepgate" \
       org.opencontainers.image.description="Static analyzer for Python supply-chain malware patterns" \
       org.opencontainers.image.version="${PYDEPGATE_VERSION}" \
-      org.opencontainers.image.source="https://github.com/nuclear-treestump/pydep-vector-runner" \
+      org.opencontainers.image.source="https://github.com/nuclear-treestump/pydepgate" \
       org.opencontainers.image.licenses="Apache-2.0" \
       org.opencontainers.image.authors="Ikari <ikari@nuclear-treestump.com>"
 

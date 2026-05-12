@@ -22,7 +22,7 @@ body:
     attributes:
       label: pydepgate version
       description: Output of `pydepgate --version`
-      placeholder: "0.0.4"
+      placeholder: "0.4.0"
     validations:
       required: true
 
@@ -143,7 +143,7 @@ body:
     attributes:
       label: Last known working version (if regression)
       description: Only fill this in if you answered "regression" above.
-      placeholder: "0.0.3"
+      placeholder: "0.4.0"
     validations:
       required: false
 
