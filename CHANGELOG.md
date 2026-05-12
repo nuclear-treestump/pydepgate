@@ -14,6 +14,22 @@ become binding stability promises with formal deprecation cycles.
 
 (no changes yet)
 
+## [0.4.1] - 2026-05-12
+
+### Added
+- No new code, this is just to complete the link rename after the repo was renamed so that the URLs are correct and valid.
+
+### Changed
+- Updated `pyproject.toml` URLs
+- Changed lifecycle from Alpha to Beta
+- Added "supply-chain" topic
+
+### Security
+- No changes
+- No security advisories in this release
+
+#### Full Changelog: [v0.4.0...v0.4.1](https://github.com/nuclear-treestump/pydepgate/compare/v0.4.0...v0.4.1)
+
 ## [0.4.0] - 2026-05-10
 
 ### Added
@@ -401,6 +417,7 @@ issues will land in [ROADMAP.md](ROADMAP.md):
   of files.
 
 [Unreleased]: https://github.com/nuclear-treestump/pydepgate/compare/v0.4.0...HEAD
+[0.4.1]: https://github.com/nuclear-treestump/pydepgate/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/nuclear-treestump/pydepgate/compare/v0.3.3...v0.4.0
 [0.3.3]: https://github.com/nuclear-treestump/pydepgate/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/nuclear-treestump/pydepgate/compare/v0.3.1...v0.3.2
