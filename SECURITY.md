@@ -1,10 +1,6 @@
 # Security Policy
-v1.1
 
-> What changed:
-* Added ZipCrypto to out of scope bucket
-
-> Last Updated: 2026-05-03 
+> Last Updated: 2026-05-14 
 
 pydepgate is a security tool, which means the bar for its own security
 is higher than for ordinary software. A vulnerability in pydepgate is
@@ -187,3 +183,20 @@ If you're testing for vulnerabilities, please do so against your own
 local copy of pydepgate. Do not test against any service or
 infrastructure that hosts pydepgate (PyPI, GitHub Actions, etc.).
 Local testing on artifacts you control is welcome and encouraged.
+
+### Changelog
+
+v1.1 - 2026-05-03
+
+> What changed:
+* Added ZipCrypto to out of scope bucket
+
+v1.2 - 2026-05-12
+
+> What changed:
+* Migration of reporting link from old name `pydep-vector-runner` to `pydepgate`
+
+v1.3 = 2026-05-14
+
+> What changed:
+* Updated missed changelog entry for v1.2, moved changelog to bottom of file.
