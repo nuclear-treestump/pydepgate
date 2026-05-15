@@ -15,4 +15,12 @@ Currently houses:
 A shared base class for package_tools lands when the second
 subsystem exists; until then the surface is too small to abstract
 without guessing at requirements.
+
+Base expectation would be a PackageTool class that intakes a
+Metadata or PackageInfo object and produces a Finding object.
+This DOES mean I will have to implement both V2, V3, and V4 of
+CVSS math in the CVE pass, but that's a problem for future me.
+
+TODO: Add a base class for package tools, and refactor cvedb to use it.
+
 """
