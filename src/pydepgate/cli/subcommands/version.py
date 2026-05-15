@@ -7,7 +7,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-__version__ = "0.4.0"
+__version__ = "0.4.2"
 
 
 def register(subparsers) -> None:
