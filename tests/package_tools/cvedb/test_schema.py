@@ -534,5 +534,300 @@ class TestDropAllTables(unittest.TestCase):
             conn.close()
 
 
+"""
+Test classes added for the v2 schema bump. Append to the existing
+tests/package_tools/cvedb/test_schema.py. The imports at the top
+of the existing test file already cover everything needed here.
+"""
+
+
+class TestSchemaVersionV2(unittest.TestCase):
+    def test_constant_is_2(self):
+        self.assertEqual(schema.CVE_DB_SCHEMA_VERSION, 2)
+
+    def test_fresh_db_records_v2(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "test.db"
+            conn = schema.connect(db_path)
+            try:
+                schema.initialize_schema(conn)
+                conn.commit()
+                version = schema.read_schema_version(conn)
+                self.assertEqual(version, 2)
+            finally:
+                conn.close()
+
+
+class TestRunUuidMetadataKey(unittest.TestCase):
+    def test_constant_defined(self):
+        self.assertEqual(
+            schema.METADATA_KEY_LAST_IMPORT_RUN_UUID,
+            "last_import_run_uuid",
+        )
+
+    def test_run_uuid_writes_and_reads(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "test.db"
+            conn = schema.connect(db_path)
+            try:
+                schema.initialize_schema(conn)
+                run_uid = "550e8400-e29b-41d4-a716-446655440000"
+                schema.write_metadata(
+                    conn,
+                    schema.METADATA_KEY_LAST_IMPORT_RUN_UUID,
+                    run_uid,
+                )
+                conn.commit()
+
+                got = schema.read_metadata(
+                    conn,
+                    schema.METADATA_KEY_LAST_IMPORT_RUN_UUID,
+                )
+                self.assertEqual(got, run_uid)
+            finally:
+                conn.close()
+
+
+class TestAffectedRangesTable(unittest.TestCase):
+    def _open(self, tmp: str):
+        db_path = Path(tmp) / "test.db"
+        conn = schema.connect(db_path)
+        schema.initialize_schema(conn)
+        return conn
+
+    def test_table_exists(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            conn = self._open(tmp)
+            try:
+                rows = conn.execute(
+                    "SELECT name FROM sqlite_master "
+                    "WHERE type='table' AND name='affected_ranges'"
+                ).fetchall()
+                self.assertEqual(len(rows), 1)
+            finally:
+                conn.close()
+
+    def test_table_has_expected_columns(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            conn = self._open(tmp)
+            try:
+                cols = conn.execute("PRAGMA table_info(affected_ranges)").fetchall()
+                col_names = {c[1] for c in cols}
+                self.assertIn("canonical_id", col_names)
+                self.assertIn("package_name", col_names)
+                self.assertIn("range_type", col_names)
+                self.assertIn("introduced", col_names)
+                self.assertIn("fixed", col_names)
+                self.assertIn("last_affected", col_names)
+            finally:
+                conn.close()
+
+    def test_optional_columns_default_to_empty_string(self):
+        """fixed and last_affected default to '' per Option A."""
+        with tempfile.TemporaryDirectory() as tmp:
+            conn = self._open(tmp)
+            try:
+                # Insert with only required columns; defaults fill the rest
+                conn.execute(
+                    "INSERT INTO vulnerabilities (canonical_id) " "VALUES (?)",
+                    ("CVE-2025-1",),
+                )
+                conn.execute(
+                    "INSERT INTO affected_ranges "
+                    "(canonical_id, package_name, range_type, introduced) "
+                    "VALUES (?, ?, ?, ?)",
+                    ("CVE-2025-1", "somepkg", "ECOSYSTEM", "1.0"),
+                )
+                row = conn.execute(
+                    "SELECT fixed, last_affected FROM affected_ranges "
+                    "WHERE canonical_id = ?",
+                    ("CVE-2025-1",),
+                ).fetchone()
+                self.assertEqual(row[0], "")
+                self.assertEqual(row[1], "")
+            finally:
+                conn.close()
+
+    def test_primary_key_dedups_identical_ranges(self):
+        """Composite PK across all columns; INSERT OR IGNORE swallows dups."""
+        with tempfile.TemporaryDirectory() as tmp:
+            conn = self._open(tmp)
+            try:
+                conn.execute(
+                    "INSERT INTO vulnerabilities (canonical_id) VALUES (?)",
+                    ("CVE-2025-1",),
+                )
+                row = ("CVE-2025-1", "somepkg", "ECOSYSTEM", "1.0", "2.0", "")
+                conn.execute(
+                    "INSERT OR IGNORE INTO affected_ranges "
+                    "(canonical_id, package_name, range_type, "
+                    "introduced, fixed, last_affected) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    row,
+                )
+                conn.execute(
+                    "INSERT OR IGNORE INTO affected_ranges "
+                    "(canonical_id, package_name, range_type, "
+                    "introduced, fixed, last_affected) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    row,
+                )
+                count = conn.execute(
+                    "SELECT COUNT(*) FROM affected_ranges " "WHERE canonical_id = ?",
+                    ("CVE-2025-1",),
+                ).fetchone()[0]
+                self.assertEqual(count, 1)
+            finally:
+                conn.close()
+
+    def test_primary_key_allows_distinct_ranges(self):
+        """Different (introduced, fixed, last_affected) are distinct rows."""
+        with tempfile.TemporaryDirectory() as tmp:
+            conn = self._open(tmp)
+            try:
+                conn.execute(
+                    "INSERT INTO vulnerabilities (canonical_id) VALUES (?)",
+                    ("CVE-2025-1",),
+                )
+                # Three different ranges for the same CVE/package
+                ranges = [
+                    ("CVE-2025-1", "somepkg", "ECOSYSTEM", "1.0", "1.5", ""),
+                    ("CVE-2025-1", "somepkg", "ECOSYSTEM", "2.0", "2.3", ""),
+                    ("CVE-2025-1", "somepkg", "ECOSYSTEM", "3.0", "", ""),
+                ]
+                for r in ranges:
+                    conn.execute(
+                        "INSERT INTO affected_ranges "
+                        "(canonical_id, package_name, range_type, "
+                        "introduced, fixed, last_affected) "
+                        "VALUES (?, ?, ?, ?, ?, ?)",
+                        r,
+                    )
+                count = conn.execute(
+                    "SELECT COUNT(*) FROM affected_ranges " "WHERE canonical_id = ?",
+                    ("CVE-2025-1",),
+                ).fetchone()[0]
+                self.assertEqual(count, 3)
+            finally:
+                conn.close()
+
+    def test_cascade_delete_on_vulnerability(self):
+        """Deleting a vulnerability cascades to affected_ranges."""
+        with tempfile.TemporaryDirectory() as tmp:
+            conn = self._open(tmp)
+            try:
+                conn.execute(
+                    "INSERT INTO vulnerabilities (canonical_id) VALUES (?)",
+                    ("CVE-2025-1",),
+                )
+                conn.execute(
+                    "INSERT INTO affected_ranges "
+                    "(canonical_id, package_name, range_type, "
+                    "introduced, fixed, last_affected) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    ("CVE-2025-1", "somepkg", "ECOSYSTEM", "1.0", "2.0", ""),
+                )
+                conn.execute(
+                    "DELETE FROM vulnerabilities WHERE canonical_id = ?",
+                    ("CVE-2025-1",),
+                )
+                count = conn.execute("SELECT COUNT(*) FROM affected_ranges").fetchone()[
+                    0
+                ]
+                self.assertEqual(count, 0)
+            finally:
+                conn.close()
+
+    def test_package_index_exists(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            conn = self._open(tmp)
+            try:
+                rows = conn.execute(
+                    "SELECT name FROM sqlite_master "
+                    "WHERE type='index' AND name='idx_ranges_package'"
+                ).fetchall()
+                self.assertEqual(len(rows), 1)
+            finally:
+                conn.close()
+
+
+class TestTableNamesIncludesRanges(unittest.TestCase):
+    def test_affected_ranges_in_table_names(self):
+        self.assertIn("affected_ranges", schema.TABLE_NAMES)
+
+    def test_drop_all_tables_includes_ranges(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "test.db"
+            conn = schema.connect(db_path)
+            try:
+                schema.initialize_schema(conn)
+                # Verify table exists before drop
+                exists = conn.execute(
+                    "SELECT name FROM sqlite_master "
+                    "WHERE type='table' AND name='affected_ranges'"
+                ).fetchall()
+                self.assertEqual(len(exists), 1)
+                schema.drop_all_tables(conn)
+                # Verify table gone after drop
+                exists = conn.execute(
+                    "SELECT name FROM sqlite_master "
+                    "WHERE type='table' AND name='affected_ranges'"
+                ).fetchall()
+                self.assertEqual(len(exists), 0)
+            finally:
+                conn.close()
+
+
+class TestSchemaCompatibilityWithV1Db(unittest.TestCase):
+    def test_v1_db_is_rejected(self):
+        """A DB with v1 schema version triggers SchemaVersionMismatch."""
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "test.db"
+            conn = schema.connect(db_path)
+            try:
+                schema.initialize_schema(conn)
+                # Manually downgrade the recorded version to 1
+                schema.write_metadata(
+                    conn,
+                    schema.METADATA_KEY_SCHEMA_VERSION,
+                    "1",
+                )
+                conn.commit()
+                with self.assertRaises(schema.SchemaVersionMismatch) as ctx:
+                    schema.check_schema_compatibility(conn)
+                self.assertEqual(ctx.exception.actual, 1)
+                self.assertEqual(ctx.exception.expected, 2)
+            finally:
+                conn.close()
+
+    def test_v2_db_is_accepted(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "test.db"
+            conn = schema.connect(db_path)
+            try:
+                schema.initialize_schema(conn)
+                conn.commit()
+                # Should not raise
+                schema.check_schema_compatibility(conn)
+            finally:
+                conn.close()
+
+    def test_no_version_metadata_is_rejected(self):
+        """A DB with no version metadata at all is still rejected."""
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "test.db"
+            conn = schema.connect(db_path)
+            try:
+                # Create the tables but skip the version write
+                for stmt in schema.DDL_STATEMENTS:
+                    conn.execute(stmt)
+                conn.commit()
+                with self.assertRaises(schema.SchemaVersionMismatch) as ctx:
+                    schema.check_schema_compatibility(conn)
+                self.assertIsNone(ctx.exception.actual)
+            finally:
+                conn.close()
+
+
 if __name__ == "__main__":
     unittest.main()

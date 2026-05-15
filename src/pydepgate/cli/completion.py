@@ -36,6 +36,7 @@ SUBCOMMAND_NAMES: tuple[str, ...] = (
     "explain",
     "preflight",
     "exec",
+    "cvedb",
     "version",
     "help",
     "completions",
@@ -129,6 +130,10 @@ _EXEC_BOOL_FLAGS: frozenset[str] = frozenset()
 _EXEC_VALUE_FLAGS: dict[str, tuple[str, ...] | None] = {}
 
 
+_CVEDB_BOOL_FLAGS: frozenset[str] = frozenset({"--no-bar"})
+_CVEDB_VALUE_FLAGS: dict[str, tuple[str, ...] | None] = {}
+
+
 _VERSION_BOOL_FLAGS: frozenset[str] = frozenset()
 _VERSION_VALUE_FLAGS: dict[str, tuple[str, ...] | None] = {}
 
@@ -150,6 +155,7 @@ _SUBCOMMAND_FLAGS: dict[
     "explain": (_EXPLAIN_BOOL_FLAGS, _EXPLAIN_VALUE_FLAGS),
     "preflight": (_PREFLIGHT_BOOL_FLAGS, _PREFLIGHT_VALUE_FLAGS),
     "exec": (_EXEC_BOOL_FLAGS, _EXEC_VALUE_FLAGS),
+    "cvedb": (_CVEDB_BOOL_FLAGS, _CVEDB_VALUE_FLAGS),
     "version": (_VERSION_BOOL_FLAGS, _VERSION_VALUE_FLAGS),
     "help": (_HELP_BOOL_FLAGS, _HELP_VALUE_FLAGS),
     "completions": (_COMPLETIONS_BOOL_FLAGS, _COMPLETIONS_VALUE_FLAGS),
@@ -162,6 +168,7 @@ _SUBCOMMAND_FLAGS: dict[
 _SUBCOMMAND_POSITIONAL_CHOICES: dict[str, tuple[str, ...]] = {
     "help": SUBCOMMAND_NAMES,
     "completions": ("bash", "zsh", "fish"),
+    "cvedb": ("update", "status", "path"),
 }
 
 
