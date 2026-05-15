@@ -90,7 +90,7 @@ CVE_DB_IMPORT_ZIP_FILENAME = "pypi_osv_import.zip"
 # and refuses to operate on a database written by a different
 # schema generation. A future migration system can use this as
 # the source-of-truth target version.
-CVE_DB_SCHEMA_VERSION = 1
+CVE_DB_SCHEMA_VERSION = 2
 
 
 # ---------------------------------------------------------------------------

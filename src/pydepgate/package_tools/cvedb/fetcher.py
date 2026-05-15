@@ -89,7 +89,7 @@ DEFAULT_ACCEPTED_CONTENT_TYPES: tuple[str, ...] = (
 # defense against decompression bombs. A second defense lives in
 # the importer, which validates decompressed sizes per-entry and
 # in aggregate.
-DEFAULT_MIN_CONTENT_LENGTH = 50 * 1024 * 1024
+DEFAULT_MIN_CONTENT_LENGTH = 15 * 1024 * 1024
 DEFAULT_MAX_CONTENT_LENGTH = 200 * 1024 * 1024
 
 # Default per-operation timeout. urllib does not distinguish connect

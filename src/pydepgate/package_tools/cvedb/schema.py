@@ -123,6 +123,7 @@ METADATA_KEY_DATA_LICENSE_URL = "data_license_url"
 METADATA_KEY_RECORDS_IMPORTED = "records_imported"
 METADATA_KEY_RECORDS_SKIPPED_NO_VERSIONS = "records_skipped_no_versions"
 METADATA_KEY_PYDEPGATE_VERSION = "pydepgate_version"
+METADATA_KEY_LAST_IMPORT_RUN_UUID = "last_import_run_uuid"
 
 
 # ---------------------------------------------------------------------------
@@ -198,6 +199,25 @@ CREATE INDEX IF NOT EXISTS idx_av_package
 ON affected_versions(package_name)
 """.strip()
 
+_DDL_CREATE_AFFECTED_RANGES = """
+CREATE TABLE IF NOT EXISTS affected_ranges (
+    canonical_id  TEXT NOT NULL,
+    package_name  TEXT NOT NULL,
+    range_type    TEXT NOT NULL,
+    introduced    TEXT NOT NULL,
+    fixed         TEXT NOT NULL DEFAULT '',
+    last_affected TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY (canonical_id, package_name, introduced, fixed, last_affected),
+    FOREIGN KEY (canonical_id) REFERENCES vulnerabilities(canonical_id)
+        ON DELETE CASCADE
+)
+""".strip()
+
+_DDL_CREATE_INDEX_RANGES_PACKAGE = """
+CREATE INDEX IF NOT EXISTS idx_ranges_package
+ON affected_ranges(package_name)
+""".strip()
+
 _DDL_CREATE_IMPORT_WARNINGS = """
 CREATE TABLE IF NOT EXISTS import_warnings (
     osv_id      TEXT,
@@ -216,7 +236,7 @@ ON import_warnings(reason)
 # The full schema as a tuple. Public so tests can introspect and
 # so the importer's "what tables do I need to populate" inventory
 # is one place rather than scattered.
-DDL_STATEMENTS: tuple[str, ...] = (
+DDL_STATEMENTS = (
     _DDL_CREATE_DB_METADATA,
     _DDL_CREATE_VULNERABILITIES,
     _DDL_CREATE_ALIASES,
@@ -225,16 +245,18 @@ DDL_STATEMENTS: tuple[str, ...] = (
     _DDL_CREATE_AFFECTED_VERSIONS,
     _DDL_CREATE_INDEX_AV_LOOKUP,
     _DDL_CREATE_INDEX_AV_PACKAGE,
+    _DDL_CREATE_AFFECTED_RANGES,
+    _DDL_CREATE_INDEX_RANGES_PACKAGE,
     _DDL_CREATE_IMPORT_WARNINGS,
     _DDL_CREATE_INDEX_WARNINGS_REASON,
 )
 
 
-# Table names for drop_all_tables and for introspection.
-TABLE_NAMES: tuple[str, ...] = (
+TABLE_NAMES = (
     "vulnerabilities",
     "aliases",
     "affected_versions",
+    "affected_ranges",
     "import_warnings",
     "db_metadata",
 )

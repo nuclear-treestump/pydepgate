@@ -1,52 +1,23 @@
 """pydepgate.package_tools.cvedb.importer
 
-Import OSV PyPI vulnerability data from a downloaded zip into a
-cvedb SQLite database.
+OSV PyPI snapshot importer.
 
-Public surface:
+Pipeline:
+  1. Validate the downloaded zip (decompressed size caps).
+  2. Read JSON entries from the zip (sequential; ZipFile is not
+     thread-safe).
+  3. Parse each entry in a thread pool. Each record yields a
+     ParsedRecord or a ParseFailure.
+  4. Merge ParsedRecords by canonical ID. Multi-record CVEs
+     (CVE + GHSA + PYSEC for the same vulnerability) union
+     their data.
+  5. Drop and recreate the cvedb tables inside one BEGIN
+     IMMEDIATE transaction. Batched executemany writes follow,
+     then provenance metadata, then commit.
 
-    import_from_zip(zip_path, db_path, ...) -> ImportResult
-        Run the full import pipeline. Atomic at the DB level:
-        prior data is preserved on any failure.
-
-    ImportResult
-        Frozen dataclass returned on successful import. Counts
-        records imported, skipped, failed, plus elapsed time.
-
-    ParsedRecord, ParseFailure
-        Frozen, picklable result types from the per-record parse
-        step. Exposed so the importer's intermediate stages can
-        be tested in isolation.
-
-    CvedbImportError, ZipValidationError, ImportFailedError
-        Exception hierarchy.
-
-    WARNING_* constants
-        Reason strings used in the import_warnings table.
-
-This module is stdlib-only.
-
-Threading: JSON parsing happens in a ThreadPoolExecutor because
-the json module's C implementation releases the GIL. SQLite
-inserts happen serially in the main thread because SQLite is
-single-writer. The producer-consumer boundary is the parsed list,
-which is built in memory before the DB write phase begins.
-
-Memory: peak around 400-600MB during the parse phase for the
-real OSV dataset. Acceptable for a deliberate one-time-ish
-operation. Callers that need lower memory ceilings can stream
-through a smaller worker pool, but the simple full-load approach
-gives the best wall-clock time for the expected input size.
-
-Picklability: ParsedRecord, ParseFailure, and ImportResult are
-frozen dataclasses with picklable fields, so a future
-ProcessPoolExecutor variant of the parser would work without
-refactoring the result types.
-
-Atomicity: the DB write phase is one BEGIN IMMEDIATE / COMMIT
-transaction wrapping drop_all_tables, initialize_schema, and
-all batched executemany inserts. Any failure rolls back to the
-prior DB state.
+The importer is responsible only for ingesting OSV data. CC-BY
+4.0 attribution constants are written by the CLI's update path,
+not here, so the importer stays decoupled from licensing.
 """
 
 from __future__ import annotations
@@ -62,38 +33,26 @@ from pathlib import Path
 from typing import Callable, Iterable
 
 from pydepgate.package_tools.cvedb import schema
+from pydepgate import run_context
 
 ProgressCallback = Callable[[int, int], None]
+FinishCallback = Callable[[], None]
 
 
 # ---------------------------------------------------------------------------
-# Tuning constants
+# Constants and tuning
 # ---------------------------------------------------------------------------
 
-# Maximum total decompressed size of the zip. The real OSV PyPI
-# all.zip decompresses to roughly 300MB; 500MB gives headroom.
-# The importer refuses larger archives as a defense against
-# decompression bombs.
 DEFAULT_MAX_DECOMPRESSED_BYTES = 500 * 1024 * 1024
-
-# Maximum decompressed size of a single entry within the zip. No
-# legitimate OSV record approaches this; an entry larger than
-# this signals either corruption or a targeted bomb.
 DEFAULT_MAX_PER_FILE_BYTES = 1 * 1024 * 1024
-
-# Default worker count for the parallel parse phase. JSON parsing
-# in CPython releases the GIL so threads provide real concurrency
-# on multi-core hardware. The cap of 8 reflects diminishing
-# returns past that count for the expected record sizes; callers
-# on machines with substantially more cores can override.
 DEFAULT_MAX_WORKERS = 8
 
+# Batch size for executemany during the write phase. Calibrated
+# to balance progress-bar refresh granularity against per-batch
+# overhead. With ~560k rows total and 1000 per batch, the bar
+# updates ~560 times during write.
+_WRITE_BATCH_SIZE = 1000
 
-# Identifier prefixes we recognize and their alias_type labels.
-# Used both for canonical_id derivation and for populating the
-# alias_type column. The order matters for derivation: prefixes
-# earlier in the tuple are checked first, but selection of the
-# canonical happens through _CANONICAL_PRIORITY below.
 _KNOWN_ALIAS_PREFIXES: tuple[tuple[str, str], ...] = (
     ("CVE-", "CVE"),
     ("GHSA-", "GHSA"),
@@ -107,16 +66,8 @@ _KNOWN_ALIAS_PREFIXES: tuple[tuple[str, str], ...] = (
     ("MAL-", "MAL"),
 )
 
-# Priority order for canonical_id selection. A CVE alias always
-# wins. If no CVE is present, GHSA. Then PYSEC. If none of these,
-# fall back to the record's own id with its discovered alias_type.
 _CANONICAL_PRIORITY: tuple[str, ...] = ("CVE", "GHSA", "PYSEC")
 
-
-# Rank for highest-wins severity merging. CRITICAL > HIGH > MEDIUM
-# > LOW > INFO. MODERATE is GitHub's wording for MEDIUM, treated
-# equivalently. Unknown labels rank below INFO so the first known
-# label wins over them.
 _SEVERITY_RANK: dict[str, int] = {
     "CRITICAL": 4,
     "HIGH": 3,
@@ -126,20 +77,20 @@ _SEVERITY_RANK: dict[str, int] = {
     "INFO": 0,
 }
 
-
-# The ecosystem label used by OSV for PyPI records. Records with
-# other ecosystem values are skipped (logged to import_warnings).
 PYPI_ECOSYSTEM = "PyPI"
 
+# The sentinel version string written to affected_versions when
+# a CVE applies to every version of a package. Queries can use
+# `WHERE version = ? OR version = 'ALL'` to handle both exact-
+# match and universal-coverage CVEs in one pass.
+ALL_VERSIONS_SENTINEL = "ALL"
 
-# Reason codes for the import_warnings table. Importer callers
-# can filter or aggregate on these.
-WARNING_NO_VERSIONS = "no_versions_list"
 WARNING_NO_AFFECTED = "no_affected"
 WARNING_NO_PYPI_AFFECTED = "no_pypi_affected"
 WARNING_PARSE_ERROR = "parse_error"
 WARNING_MISSING_ID = "missing_id"
 WARNING_MALFORMED_RECORD = "malformed_record"
+WARNING_NO_USABLE_DATA = "no_usable_data"
 
 
 # ---------------------------------------------------------------------------
@@ -148,89 +99,66 @@ WARNING_MALFORMED_RECORD = "malformed_record"
 
 
 class CvedbImportError(Exception):
-    """Base class for cvedb importer failures."""
+    pass
 
 
 class ZipValidationError(CvedbImportError):
-    """The zip failed pre-extraction safety checks.
-
-    Raised when the archive is corrupt, exceeds the per-file
-    size cap, or exceeds the aggregate decompressed-size cap.
-    The DB is not touched when this is raised.
-    """
+    pass
 
 
 class ImportFailedError(CvedbImportError):
-    """The DB write phase could not complete.
-
-    Raised when the SQLite write phase fails after parsing
-    completed. The DB rollback has already happened by the
-    time this is raised; the prior state is preserved.
-    """
+    pass
 
 
 # ---------------------------------------------------------------------------
-# Result types (picklable frozen dataclasses)
+# Progress callbacks bundle
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ProgressCallbacks:
+    """Bundle of update + finish callbacks for the importer's three phases.
+
+    Each phase has an update callback (called as work progresses)
+    and a finish callback (called once when the phase completes).
+    The finish callback writes a newline so the next phase's bar
+    starts on a fresh line; without it, the next phase's update
+    would overwrite the previous phase's line via the carriage-
+    return prefix.
+
+    Any field may be None to suppress that phase's bar. The CLI
+    typically supplies all six; tests typically supply none.
+    """
+
+    read_update: ProgressCallback | None = None
+    read_finish: FinishCallback | None = None
+    parse_update: ProgressCallback | None = None
+    parse_finish: FinishCallback | None = None
+    write_update: ProgressCallback | None = None
+    write_finish: FinishCallback | None = None
+
+
+# ---------------------------------------------------------------------------
+# Result types
 # ---------------------------------------------------------------------------
 
 
 @dataclass(frozen=True)
 class ImportResult:
-    """Summary of a successful import.
-
-    Attributes:
-        records_imported: Number of canonical vulnerabilities
-            in the DB after the import. Equal to the number of
-            distinct canonical_ids after dedup.
-        records_skipped_no_versions: Subset of records_imported
-            whose contributing records were all range-only and
-            therefore produced no affected_versions rows.
-        records_with_parse_errors: Number of zip entries that
-            failed to parse or produced a non-importable record
-            (no PyPI affected, malformed JSON, missing id).
-        affected_version_rows: Total rows inserted into the
-            affected_versions table.
-        alias_rows: Total rows inserted into the aliases table.
-        elapsed_seconds: Wall-clock duration of the import.
-    """
+    """Summary of a successful import."""
 
     records_imported: int
-    records_skipped_no_versions: int
     records_with_parse_errors: int
+    records_with_no_usable_data: int
     affected_version_rows: int
+    affected_range_rows: int
     alias_rows: int
     elapsed_seconds: float
 
 
 @dataclass(frozen=True)
 class ParsedRecord:
-    """One OSV record reduced to the fields the importer needs.
-
-    Built by _parse_entry from raw JSON bytes. Frozen and
-    picklable so future parallel-via-processes variants work
-    without refactoring.
-
-    Attributes:
-        osv_id: The record's own id field (PYSEC-*, GHSA-*, etc).
-        canonical_id: The selected canonical identifier after
-            priority resolution (CVE > GHSA > PYSEC > osv_id).
-        canonical_id_type: alias_type label for canonical_id.
-        all_identifiers: Tuple of (identifier, alias_type) pairs
-            covering osv_id, canonical_id, and every alias from
-            the record's aliases array. Deduplicated by identifier.
-        summary, details: From the OSV record. May be None.
-        published, modified: ISO 8601 timestamps from the OSV
-            record. May be None.
-        cvss_v3, cvss_v4: CVSS vector strings from the severity
-            array. Stored verbatim; no score computation.
-        severity: The database_specific.severity label
-            (CRITICAL, HIGH, MEDIUM, LOW). None when absent.
-        affected: Tuple of (package_name, version) pairs for
-            every explicit PyPI version mention in the record.
-        has_explicit_versions: True if any (package, versions)
-            entry in the affected array provided a non-empty
-            versions list. False for range-only records.
-    """
+    """One OSV record reduced to the fields the importer needs."""
 
     osv_id: str
     canonical_id: str
@@ -244,18 +172,13 @@ class ParsedRecord:
     cvss_v4: str | None
     severity: str | None
     affected: tuple[tuple[str, str], ...]
+    ranges: tuple[tuple[str, str, str, str, str], ...]
+    all_versions_packages: tuple[str, ...]
     has_explicit_versions: bool
 
 
 @dataclass(frozen=True)
 class ParseFailure:
-    """Per-record parse or content failure.
-
-    Logged into the import_warnings table at write time. The
-    osv_id may be None when the failure occurred before the id
-    could be extracted (e.g. malformed JSON).
-    """
-
     filename: str
     osv_id: str | None
     reason: str
@@ -264,13 +187,6 @@ class ParseFailure:
 
 @dataclass
 class MergedVulnerability:
-    """In-memory accumulator for one canonical_id during dedup.
-
-    Mutable (not frozen) because we accumulate across multiple
-    contributing records. Never crosses process boundaries; only
-    used in the main thread between the parse and write phases.
-    """
-
     canonical_id: str
     summary: str | None = None
     details: str | None = None
@@ -282,19 +198,10 @@ class MergedVulnerability:
     has_explicit_versions: bool = False
     identifiers: set[tuple[str, str]] = field(default_factory=set)
     affected: set[tuple[str, str]] = field(default_factory=set)
+    ranges: set[tuple[str, str, str, str, str]] = field(default_factory=set)
+    all_versions_packages: set[str] = field(default_factory=set)
 
     def merge(self, record: ParsedRecord) -> None:
-        """Fold a ParsedRecord into this accumulator.
-
-        Field semantics:
-          summary, details, cvss_v3, cvss_v4: first non-empty wins
-          published: earliest wins
-          modified: latest wins
-          severity: highest rank wins
-          has_explicit_versions: OR across contributors
-          identifiers: union
-          affected: union
-        """
         if self.summary is None and record.summary:
             self.summary = record.summary
         if self.details is None and record.details:
@@ -318,25 +225,21 @@ class MergedVulnerability:
             self.has_explicit_versions = True
         for ident, alias_type in record.all_identifiers:
             self.identifiers.add((ident, alias_type))
-        # Ensure the canonical_id is always present as a
-        # self-alias even if no contributing record listed it
-        # explicitly.
         self.identifiers.add((self.canonical_id, _alias_type_for(self.canonical_id)))
         for entry in record.affected:
             self.affected.add(entry)
+        for range_entry in record.ranges:
+            self.ranges.add(range_entry)
+        for pkg in record.all_versions_packages:
+            self.all_versions_packages.add(pkg)
 
 
 # ---------------------------------------------------------------------------
-# Private helpers: canonical ID and alias-type derivation
+# Canonical ID and alias-type helpers
 # ---------------------------------------------------------------------------
 
 
 def _alias_type_for(identifier: str) -> str:
-    """Classify an identifier by its prefix.
-
-    Returns the alias_type label (CVE, GHSA, PYSEC, etc) for
-    known prefixes, or "OTHER" for unknown shapes.
-    """
     for prefix, label in _KNOWN_ALIAS_PREFIXES:
         if identifier.startswith(prefix):
             return label
@@ -347,14 +250,6 @@ def _derive_canonical_id(
     osv_id: str,
     aliases: Iterable[str],
 ) -> tuple[str, str]:
-    """Select the canonical_id from a record's id and aliases.
-
-    Priority: CVE-* > GHSA-* > PYSEC-* > the record's own id.
-    Ties within a priority class break alphabetically.
-
-    Returns:
-        (canonical_id, alias_type) tuple.
-    """
     candidates = [osv_id, *aliases]
     by_type: dict[str, list[str]] = {}
     for ident in candidates:
@@ -368,7 +263,91 @@ def _derive_canonical_id(
 
 
 # ---------------------------------------------------------------------------
-# Private helpers: zip validation and entry reading
+# Range parsing helpers
+# ---------------------------------------------------------------------------
+
+
+def _parse_ranges_for_package(
+    ranges_field: list,
+) -> tuple[list[tuple[str, str, str, str]], bool]:
+    """Walk the OSV ranges array as an events state machine.
+
+    Returns (parsed_ranges, has_all):
+      parsed_ranges is a list of (range_type, introduced, fixed,
+      last_affected) tuples. fixed and last_affected are "" when
+      not present in the source.
+
+      has_all is True if any range qualifies as "every version
+      affected" via the structural rule: an introduced=0 event
+      with no fixed and no last_affected closing it.
+
+    The OSV events list is a state machine:
+      - "introduced" opens a new range with the given lower bound
+      - "fixed" closes the current range with that upper bound
+      - "last_affected" closes the current range inclusively
+      - A trailing introduced with no closer is an open-ended
+        range from that version onward
+    """
+    parsed: list[tuple[str, str, str, str]] = []
+    has_all = False
+
+    for range_entry in ranges_field:
+        if not isinstance(range_entry, dict):
+            continue
+        range_type = range_entry.get("type", "ECOSYSTEM")
+        if not isinstance(range_type, str) or not range_type:
+            continue
+        events = range_entry.get("events", [])
+        if not isinstance(events, list):
+            continue
+
+        # State machine state: the introduced value awaiting its
+        # closer (None means we're between ranges)
+        current_introduced: str | None = None
+
+        for event in events:
+            if not isinstance(event, dict):
+                continue
+            if "introduced" in event:
+                val = event["introduced"]
+                if not isinstance(val, str) or not val:
+                    continue
+                if current_introduced is not None:
+                    # Previous introduced had no closer; emit it
+                    # as open-ended before starting the new range.
+                    parsed.append((range_type, current_introduced, "", ""))
+                    if current_introduced == "0":
+                        has_all = True
+                current_introduced = val
+            elif "fixed" in event:
+                val = event["fixed"]
+                if not isinstance(val, str) or not val:
+                    continue
+                if current_introduced is not None:
+                    parsed.append((range_type, current_introduced, val, ""))
+                    current_introduced = None
+                # else: fixed without introduced is malformed; skip
+            elif "last_affected" in event:
+                val = event["last_affected"]
+                if not isinstance(val, str) or not val:
+                    continue
+                if current_introduced is not None:
+                    parsed.append((range_type, current_introduced, "", val))
+                    current_introduced = None
+                # else: last_affected without introduced is malformed
+
+        # Tail: any introduced still awaiting a closer at end-of-
+        # events is an open-ended range from that version onward.
+        if current_introduced is not None:
+            parsed.append((range_type, current_introduced, "", ""))
+            if current_introduced == "0":
+                has_all = True
+
+    return parsed, has_all
+
+
+# ---------------------------------------------------------------------------
+# Zip validation and reading
 # ---------------------------------------------------------------------------
 
 
@@ -378,17 +357,6 @@ def _validate_zip(
     max_decompressed_bytes: int,
     max_per_file_bytes: int,
 ) -> list[zipfile.ZipInfo]:
-    """Validate a zip against safety limits.
-
-    Reads only the central directory (no entry contents). Returns
-    the full infolist so the caller can avoid a second read of
-    the central directory.
-
-    Raises ZipValidationError if the zip is corrupt, if any
-    single entry would decompress beyond max_per_file_bytes, or
-    if the aggregate decompressed size would exceed
-    max_decompressed_bytes.
-    """
     try:
         with zipfile.ZipFile(zip_path) as zf:
             infolist = zf.infolist()
@@ -415,33 +383,49 @@ def _validate_zip(
 def _read_json_entries(
     zip_path: Path,
     infolist: list[zipfile.ZipInfo],
+    progress_callback: ProgressCallback | None = None,
 ) -> list[tuple[str, bytes]]:
     """Read every JSON entry's decompressed bytes from the zip.
 
-    Sequential because ZipFile is not thread-safe. Returns a
-    list of (filename, bytes) tuples ready for the parallel
-    parse phase. Entries that fail to read (corrupt member,
-    OSError) are skipped silently; the parse phase will not
-    receive them, and the absence shows up in the imported-
-    versus-attempted record count.
+    Sequential because ZipFile is not thread-safe. Progress is
+    reported per JSON entry; total is the JSON-file count.
     """
+    json_infos = [
+        i for i in infolist if i.filename.endswith(".json") and not i.is_dir()
+    ]
+    total = len(json_infos)
+
+    if progress_callback is not None:
+        try:
+            progress_callback(0, total)
+        except Exception:
+            pass
+
     out: list[tuple[str, bytes]] = []
     with zipfile.ZipFile(zip_path) as zf:
-        for info in infolist:
-            if not info.filename.endswith(".json"):
-                continue
-            if info.is_dir():
-                continue
+        for idx, info in enumerate(json_infos, 1):
             try:
                 data = zf.read(info.filename)
             except (zipfile.BadZipFile, RuntimeError, OSError):
+                # Bad entry; skip silently. Count of parsed records
+                # reflects the gap.
+                if progress_callback is not None:
+                    try:
+                        progress_callback(idx, total)
+                    except Exception:
+                        pass
                 continue
             out.append((info.filename, data))
+            if progress_callback is not None:
+                try:
+                    progress_callback(idx, total)
+                except Exception:
+                    pass
     return out
 
 
 # ---------------------------------------------------------------------------
-# Private helpers: per-record JSON parsing
+# Per-record JSON parsing
 # ---------------------------------------------------------------------------
 
 
@@ -449,21 +433,6 @@ def _parse_entry(
     filename: str,
     data: bytes,
 ) -> ParsedRecord | ParseFailure:
-    """Parse one OSV JSON record into a ParsedRecord or ParseFailure.
-
-    Returns ParseFailure with an appropriate reason code when:
-      * JSON parsing fails
-      * top-level shape is not an object
-      * the id field is missing or not a string
-      * the affected array contains no PyPI ecosystem entries
-
-    Otherwise returns a ParsedRecord. The returned ParsedRecord
-    may have has_explicit_versions=False if every PyPI affected
-    entry was range-only; that case is logged as a warning at
-    write time rather than treated as a failure here, because
-    the record is still useful in the DB (its canonical_id and
-    aliases get stored).
-    """
     try:
         record = json.loads(data)
     except (json.JSONDecodeError, UnicodeDecodeError) as exc:
@@ -498,10 +467,6 @@ def _parse_entry(
 
     canonical_id, canonical_type = _derive_canonical_id(osv_id, aliases)
 
-    # Build the full identifier set: record's own id, the
-    # canonical (which may be the same), and every alias.
-    # Deduplicate by identifier string while preserving the
-    # alias_type per identifier.
     all_idents_list: list[tuple[str, str]] = [
         (osv_id, _alias_type_for(osv_id)),
         (canonical_id, canonical_type),
@@ -521,6 +486,8 @@ def _parse_entry(
         affected_field = []
 
     affected_entries: list[tuple[str, str]] = []
+    range_entries: list[tuple[str, str, str, str, str]] = []
+    all_versions_pkgs: list[str] = []
     saw_pypi = False
     saw_versions = False
     for entry in affected_field:
@@ -536,6 +503,8 @@ def _parse_entry(
         name = package.get("name")
         if not isinstance(name, str) or not name:
             continue
+
+        # Explicit versions
         versions = entry.get("versions", [])
         if not isinstance(versions, list):
             versions = []
@@ -545,6 +514,16 @@ def _parse_entry(
             saw_versions = True
             affected_entries.append((name, version))
 
+        # Ranges (v2 addition)
+        ranges_field = entry.get("ranges", [])
+        if not isinstance(ranges_field, list):
+            ranges_field = []
+        parsed_ranges, has_all = _parse_ranges_for_package(ranges_field)
+        for range_type, intro, fixed, last_aff in parsed_ranges:
+            range_entries.append((name, range_type, intro, fixed, last_aff))
+        if has_all:
+            all_versions_pkgs.append(name)
+
     if not saw_pypi:
         return ParseFailure(
             filename=filename,
@@ -553,8 +532,6 @@ def _parse_entry(
             detail="no PyPI ecosystem entries in affected array",
         )
 
-    # Optional fields, type-checked individually so an unexpected
-    # null or non-string value does not corrupt the record.
     summary = record.get("summary")
     if not isinstance(summary, str):
         summary = None
@@ -568,9 +545,6 @@ def _parse_entry(
     if not isinstance(modified, str):
         modified = None
 
-    # Severity vectors: take the first occurrence of each type.
-    # Some records have CVSS_V3 only, some both V3 and V4, some
-    # neither. Verbatim string storage; no score computation.
     cvss_v3 = None
     cvss_v4 = None
     severity_field = record.get("severity", [])
@@ -587,14 +561,14 @@ def _parse_entry(
             elif sev_type == "CVSS_V4" and cvss_v4 is None:
                 cvss_v4 = score
 
-    # Severity label: from database_specific.severity when
-    # present, normalized to upper-case. None otherwise.
     severity_label = None
     db_specific = record.get("database_specific", {})
     if isinstance(db_specific, dict):
         sev = db_specific.get("severity")
         if isinstance(sev, str) and sev:
             severity_label = sev.upper()
+
+    unique_all_pkgs = tuple(sorted(set(all_versions_pkgs)))
 
     return ParsedRecord(
         osv_id=osv_id,
@@ -609,28 +583,22 @@ def _parse_entry(
         cvss_v4=cvss_v4,
         severity=severity_label,
         affected=tuple(affected_entries),
+        ranges=tuple(range_entries),
+        all_versions_packages=unique_all_pkgs,
         has_explicit_versions=saw_versions,
     )
 
 
 # ---------------------------------------------------------------------------
-# Private helpers: parallel parse driver
+# Parallel parse
 # ---------------------------------------------------------------------------
 
 
 def _parse_all(
     entries: list[tuple[str, bytes]],
     max_workers: int,
-    progress_callback: ProgressCallback | None,
+    progress_callback: ProgressCallback | None = None,
 ) -> tuple[list[ParsedRecord], list[ParseFailure]]:
-    """Run _parse_entry across all entries with a thread pool.
-
-    Returns (parsed_records, parse_failures). Progress callback
-    is invoked once per completed task with (completed_count,
-    total_count). The callback is also invoked with (0, total)
-    before any task completes so the bar appears immediately on
-    a TTY.
-    """
     if not entries:
         return [], []
 
@@ -642,9 +610,6 @@ def _parse_all(
         try:
             progress_callback(0, total)
         except Exception:
-            # A buggy progress callback must not abort the import.
-            # The same defensive principle applies as in the scan
-            # engine's _safe_progress helper.
             pass
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as pool:
@@ -658,10 +623,6 @@ def _parse_all(
             try:
                 result = future.result()
             except Exception as exc:
-                # Should not happen, since _parse_entry catches
-                # its own exceptions and returns ParseFailure.
-                # Defensive in case a future change in
-                # _parse_entry lets an exception escape.
                 filename = future_map[future]
                 failures.append(
                     ParseFailure(
@@ -686,19 +647,13 @@ def _parse_all(
 
 
 # ---------------------------------------------------------------------------
-# Private helpers: dedup and merge
+# Dedup and merge
 # ---------------------------------------------------------------------------
 
 
 def _merge_records(
     records: list[ParsedRecord],
 ) -> dict[str, MergedVulnerability]:
-    """Group records by canonical_id and merge contributors.
-
-    Returns a dict keyed by canonical_id. Each value is a
-    MergedVulnerability with fields combined per the rules
-    documented on MergedVulnerability.merge.
-    """
     merged: dict[str, MergedVulnerability] = {}
     for record in records:
         cid = record.canonical_id
@@ -709,7 +664,7 @@ def _merge_records(
 
 
 # ---------------------------------------------------------------------------
-# Private helpers: DB write
+# DB write with batched executemany and write-phase progress
 # ---------------------------------------------------------------------------
 
 
@@ -719,16 +674,15 @@ def _write_to_db(
     failures: list[ParseFailure],
     *,
     imported_at: str,
+    progress_callback: ProgressCallback | None = None,
 ) -> dict[str, int]:
-    """Insert merged vulnerabilities, aliases, versions, and warnings.
+    """Build all row batches, then batch-insert with progress callbacks.
 
-    Uses executemany for every batch so the per-row overhead of
-    cursor execution is amortized. Returns a dict of counts the
-    caller uses to build the ImportResult.
-
-    Must be called inside an open transaction. Does not commit
-    or rollback; the caller manages transaction boundaries.
+    The batches are computed upfront so we know the total row
+    count before any inserts begin; that lets the progress bar
+    show a meaningful denominator from the first update.
     """
+    # Build vulnerability rows
     vuln_rows = []
     for vuln in merged.values():
         vuln_rows.append(
@@ -744,18 +698,8 @@ def _write_to_db(
                 1 if vuln.has_explicit_versions else 0,
             )
         )
-    conn.executemany(
-        "INSERT INTO vulnerabilities "
-        "(canonical_id, summary, details, published, modified, "
-        "cvss_v3, cvss_v4, severity, versions_complete) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        vuln_rows,
-    )
 
-    # Aliases: deduplicate by alias string across all merged
-    # vulnerabilities. If two distinct canonical_ids both claim
-    # the same alias string (which would indicate upstream data
-    # corruption), the first one wins via INSERT OR IGNORE.
+    # Build alias rows (deduplicated across canonicals)
     alias_rows = []
     seen_aliases: set[str] = set()
     for vuln in merged.values():
@@ -764,27 +708,42 @@ def _write_to_db(
                 continue
             seen_aliases.add(ident)
             alias_rows.append((ident, vuln.canonical_id, atype))
-    conn.executemany(
-        "INSERT OR IGNORE INTO aliases "
-        "(alias, canonical_id, alias_type) VALUES (?, ?, ?)",
-        alias_rows,
-    )
 
+    # Build affected_versions rows: explicit versions plus ALL
+    # sentinel rows for packages flagged as "every version
+    # affected" via structural detection at parse time.
     av_rows = []
     for vuln in merged.values():
         for package, version in vuln.affected:
             av_rows.append((vuln.canonical_id, package, version))
-    conn.executemany(
-        "INSERT OR IGNORE INTO affected_versions "
-        "(canonical_id, package_name, version) VALUES (?, ?, ?)",
-        av_rows,
-    )
+        for package in vuln.all_versions_packages:
+            av_rows.append((vuln.canonical_id, package, ALL_VERSIONS_SENTINEL))
 
-    # Warnings: per-record parse failures plus per-canonical
-    # range-only flags. The latter are emitted at write time
-    # rather than during the merge so the count reflects the
-    # final deduplicated state (one warning per affected
-    # canonical, not per contributing record).
+    # Build affected_ranges rows
+    ar_rows = []
+    for vuln in merged.values():
+        for entry in vuln.ranges:
+            package, range_type, intro, fixed, last_aff = entry
+            ar_rows.append(
+                (
+                    vuln.canonical_id,
+                    package,
+                    range_type,
+                    intro,
+                    fixed,
+                    last_aff,
+                )
+            )
+
+    # Count canonicals with no usable data (no version rows, no
+    # range rows, no ALL flag for any package). These get a
+    # warning row.
+    no_data_canonicals: list[str] = []
+    for vuln in merged.values():
+        if not vuln.affected and not vuln.ranges and not vuln.all_versions_packages:
+            no_data_canonicals.append(vuln.canonical_id)
+
+    # Build warning rows: parse failures plus no-usable-data flags
     warning_rows = []
     for failure in failures:
         warning_rows.append(
@@ -795,31 +754,80 @@ def _write_to_db(
                 imported_at,
             )
         )
-    skipped_no_versions = 0
-    for vuln in merged.values():
-        if not vuln.has_explicit_versions:
-            skipped_no_versions += 1
-            warning_rows.append(
-                (
-                    vuln.canonical_id,
-                    WARNING_NO_VERSIONS,
-                    "no explicit versions list for any PyPI package",
-                    imported_at,
-                )
+    for cid in no_data_canonicals:
+        warning_rows.append(
+            (
+                cid,
+                WARNING_NO_USABLE_DATA,
+                "PyPI affected entry present but no versions and no ranges",
+                imported_at,
             )
-    if warning_rows:
-        conn.executemany(
-            "INSERT INTO import_warnings "
-            "(osv_id, reason, detail, imported_at) "
-            "VALUES (?, ?, ?, ?)",
-            warning_rows,
         )
+
+    total_rows = (
+        len(vuln_rows)
+        + len(alias_rows)
+        + len(av_rows)
+        + len(ar_rows)
+        + len(warning_rows)
+    )
+    written = 0
+
+    if progress_callback is not None:
+        try:
+            progress_callback(0, total_rows)
+        except Exception:
+            pass
+
+    def batch_insert(sql: str, rows: list) -> None:
+        nonlocal written
+        for i in range(0, len(rows), _WRITE_BATCH_SIZE):
+            batch = rows[i : i + _WRITE_BATCH_SIZE]
+            conn.executemany(sql, batch)
+            written += len(batch)
+            if progress_callback is not None:
+                try:
+                    progress_callback(written, total_rows)
+                except Exception:
+                    pass
+
+    batch_insert(
+        "INSERT INTO vulnerabilities "
+        "(canonical_id, summary, details, published, modified, "
+        "cvss_v3, cvss_v4, severity, versions_complete) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        vuln_rows,
+    )
+    batch_insert(
+        "INSERT OR IGNORE INTO aliases "
+        "(alias, canonical_id, alias_type) VALUES (?, ?, ?)",
+        alias_rows,
+    )
+    batch_insert(
+        "INSERT OR IGNORE INTO affected_versions "
+        "(canonical_id, package_name, version) VALUES (?, ?, ?)",
+        av_rows,
+    )
+    batch_insert(
+        "INSERT OR IGNORE INTO affected_ranges "
+        "(canonical_id, package_name, range_type, "
+        "introduced, fixed, last_affected) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        ar_rows,
+    )
+    batch_insert(
+        "INSERT INTO import_warnings "
+        "(osv_id, reason, detail, imported_at) "
+        "VALUES (?, ?, ?, ?)",
+        warning_rows,
+    )
 
     return {
         "vulnerabilities": len(vuln_rows),
         "aliases": len(alias_rows),
         "affected_versions": len(av_rows),
-        "skipped_no_versions": skipped_no_versions,
+        "affected_ranges": len(ar_rows),
+        "no_usable_data": len(no_data_canonicals),
     }
 
 
@@ -828,28 +836,18 @@ def _write_provenance_metadata(
     *,
     snapshot_sha256: str | None,
     imported_at: str,
+    run_uuid: str,
     records_imported: int,
-    records_skipped_no_versions: int,
 ) -> None:
     """Write import provenance into db_metadata.
 
-    Records:
-      * last_full_update: ISO 8601 timestamp of this import
-      * last_snapshot_sha256: the zip's SHA256 (if provided by caller)
-      * records_imported: count after dedup
-      * records_skipped_no_versions: range-only count
-
-    OSV attribution constants (data_source_name, license, etc)
-    are written separately by the caller (typically the CLI
-    subcommand) using values from
-    pydepgate.package_tools.cvedb.constants.
+    Includes the run UUID so the DB knows which pydepgate
+    invocation produced its current state.
     """
     payload: dict[str, str] = {
         schema.METADATA_KEY_LAST_FULL_UPDATE: imported_at,
         schema.METADATA_KEY_RECORDS_IMPORTED: str(records_imported),
-        schema.METADATA_KEY_RECORDS_SKIPPED_NO_VERSIONS: str(
-            records_skipped_no_versions
-        ),
+        schema.METADATA_KEY_LAST_IMPORT_RUN_UUID: run_uuid,
     }
     if snapshot_sha256 is not None:
         payload[schema.METADATA_KEY_LAST_SNAPSHOT_SHA256] = snapshot_sha256
@@ -866,64 +864,38 @@ def import_from_zip(
     db_path: Path,
     *,
     snapshot_sha256: str | None = None,
+    run_uuid: str | None = None,
     max_workers: int = DEFAULT_MAX_WORKERS,
     max_decompressed_bytes: int = DEFAULT_MAX_DECOMPRESSED_BYTES,
     max_per_file_bytes: int = DEFAULT_MAX_PER_FILE_BYTES,
-    progress_callback: ProgressCallback | None = None,
+    progress: ProgressCallbacks | None = None,
 ) -> ImportResult:
     """Import OSV PyPI data from a downloaded zip into a cvedb DB.
 
-    The import is atomic at the DB level: the entire write phase
-    runs inside one BEGIN IMMEDIATE / COMMIT transaction. If
-    anything fails after the transaction begins, ROLLBACK
-    restores the prior DB state. The zip on disk is not modified.
-
-    Pipeline phases:
-      1. Validate the zip against safety limits (per-entry and
-         aggregate decompressed size).
-      2. Read every .json entry's bytes from the zip (sequential).
-      3. Parse each entry in a thread pool. Failures are recorded
-         to the import_warnings table at write time but do not
-         abort the import.
-      4. Group records by canonical_id and merge contributors.
-      5. Drop and recreate the cvedb schema, then bulk-insert
-         every vulnerability, alias, affected_version, and
-         warning row. Commit the transaction.
-
     Args:
         zip_path: Path to the OSV PyPI all.zip on disk.
-        db_path: Path where the cvedb SQLite DB will live. If
-            the file does not exist it is created. If it does
-            exist its previous contents are replaced atomically.
+        db_path: Path where the cvedb SQLite DB will live.
         snapshot_sha256: Optional SHA256 of the downloaded zip,
-            typically taken from the fetcher's FetchResult.
-            Written to db_metadata as last_snapshot_sha256 so
-            future cvedb update calls can detect "same snapshot,
-            no work needed."
+            written to metadata for future short-circuit checks.
+        run_uuid: Optional explicit run UUID. When None, uses
+            run_context.get_current_run_uuid(). Tests pass an
+            explicit value; production callers pass nothing.
         max_workers: Thread pool size for the parse phase.
-            Defaults to DEFAULT_MAX_WORKERS (8). JSON parsing
-            releases the GIL so threads provide real concurrency.
-        max_decompressed_bytes: Aggregate decompressed-size cap
-            for bomb protection. Defaults to 500MB.
+        max_decompressed_bytes: Aggregate decompressed-size cap.
         max_per_file_bytes: Per-entry decompressed-size cap.
-            Defaults to 1MB.
-        progress_callback: Optional Callable[[int, int], None]
-            matching pydepgate.cli.progress.ProgressCallback.
-            Invoked once per completed parse task plus one
-            initial (0, total) call so the bar appears
-            immediately on a TTY.
+        progress: Optional ProgressCallbacks bundle covering the
+            three phases (read, parse, write). Each phase's
+            finish callback is invoked after its work completes.
 
     Returns:
         ImportResult summarizing what was imported.
-
-    Raises:
-        ZipValidationError: zip is corrupt or violates safety
-            limits. The DB is not touched.
-        sqlite3.Error: a SQLite-level failure during the write
-            phase. The transaction is rolled back before this
-            propagates.
     """
     start = time.monotonic()
+
+    if run_uuid is None:
+        run_uuid = run_context.get_current_run_uuid()
+    if progress is None:
+        progress = ProgressCallbacks()
 
     infolist = _validate_zip(
         zip_path,
@@ -931,12 +903,28 @@ def import_from_zip(
         max_per_file_bytes=max_per_file_bytes,
     )
 
-    entries = _read_json_entries(zip_path, infolist)
-    parsed, failures = _parse_all(entries, max_workers, progress_callback)
+    # Phase 1: read
+    entries = _read_json_entries(zip_path, infolist, progress.read_update)
+    if progress.read_finish is not None:
+        try:
+            progress.read_finish()
+        except Exception:
+            pass
+
+    # Phase 2: parse
+    parsed, failures = _parse_all(entries, max_workers, progress.parse_update)
+    if progress.parse_finish is not None:
+        try:
+            progress.parse_finish()
+        except Exception:
+            pass
+
+    # Phase 3: merge (in-memory only, no bar)
     merged = _merge_records(parsed)
 
     imported_at = datetime.now(timezone.utc).isoformat()
 
+    # Phase 4: write
     conn = schema.connect(db_path)
     try:
         conn.execute("BEGIN IMMEDIATE")
@@ -948,13 +936,14 @@ def import_from_zip(
                 merged,
                 failures,
                 imported_at=imported_at,
+                progress_callback=progress.write_update,
             )
             _write_provenance_metadata(
                 conn,
                 snapshot_sha256=snapshot_sha256,
                 imported_at=imported_at,
+                run_uuid=run_uuid,
                 records_imported=len(merged),
-                records_skipped_no_versions=counts["skipped_no_versions"],
             )
             conn.commit()
         except Exception:
@@ -962,13 +951,19 @@ def import_from_zip(
             raise
     finally:
         conn.close()
+        if progress.write_finish is not None:
+            try:
+                progress.write_finish()
+            except Exception:
+                pass
 
     elapsed = time.monotonic() - start
     return ImportResult(
         records_imported=len(merged),
-        records_skipped_no_versions=counts["skipped_no_versions"],
         records_with_parse_errors=len(failures),
+        records_with_no_usable_data=counts["no_usable_data"],
         affected_version_rows=counts["affected_versions"],
+        affected_range_rows=counts["affected_ranges"],
         alias_rows=counts["aliases"],
         elapsed_seconds=elapsed,
     )
