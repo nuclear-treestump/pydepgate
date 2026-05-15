@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pydepgate"
-version = "0.4.2
+version = "0.4.2"
 description = "A zero dependency lightweight static analyzer that detects weird startup behaviors in python."
 requires-python = ">=3.11"
 readme = "README.md"
