@@ -14,6 +14,119 @@ become binding stability promises with formal deprecation cycles.
 
 (no changes yet)
 
+## [0.4.2] - 2026-05-15
+
+### Added
+
+- **OSV PyPI CVE database (`cvedb` subsystem).** New subsystem
+  for managing the local CVE database built from OSV PyPI
+  snapshots. Implements the full ingestion pipeline: download
+  with SHA256 verification, streaming JSON parse with
+  ThreadPoolExecutor, multi-contributor deduplication by
+  canonical CVE ID (CVE/GHSA/PYSEC precedence), and atomic
+  SQLite writes. `pydepgate cvedb update` fetches the latest
+  snapshot and imports ~16,500 distinct vulnerabilities in
+  under 10 seconds. The `cvedb` subcommand exposes three
+  actions: `update` (download and import), `status` (show
+  record counts and metadata), and `path` (print DB location).
+  Database is cached in `$XDG_CACHE_HOME/pydepgate/cvedb/`
+  following the XDG Base Directory spec.
+
+- **OSV ranges as first-class data.** The `affected_ranges`
+  table captures version constraints from OSV range events
+  (introduced, fixed, last_affected) as parsed (range_type,
+  introduced, fixed, last_affected) tuples. Ranges are walked
+  as a state machine: `introduced` opens a range, `fixed` or
+  `last_affected` closes it, and a dangling `introduced` at
+  end-of-events emits as open-ended. Range-only records (no
+  explicit version list) now contribute data instead of
+  warnings. A real OSV import yields 7,000-15,000 range rows
+  alongside 500,000+ exact version rows, making the full
+  constraint space queryable by the PEP 440 evaluator.
+
+- **Structural ALL-versions detection with sentinel fast-path.**
+  When a range has `introduced=0` with no fixed/last_affected
+  closer, it qualifies as "every version affected". The importer
+  flags the package and emits a sentinel row `(canonical_id,
+  package, "ALL")` in `affected_versions`. Depscan queries
+  become `WHERE version = ? OR version = 'ALL'`, handling both
+  exact-match and universal-coverage CVEs in one disjunction
+  without invoking the PEP 440 evaluator. This is the structural
+  fast-path; semantic ALL detection (creative ways of expressing
+  universal coverage) is deferred to the range evaluator.
+
+- **Run UUID tracking in cvedb metadata.** Each import writes a
+  universally unique run ID (`METADATA_KEY_LAST_IMPORT_RUN_UUID`)
+  to the database metadata block. This UUID is foundational for
+  SARIF `automationDetails.id` correlation, audit trails, and
+  the "which invocation produced this DB" question. Defaults to
+  `uuid.uuid4()` unless explicitly overridden; the run_context
+  module manages generation with thread-safe double-checked
+  locking.
+
+- **Three-phase import progress bars (read, parse, write).**
+  The importer exposes a `ProgressCallbacks` dataclass bundling
+  update and finish callbacks for read, parse, and write phases.
+  The CLI displays four bars total: Downloading (from fetcher),
+  then Reading (zip entries), Parsing (JSON records),
+  and Writing (DB inserts). Finish callbacks add newlines so
+  each bar completes cleanly before the next starts. Write-phase
+  progress fires after each batch of 1,000 rows, yielding ~560
+  updates during a real 560k-row import for a smooth bar without
+  per-row overhead.
+
+- **New `cvedb` CLI summary format with totals.** The import
+  summary now reports exact version rows, range rows, aliases,
+  parse errors (each on its own line), and a Total summing all
+  four. Example: `Exact version rows: 528447 / Range rows: 7842
+  / Aliases: 25934 / Parse errors: 0 / Total: 562223`. The format
+  makes it easy to spot coverage gaps (nonzero parse errors means
+  some records weren't ingested) and track import growth over time.
+
+### Changed
+
+- **`pydepgate cvedb status` output gains range counts and run
+  UUID.** The status display now shows a live query count of
+  `affected_ranges` rows (not cached in metadata, so it reflects
+  the actual table state) and the last import run's UUID if
+  available. The "Skipped (no vers)" line is removed since
+  range-only records are no longer skipped; they now appear as
+  range rows. Schema version is included for future migrations.
+
+- **CVE database schema version 2.** The `affected_ranges` table
+  is new; the PRIMARY KEY strategy uses empty strings for absent
+  `fixed` and `last_affected` fields (never NULL) so the key
+  remains composite and deduplication works cleanly. Old v1
+  databases are rejected with a hard error and a directive to
+  re-run `cvedb update`; no in-place migration is offered.
+  Future schema versions will follow the same hard-reject
+  pattern to avoid migration complexity.
+
+- **Importer API shape.** The `import_from_zip` function
+  replaces the single `progress_callback` argument with a
+  `progress: ProgressCallbacks | None` parameter. Tests
+  typically pass `None` (silent import); the CLI constructs the
+  bundle with all six callbacks. The `ImportResult` dataclass
+  drops `records_skipped_no_versions` and adds
+  `records_with_no_usable_data` (for CVEs with PyPI mentions
+  but neither versions nor ranges; rare/never in practice) and
+  `affected_range_rows` (count of range table inserts).
+
+- **`cvedb update` download vs. import bars separated.** The
+  download phase (checking and fetching the OSV snapshot) is now
+  visually distinct from the import phase (reading, parsing,
+  writing), making it easy to diagnose where time is spent. The
+  download bar covers the HEAD check and full transfer; import
+  bars cover unpacking and database operations.
+
+### Security
+
+No security advisories in this release. The cvedb subsystem
+processes untrusted OSV JSON without executing user-provided
+content (parsing is read-only and validation-strict). The run
+UUID provides forensic trails for audit; databases can be
+reproduced from the recorded snapshot SHA256 and run ID.
+
 ## [0.4.1] - 2026-05-12
 
 ### Added
@@ -417,6 +530,7 @@ issues will land in [ROADMAP.md](ROADMAP.md):
   of files.
 
 [Unreleased]: https://github.com/nuclear-treestump/pydepgate/compare/v0.4.0...HEAD
+[0.4.2]: https://github.com/nuclear-treestump/pydepgate/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/nuclear-treestump/pydepgate/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/nuclear-treestump/pydepgate/compare/v0.3.3...v0.4.0
 [0.3.3]: https://github.com/nuclear-treestump/pydepgate/compare/v0.3.2...v0.3.3
