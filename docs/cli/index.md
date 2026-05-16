@@ -25,6 +25,7 @@ pydepgate scan package.whl --format json
 | Subcommand | Status | Description |
 |---|---|---|
 | [scan](scan.md) | Available | Scan a wheel, sdist, installed package, or single file |
+| [cvedb](cvedb.md) | Available | Download the PyPI `all.zip` from OSV.dev and import it into a SQLite DB |
 | [explain](explain.md) | Available | Look up signal and rule documentation |
 | [preflight](preflight.md) | Under development | Walk an installed Python environment |
 | [exec](exec.md) | Under development | Run a script with runtime interdiction |
