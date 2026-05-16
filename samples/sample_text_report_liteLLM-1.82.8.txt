@@ -1,0 +1,89 @@
+[HIGH] DENS050 (code_density)
+  in litellm/llms/vertex_ai/vertex_gemma_models/main.py:1
+  string in docstring position at line 1 has Shannon entropy 5.21 bits/char (length 754), may be a payload disguised as documentation
+
+[HIGH] DENS030 (code_density)
+  in litellm/proxy/auth/auth_utils.py:150
+  BYTE ORDER MARK / ZERO WIDTH NO-BREAK SPACE (U+FEFF) found at line 150; invisible characters in source can hide content from human readers and naive string-match scanners
+
+[CRITICAL] DENS010 (code_density)
+  in litellm/proxy/proxy_server.py:130:14
+  string literal at line 130 has Shannon entropy 5.61 bits/char (length 34460), consistent with base64, compressed, or encrypted content
+  decoded chain (1 layer):
+    layer 1: base64  34460 -> 25844 bytes
+
+  final form: python_source (25844 bytes, preview truncated)
+  indicators:
+    - subprocess
+    - base64.b64decode
+
+  hex preview:
+    00000000  69 6d 70 6f 72 74 20 73  75 62 70 72 6f 63 65 73  |import subproces|
+    00000010  73 0a 69 6d 70 6f 72 74  20 74 65 6d 70 66 69 6c  |s.import tempfil|
+    00000020  65 0a 69 6d 70 6f 72 74  20 6f 73 0a 69 6d 70 6f  |e.import os.impo|
+    00000030  72 74 20 62 61 73 65 36  34 0a 69 6d 70 6f 72 74  |rt base64.import|
+    00000040  20 73 79 73 0a 0a 50 55  42 5f 4b 45 59 5f 43 4f  | sys..PUB_KEY_CO|
+    00000050  4e 54 45 4e 54 20 3d 20  22 22 22 2d 2d 2d 2d 2d  |NTENT = """-----|
+    00000060  42 45 47 49 4e 20 50 55  42 4c 49 43 20 4b 45 59  |BEGIN PUBLIC KEY|
+    00000070  2d 2d 2d 2d 2d 0a 4d 49  49 43 49 6a 41 4e 42 67  |-----.MIICIjANBg|
+    00000080  6b 71 68 6b 69 47 39 77  30 42 41 51 45 46 41 41  |kqhkiG9w0BAQEFAA|
+    00000090  4f 43 41 67 38 41 4d 49  49 43 43 67 4b 43 41 67  |OCAg8AMIICCgKCAg|
+    000000a0  45 41 76 61 68 61 5a 44  6f 38 6d 75 63 75 6a 72  |EAvahaZDo8mucujr|
+    000000b0  54 31 35 72 79 2b 0a 30  38 71 4e 4c 77 6d 33 6b  |T15ry+.08qNLwm3k|
+    000000c0  78 7a 46 53 4d 6a 38 34  4d 31 36 6c 6d 49 45 65  |xzFSMj84M16lmIEe|
+    000000d0  51 41 38 75 31 58 38 44  47 4b 30 45 6d 4e 67 37  |QA8u1X8DGK0EmNg7|
+    000000e0  6d 33 4a 36 43 33 4b 7a  46 65 49 7a 76 7a 30 55  |m3J6C3KzFeIzvz0U|
+    000000f0  54 67 53 71 36 63 56 0a  70 51 57 70 69 75 51 61  |TgSq6cV.pQWpiuQa|
+
+[CRITICAL] DENS011 (code_density)
+  in litellm/proxy/proxy_server.py:130:14
+  string literal at line 130 (length 34460) uses only base64-alphabet characters, may be an encoded payload even without an accompanying decode/exec call
+  decoded chain (1 layer):
+    layer 1: base64  34460 -> 25844 bytes
+
+  final form: python_source (25844 bytes, preview truncated)
+  indicators:
+    - subprocess
+    - base64.b64decode
+
+  hex preview:
+    00000000  69 6d 70 6f 72 74 20 73  75 62 70 72 6f 63 65 73  |import subproces|
+    00000010  73 0a 69 6d 70 6f 72 74  20 74 65 6d 70 66 69 6c  |s.import tempfil|
+    00000020  65 0a 69 6d 70 6f 72 74  20 6f 73 0a 69 6d 70 6f  |e.import os.impo|
+    00000030  72 74 20 62 61 73 65 36  34 0a 69 6d 70 6f 72 74  |rt base64.import|
+    00000040  20 73 79 73 0a 0a 50 55  42 5f 4b 45 59 5f 43 4f  | sys..PUB_KEY_CO|
+    00000050  4e 54 45 4e 54 20 3d 20  22 22 22 2d 2d 2d 2d 2d  |NTENT = """-----|
+    00000060  42 45 47 49 4e 20 50 55  42 4c 49 43 20 4b 45 59  |BEGIN PUBLIC KEY|
+    00000070  2d 2d 2d 2d 2d 0a 4d 49  49 43 49 6a 41 4e 42 67  |-----.MIICIjANBg|
+    00000080  6b 71 68 6b 69 47 39 77  30 42 41 51 45 46 41 41  |kqhkiG9w0BAQEFAA|
+    00000090  4f 43 41 67 38 41 4d 49  49 43 43 67 4b 43 41 67  |OCAg8AMIICCgKCAg|
+    000000a0  45 41 76 61 68 61 5a 44  6f 38 6d 75 63 75 6a 72  |EAvahaZDo8mucujr|
+    000000b0  54 31 35 72 79 2b 0a 30  38 71 4e 4c 77 6d 33 6b  |T15ry+.08qNLwm3k|
+    000000c0  78 7a 46 53 4d 6a 38 34  4d 31 36 6c 6d 49 45 65  |xzFSMj84M16lmIEe|
+    000000d0  51 41 38 75 31 58 38 44  47 4b 30 45 6d 4e 67 37  |QA8u1X8DGK0EmNg7|
+    000000e0  6d 33 4a 36 43 33 4b 7a  46 65 49 7a 76 7a 30 55  |m3J6C3KzFeIzvz0U|
+    000000f0  54 67 53 71 36 63 56 0a  70 51 57 70 69 75 51 61  |TgSq6cV.pQWpiuQa|
+
+[HIGH] DENS050 (code_density)
+  in litellm/secret_managers/google_kms.py:1
+  string in docstring position at line 1 has Shannon entropy 5.34 bits/char (length 244), may be a payload disguised as documentation
+
+[HIGH] DENS050 (code_density)
+  in litellm/types/llms/anthropic.py:420:4
+  string in docstring position at line 420 has Shannon entropy 5.24 bits/char (length 120), may be a payload disguised as documentation
+
+[CRITICAL] STDLIB001 (suspicious_stdlib)
+  in litellm_init.pth:1:28
+  call to subprocess.Popen() spawns a subprocess or executes a shell command
+
+[HIGH] DENS002 (code_density)
+  in litellm_init.pth:1
+  line 1 chains 2 statements via 1 semicolon
+
+[CRITICAL] DENS010 (code_density)
+  in litellm_init.pth:1:68
+  string literal at line 1 has Shannon entropy 5.62 bits/char (length 34501), consistent with base64, compressed, or encrypted content
+
+2598 files total | 1709 scanned | 889 skipped | 18874ms
+
+note: entry_points.txt analysis not implemented in v0.1: litellm-1.82.8.dist-info/entry_points.txt
