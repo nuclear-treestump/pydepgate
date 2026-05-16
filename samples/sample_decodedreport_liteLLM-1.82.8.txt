@@ -1,0 +1,73 @@
+decoded payload report for litellm-1.82.8-py3-none-any.whl
+max recursion depth: 8
+artifact SHA256: d2a0d5f564628773b6af7b9c11f6b86531a875bd2d186d7081ab62748a800ebb
+artifact SHA512: 4d3b3ea1b93b8714d9a900b9d63d965774b481117ccb44fc0dc8b3eed2a0591a3f4983b5a4697947340818baa8e68872609da965606dd14a61346b452064a362
+=================================================================
+
+litellm/proxy/proxy_server.py:130:14 (DENS010+DENS011, length 34460)
+    chain: base64 -> python_source (25844 bytes)
+    indicators: subprocess, base64.b64decode
+    inner findings:
+      `-- DENS010+DENS011 critical at line 22:13
+          chain: base64 -> python_source (17281 bytes)
+          indicators: subprocess, urllib, base64.b64decode, /etc/passwd, /etc/shadow, .ssh/id_rsa, AWS_SECRET, AWS_ACCESS_KEY, curl 
+          inner findings:
+            `-- DENS010+DENS011 high at line 278:16
+                chain: base64 -> python_source (1125 bytes)
+                indicators: subprocess, urllib
+
+litellm_init.pth:1:68 (DENS010, length 34501)
+    chain: (no transforms applied)
+    indicators: exec(, base64.b64decode
+    inner findings:
+      - DYN002 critical at line 1:15: exec() at module scope with non-literal argument; executes code computed at runtime
+      - DENS002 high at line 1:0: line 1 chains 2 statements via 1 semicolon
+      `-- DENS010+DENS011+ENC001 critical at line 1:37
+          chain: base64 -> python_source (25844 bytes)
+          indicators: subprocess, base64.b64decode
+          inner findings:
+            - STDLIB001 critical at line 37:16: call to subprocess.run() spawns a subprocess or executes a shell command
+            - STDLIB001 critical at line 54:12: call to subprocess.run() spawns a subprocess or executes a shell command
+            - STDLIB001 critical at line 55:12: call to subprocess.run() spawns a subprocess or executes a shell command
+            - STDLIB001 critical at line 56:12: call to subprocess.run() spawns a subprocess or executes a shell command
+            - STDLIB001 critical at line 57:12: call to subprocess.run() spawns a subprocess or executes a shell command
+            - STDLIB001 critical at line 59:12: call to subprocess.run() spawns a subprocess or executes a shell command
+            +-- DENS010 critical at line 7:18
+            |   chain: pem -> binary_unknown (550 bytes)
+            |   DER: rsa_public_key, 4096-bit
+            |   (stopped: structured rsa_public_key terminal, no Python recursion)
+            `-- DENS010+DENS011 critical at line 22:13
+                chain: base64 -> python_source (17281 bytes)
+                indicators: subprocess, urllib, base64.b64decode, /etc/passwd, /etc/shadow, .ssh/id_rsa, AWS_SECRET, AWS_ACCESS_KEY, curl 
+                inner findings:
+                  - STDLIB001 critical at line 18:12: call to subprocess.check_output() spawns a subprocess or executes a shell command
+                  - STDLIB002 critical at line 194:8: call to urllib.request.Request() initiates network communication
+                  - STDLIB002 critical at line 196:13: call to urllib.request.urlopen() initiates network communication
+                  - STDLIB002 critical at line 209:16: call to urllib.request.Request() initiates network communication
+                  - STDLIB002 critical at line 211:13: call to urllib.request.urlopen() initiates network communication
+                  - STDLIB002 critical at line 213:17: call to urllib.request.Request() initiates network communication
+                  - STDLIB002 critical at line 215:13: call to urllib.request.urlopen() initiates network communication
+                  - STDLIB002 critical at line 217:18: call to urllib.request.Request() initiates network communication
+                  - STDLIB002 critical at line 219:13: call to urllib.request.urlopen() initiates network communication
+                  - STDLIB002 critical at line 253:12: call to ssl.create_default_context() initiates network communication
+                  - STDLIB002 critical at line 254:12: call to urllib.request.Request() initiates network communication
+                  - STDLIB002 critical at line 256:17: call to urllib.request.urlopen() initiates network communication
+                  - STDLIB002 critical at line 261:12: call to ssl.create_default_context() initiates network communication
+                  - STDLIB002 critical at line 262:12: call to urllib.request.Request() initiates network communication
+                  - STDLIB002 critical at line 264:17: call to urllib.request.urlopen() initiates network communication
+                  - STDLIB001 critical at line 329:12: call to subprocess.run() spawns a subprocess or executes a shell command
+                  - STDLIB001 critical at line 330:12: call to subprocess.run() spawns a subprocess or executes a shell command
+                  - DENS001 high at line 157:0: line 157 contains 50 tokens, consistent with minification or deliberate compression
+                  - DENS002 high at line 31:0: line 31 chains 2 statements via 1 semicolon
+                  +-- DENS010 critical at line 69:4
+                  |   chain: (no transforms applied)
+                  |   indicators: curl 
+                  |   (stopped: terminal is ascii_text, not Python source)
+                  `-- DENS010+DENS011 critical at line 278:16
+                      chain: base64 -> python_source (1125 bytes)
+                      indicators: subprocess, urllib
+                      inner findings:
+                        - STDLIB002 critical at line 12:14: call to urllib.request.Request() initiates network communication
+                        - STDLIB002 critical at line 13:13: call to urllib.request.urlopen() initiates network communication
+                        - STDLIB002 critical at line 21:8: call to urllib.request.urlretrieve() initiates network communication
+                        - STDLIB001 critical at line 23:8: call to subprocess.Popen() spawns a subprocess or executes a shell command
