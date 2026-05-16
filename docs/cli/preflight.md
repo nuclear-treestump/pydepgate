@@ -1,7 +1,7 @@
 ---
 title: NYI - Preflight
 parent: CLI
-nav_order: 6
+nav_order: 7
 ---
 # pydepgate preflight
 

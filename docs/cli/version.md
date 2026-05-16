@@ -1,7 +1,7 @@
 ---
 title: Version
 parent: CLI
-nav_order: 4
+nav_order: 5
 ---
 # pydepgate version
 
@@ -14,7 +14,7 @@ pydepgate version
 ## Output
 
 ```
-pydepgate 0.4.0
+pydepgate 0.4.2
 ```
 
 ## Alternatives
