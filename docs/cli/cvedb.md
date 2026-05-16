@@ -65,13 +65,13 @@ Your Run ID: de65221a-b86f-4d4e-8998-6eb931db4524
 
 **Summary fields:**
 
-- **Exact version rows** — rows in the `affected_versions` table representing a specific vulnerable version string (e.g. `requests==2.6.0`). Sourced from each OSV record's explicit `versions` list. Also includes `ALL` sentinel rows for packages where every version is affected.
-- **Range rows** — rows in the `affected_ranges` table representing a version constraint (e.g. `introduced=0, fixed=2.28.2`). Sourced from each OSV record's `ranges` events. Used by the PEP 440 range evaluator when an exact version match is not present.
-- **Aliases** — rows in the `aliases` table. Each vulnerability may be known by multiple IDs (CVE, GHSA, PYSEC, MAL, and others). All aliases resolve to a single canonical ID.
-- **Parse errors** — OSV records that could not be parsed (invalid JSON, missing ID field, or other structural problem). Nonzero here means some records were not imported; check `pydepgate cvedb status` for details.
-- **No usable data** — records that referenced a PyPI package but contained neither an explicit versions list nor any version ranges. These are rare and represent gaps in upstream OSV data rather than pydepgate limitations.
-- **Total** — sum of exact version rows, range rows, aliases, and parse errors.
-- **Run ID** — UUID4 identifying this specific import invocation. Recorded in the database and surfaced by `pydepgate cvedb status`. Referenced in SARIF `automationDetails.id` when the CVE pass emits findings.
+- **Exact version rows**: rows in the `affected_versions` table representing a specific vulnerable version string (e.g. `requests==2.6.0`). Sourced from each OSV record's explicit `versions` list. Also includes `ALL` sentinel rows for packages where every version is affected.
+- **Range rows**: rows in the `affected_ranges` table representing a version constraint (e.g. `introduced=0, fixed=2.28.2`). Sourced from each OSV record's `ranges` events. Used by the PEP 440 range evaluator when an exact version match is not present.
+- **Aliases**: rows in the `aliases` table. Each vulnerability may be known by multiple IDs (CVE, GHSA, PYSEC, MAL, and others). All aliases resolve to a single canonical ID.
+- **Parse errors**: OSV records that could not be parsed (invalid JSON, missing ID field, or other structural problem). Nonzero here means some records were not imported; check `pydepgate cvedb status` for details.
+- **No usable data**: records that referenced a PyPI package but contained neither an explicit versions list nor any version ranges. These are rare and represent gaps in upstream OSV data rather than pydepgate limitations.
+- **Total**: sum of exact version rows, range rows, aliases, and parse errors.
+- **Run ID**: UUID4 identifying this specific import invocation. Recorded in the database and surfaced by `pydepgate cvedb status`. Referenced in SARIF `automationDetails.id` when the CVE pass emits findings.
 
 The download zip is deleted after a successful import. The database is
 atomic: a failed import leaves the previous database intact.
