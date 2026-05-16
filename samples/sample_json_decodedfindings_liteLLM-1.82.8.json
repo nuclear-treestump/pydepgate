@@ -1,0 +1,591 @@
+{
+  "report_type": "pydepgate_decoded_tree",
+  "schema_version": 1,
+  "target": "litellm-1.82.8-py3-none-any.whl",
+  "max_depth": 8,
+  "artifact_sha256": "d2a0d5f564628773b6af7b9c11f6b86531a875bd2d186d7081ab62748a800ebb",
+  "artifact_sha512": "4d3b3ea1b93b8714d9a900b9d63d965774b481117ccb44fc0dc8b3eed2a0591a3f4983b5a4697947340818baa8e68872609da965606dd14a61346b452064a362",
+  "nodes": [
+    {
+      "outer_signal_id": "DENS010",
+      "outer_severity": "critical",
+      "outer_location": "litellm/proxy/proxy_server.py:130:14",
+      "outer_length": 34460,
+      "triggered_by": [
+        "DENS010",
+        "DENS011"
+      ],
+      "chain": [
+        "base64"
+      ],
+      "unwrap_status": "completed",
+      "final_kind": "python_source",
+      "final_size": 25844,
+      "indicators": [
+        "subprocess",
+        "base64.b64decode"
+      ],
+      "pickle_warning": false,
+      "depth": 0,
+      "stop_reason": "leaf_terminal",
+      "containing_file_sha256": "a0d229be8efcb2f9135e2ad55ba275b76ddcfeb55fa4370e0a522a5bdee0120b",
+      "containing_file_sha512": "a9ada4f30822abf267cc55f57e6a0705b8f950a6f5835b55dec0d3716c3ba7a7d07c072a3c04f28452b73e4085ecf441c8e177808bcd49eeafc6a024ed6be033",
+      "details_summary": null,
+      "details_full": null,
+      "child_findings": [],
+      "children": [
+        {
+          "outer_signal_id": "DENS010",
+          "outer_severity": "critical",
+          "outer_location": "litellm/proxy/proxy_server.py<decoded:layer1@line130>:22:13",
+          "outer_length": 23044,
+          "triggered_by": [
+            "DENS010",
+            "DENS011"
+          ],
+          "chain": [
+            "base64"
+          ],
+          "unwrap_status": "completed",
+          "final_kind": "python_source",
+          "final_size": 17281,
+          "indicators": [
+            "subprocess",
+            "urllib",
+            "base64.b64decode",
+            "/etc/passwd",
+            "/etc/shadow",
+            ".ssh/id_rsa",
+            "AWS_SECRET",
+            "AWS_ACCESS_KEY",
+            "curl "
+          ],
+          "pickle_warning": false,
+          "depth": 1,
+          "stop_reason": "leaf_terminal",
+          "containing_file_sha256": null,
+          "containing_file_sha512": null,
+          "details_summary": null,
+          "details_full": null,
+          "child_findings": [],
+          "children": [
+            {
+              "outer_signal_id": "DENS010",
+              "outer_severity": "high",
+              "outer_location": "litellm/proxy/proxy_server.py<decoded:layer1@line130><decoded:layer2@line22>:278:16",
+              "outer_length": 1500,
+              "triggered_by": [
+                "DENS010",
+                "DENS011"
+              ],
+              "chain": [
+                "base64"
+              ],
+              "unwrap_status": "completed",
+              "final_kind": "python_source",
+              "final_size": 1125,
+              "indicators": [
+                "subprocess",
+                "urllib"
+              ],
+              "pickle_warning": false,
+              "depth": 2,
+              "stop_reason": "leaf_terminal",
+              "containing_file_sha256": null,
+              "containing_file_sha512": null,
+              "details_summary": null,
+              "details_full": null,
+              "child_findings": [],
+              "children": [],
+              "ioc_data": {
+                "original_sha256": "eaa27048776b0ee3139c66b0454ab98fc1b030a0604d372b13ff1d7f87fb6494",
+                "original_sha512": "ba78e867199a2f7b3a1ca0aa2aabd626e4862bb28a784574dd4d169951f75251ef7abac98debabf85674a82bac10751cb285bac6840c5c6b9e5076a5e4b906d7",
+                "decoded_sha256": "6cf223aea68b0e8031ff68251e30b6017a0513fe152e235c26f248ba1e15c92a",
+                "decoded_sha512": "4e3647b15bb92a2623d331768c8e5193e54f370366b7da62a7db720780d0d50a75057d977bca8cbb83c245eaf1f7921e12bf5163bc84c74194a2d4abc58fdf4d",
+                "decoded_source": null,
+                "extract_timestamp": "2026-05-16T19:33:43.107515+00:00"
+              }
+            }
+          ],
+          "ioc_data": {
+            "original_sha256": "c48a899976a8b3cede7d66085cacd52a0fadbda621f58836eaf35c3ab5144bb9",
+            "original_sha512": "85be43de42f6f089851111fd26f53437027308dc2a990352f592004dcae682b448b4c2e34bfd6221f639e9c3ec5d883b1506a259a0fcbb077dfd57756bcd5ab4",
+            "decoded_sha256": "ce681356c8870af8583ed753fff330e2897f4629c45677f8065649a47b20a111",
+            "decoded_sha512": "eeb0d8f021fee9c3c18112fad8279f48223684dd7cb47194fa828a5fdf3f8a007371b240ba3392bcf3561cbca1f3ddd75dc5112edce7c7f89d490bb070766a3c",
+            "decoded_source": null,
+            "extract_timestamp": "2026-05-16T19:33:43.107558+00:00"
+          }
+        }
+      ],
+      "ioc_data": {
+        "original_sha256": "8a7c64171775a25a73da5b6fd11ee3dae425741ca929645d8a7b1c0bbbe19706",
+        "original_sha512": "c4683e444d086c824dc54e38efddbc2a8060735e19507c85fe529ab3dde27a1ec615b36f9b109460b255b39aa8fd62ac7f3eeae5103ab1dbfad4e9c913b90c74",
+        "decoded_sha256": "d6fc0ff06978742a2ef789304bcdbe69a731693ad066a457db0878279830d6a9",
+        "decoded_sha512": "6a0bbd6ed3914a3123bb83c54360cf99ff808bd9f574b092ecb64ca12ca9abe9d6e1003af06e02202ce0ad319f0e3156ee42c3a5828518144250b38625b27492",
+        "decoded_source": null,
+        "extract_timestamp": "2026-05-16T19:33:43.107666+00:00"
+      }
+    },
+    {
+      "outer_signal_id": "DENS010",
+      "outer_severity": "critical",
+      "outer_location": "litellm_init.pth:1:68",
+      "outer_length": 34501,
+      "triggered_by": [
+        "DENS010"
+      ],
+      "chain": [],
+      "unwrap_status": "completed",
+      "final_kind": "python_source",
+      "final_size": 34501,
+      "indicators": [
+        "exec(",
+        "base64.b64decode"
+      ],
+      "pickle_warning": false,
+      "depth": 0,
+      "stop_reason": "leaf_terminal",
+      "containing_file_sha256": "71e35aef03099cd1f2d6446734273025a163597de93912df321ef118bf135238",
+      "containing_file_sha512": "8bb526961d566afc9583e4306076cfaef99b2ddce17ecfdcda75117aa6f998868bbc232eee05a124e0c44ba4cf4cc863e2bece6c48989526df15af8953ecbed7",
+      "details_summary": null,
+      "details_full": null,
+      "child_findings": [
+        {
+          "signal_id": "DYN002",
+          "severity": "critical",
+          "line": 1,
+          "column": 15,
+          "description": "exec() at module scope with non-literal argument; executes code computed at runtime"
+        },
+        {
+          "signal_id": "DENS002",
+          "severity": "high",
+          "line": 1,
+          "column": 0,
+          "description": "line 1 chains 2 statements via 1 semicolon"
+        }
+      ],
+      "children": [
+        {
+          "outer_signal_id": "DENS010",
+          "outer_severity": "critical",
+          "outer_location": "litellm_init.pth<decoded:layer1@line1>:1:37",
+          "outer_length": 34460,
+          "triggered_by": [
+            "DENS010",
+            "DENS011",
+            "ENC001"
+          ],
+          "chain": [
+            "base64"
+          ],
+          "unwrap_status": "completed",
+          "final_kind": "python_source",
+          "final_size": 25844,
+          "indicators": [
+            "subprocess",
+            "base64.b64decode"
+          ],
+          "pickle_warning": false,
+          "depth": 1,
+          "stop_reason": "leaf_terminal",
+          "containing_file_sha256": null,
+          "containing_file_sha512": null,
+          "details_summary": null,
+          "details_full": null,
+          "child_findings": [
+            {
+              "signal_id": "STDLIB001",
+              "severity": "critical",
+              "line": 37,
+              "column": 16,
+              "description": "call to subprocess.run() spawns a subprocess or executes a shell command"
+            },
+            {
+              "signal_id": "STDLIB001",
+              "severity": "critical",
+              "line": 54,
+              "column": 12,
+              "description": "call to subprocess.run() spawns a subprocess or executes a shell command"
+            },
+            {
+              "signal_id": "STDLIB001",
+              "severity": "critical",
+              "line": 55,
+              "column": 12,
+              "description": "call to subprocess.run() spawns a subprocess or executes a shell command"
+            },
+            {
+              "signal_id": "STDLIB001",
+              "severity": "critical",
+              "line": 56,
+              "column": 12,
+              "description": "call to subprocess.run() spawns a subprocess or executes a shell command"
+            },
+            {
+              "signal_id": "STDLIB001",
+              "severity": "critical",
+              "line": 57,
+              "column": 12,
+              "description": "call to subprocess.run() spawns a subprocess or executes a shell command"
+            },
+            {
+              "signal_id": "STDLIB001",
+              "severity": "critical",
+              "line": 59,
+              "column": 12,
+              "description": "call to subprocess.run() spawns a subprocess or executes a shell command"
+            }
+          ],
+          "children": [
+            {
+              "outer_signal_id": "DENS010",
+              "outer_severity": "critical",
+              "outer_location": "litellm_init.pth<decoded:layer1@line1><decoded:layer2@line1>:7:18",
+              "outer_length": 799,
+              "triggered_by": [
+                "DENS010"
+              ],
+              "chain": [
+                "pem"
+              ],
+              "unwrap_status": "completed",
+              "final_kind": "binary_unknown",
+              "final_size": 550,
+              "indicators": [],
+              "pickle_warning": false,
+              "depth": 2,
+              "stop_reason": "non_python_terminal",
+              "containing_file_sha256": null,
+              "containing_file_sha512": null,
+              "details_summary": {
+                "kind": "rsa_public_key",
+                "bit_size": 4096,
+                "anomaly_count": 0
+              },
+              "details_full": {
+                "kind": "rsa_public_key",
+                "bit_size": 4096,
+                "fields": {
+                  "spki_algorithm_oid": "1.2.840.113549.1.1.1",
+                  "rsa_exponent": "65537",
+                  "rsa_modulus_bits": "4096"
+                },
+                "oids_seen": [
+                  "1.2.840.113549.1.1.1"
+                ],
+                "anomalies": [],
+                "san_entries": [],
+                "extensions": []
+              },
+              "child_findings": [],
+              "children": [],
+              "ioc_data": {
+                "original_sha256": "4eceb569b4330565b93058465beab0e6d5ea09cfba8e7f29d7be1b5a2abd958a",
+                "original_sha512": "4f929275c816a9e15623b4e8c5f9c996c32f126daddb7fb33f0a86c331c1e777ab77f71db8e29fe7fb8e36a63b52f8199c1369d28cc72ff832227e44fbeb4f91",
+                "decoded_sha256": "bc40e5e2c438032bac4dec2ad61eedd4e7c162a8b42004774f6e4330d8137ba8",
+                "decoded_sha512": "fbe513066b8478348c05c10c8f4794b9dba86ac5d016441de7b002b6e672dfd646117b00382ac3cfdd8f75ee46430906984e9e45cdb50f0bc7d592f517350258",
+                "decoded_source": null,
+                "extract_timestamp": "2026-05-16T19:33:43.169763+00:00"
+              }
+            },
+            {
+              "outer_signal_id": "DENS010",
+              "outer_severity": "critical",
+              "outer_location": "litellm_init.pth<decoded:layer1@line1><decoded:layer2@line1>:22:13",
+              "outer_length": 23044,
+              "triggered_by": [
+                "DENS010",
+                "DENS011"
+              ],
+              "chain": [
+                "base64"
+              ],
+              "unwrap_status": "completed",
+              "final_kind": "python_source",
+              "final_size": 17281,
+              "indicators": [
+                "subprocess",
+                "urllib",
+                "base64.b64decode",
+                "/etc/passwd",
+                "/etc/shadow",
+                ".ssh/id_rsa",
+                "AWS_SECRET",
+                "AWS_ACCESS_KEY",
+                "curl "
+              ],
+              "pickle_warning": false,
+              "depth": 2,
+              "stop_reason": "leaf_terminal",
+              "containing_file_sha256": null,
+              "containing_file_sha512": null,
+              "details_summary": null,
+              "details_full": null,
+              "child_findings": [
+                {
+                  "signal_id": "STDLIB001",
+                  "severity": "critical",
+                  "line": 18,
+                  "column": 12,
+                  "description": "call to subprocess.check_output() spawns a subprocess or executes a shell command"
+                },
+                {
+                  "signal_id": "STDLIB002",
+                  "severity": "critical",
+                  "line": 194,
+                  "column": 8,
+                  "description": "call to urllib.request.Request() initiates network communication"
+                },
+                {
+                  "signal_id": "STDLIB002",
+                  "severity": "critical",
+                  "line": 196,
+                  "column": 13,
+                  "description": "call to urllib.request.urlopen() initiates network communication"
+                },
+                {
+                  "signal_id": "STDLIB002",
+                  "severity": "critical",
+                  "line": 209,
+                  "column": 16,
+                  "description": "call to urllib.request.Request() initiates network communication"
+                },
+                {
+                  "signal_id": "STDLIB002",
+                  "severity": "critical",
+                  "line": 211,
+                  "column": 13,
+                  "description": "call to urllib.request.urlopen() initiates network communication"
+                },
+                {
+                  "signal_id": "STDLIB002",
+                  "severity": "critical",
+                  "line": 213,
+                  "column": 17,
+                  "description": "call to urllib.request.Request() initiates network communication"
+                },
+                {
+                  "signal_id": "STDLIB002",
+                  "severity": "critical",
+                  "line": 215,
+                  "column": 13,
+                  "description": "call to urllib.request.urlopen() initiates network communication"
+                },
+                {
+                  "signal_id": "STDLIB002",
+                  "severity": "critical",
+                  "line": 217,
+                  "column": 18,
+                  "description": "call to urllib.request.Request() initiates network communication"
+                },
+                {
+                  "signal_id": "STDLIB002",
+                  "severity": "critical",
+                  "line": 219,
+                  "column": 13,
+                  "description": "call to urllib.request.urlopen() initiates network communication"
+                },
+                {
+                  "signal_id": "STDLIB002",
+                  "severity": "critical",
+                  "line": 253,
+                  "column": 12,
+                  "description": "call to ssl.create_default_context() initiates network communication"
+                },
+                {
+                  "signal_id": "STDLIB002",
+                  "severity": "critical",
+                  "line": 254,
+                  "column": 12,
+                  "description": "call to urllib.request.Request() initiates network communication"
+                },
+                {
+                  "signal_id": "STDLIB002",
+                  "severity": "critical",
+                  "line": 256,
+                  "column": 17,
+                  "description": "call to urllib.request.urlopen() initiates network communication"
+                },
+                {
+                  "signal_id": "STDLIB002",
+                  "severity": "critical",
+                  "line": 261,
+                  "column": 12,
+                  "description": "call to ssl.create_default_context() initiates network communication"
+                },
+                {
+                  "signal_id": "STDLIB002",
+                  "severity": "critical",
+                  "line": 262,
+                  "column": 12,
+                  "description": "call to urllib.request.Request() initiates network communication"
+                },
+                {
+                  "signal_id": "STDLIB002",
+                  "severity": "critical",
+                  "line": 264,
+                  "column": 17,
+                  "description": "call to urllib.request.urlopen() initiates network communication"
+                },
+                {
+                  "signal_id": "STDLIB001",
+                  "severity": "critical",
+                  "line": 329,
+                  "column": 12,
+                  "description": "call to subprocess.run() spawns a subprocess or executes a shell command"
+                },
+                {
+                  "signal_id": "STDLIB001",
+                  "severity": "critical",
+                  "line": 330,
+                  "column": 12,
+                  "description": "call to subprocess.run() spawns a subprocess or executes a shell command"
+                },
+                {
+                  "signal_id": "DENS001",
+                  "severity": "high",
+                  "line": 157,
+                  "column": 0,
+                  "description": "line 157 contains 50 tokens, consistent with minification or deliberate compression"
+                },
+                {
+                  "signal_id": "DENS002",
+                  "severity": "high",
+                  "line": 31,
+                  "column": 0,
+                  "description": "line 31 chains 2 statements via 1 semicolon"
+                }
+              ],
+              "children": [
+                {
+                  "outer_signal_id": "DENS010",
+                  "outer_severity": "critical",
+                  "outer_location": "litellm_init.pth<decoded:layer1@line1><decoded:layer2@line1><decoded:layer3@line22>:69:4",
+                  "outer_length": 89,
+                  "triggered_by": [
+                    "DENS010"
+                  ],
+                  "chain": [],
+                  "unwrap_status": "completed",
+                  "final_kind": "ascii_text",
+                  "final_size": 89,
+                  "indicators": [
+                    "curl "
+                  ],
+                  "pickle_warning": false,
+                  "depth": 3,
+                  "stop_reason": "non_python_terminal",
+                  "containing_file_sha256": null,
+                  "containing_file_sha512": null,
+                  "details_summary": null,
+                  "details_full": null,
+                  "child_findings": [],
+                  "children": [],
+                  "ioc_data": {
+                    "original_sha256": "0a76379dc2244420d14b09552eb22fb9b942e5d6ff77926c3a7392c4512a400b",
+                    "original_sha512": "5ee1413c55e5fec44487cb9a0e6a89e4ff70e877891d373456405f675c86b7b1d63eca23571ab4a662d760884aee91c4aa5f4e3603b1d82bc8a21c9905f9b1f8",
+                    "decoded_sha256": "0a76379dc2244420d14b09552eb22fb9b942e5d6ff77926c3a7392c4512a400b",
+                    "decoded_sha512": "5ee1413c55e5fec44487cb9a0e6a89e4ff70e877891d373456405f675c86b7b1d63eca23571ab4a662d760884aee91c4aa5f4e3603b1d82bc8a21c9905f9b1f8",
+                    "decoded_source": null,
+                    "extract_timestamp": "2026-05-16T19:33:43.245132+00:00"
+                  }
+                },
+                {
+                  "outer_signal_id": "DENS010",
+                  "outer_severity": "critical",
+                  "outer_location": "litellm_init.pth<decoded:layer1@line1><decoded:layer2@line1><decoded:layer3@line22>:278:16",
+                  "outer_length": 1500,
+                  "triggered_by": [
+                    "DENS010",
+                    "DENS011"
+                  ],
+                  "chain": [
+                    "base64"
+                  ],
+                  "unwrap_status": "completed",
+                  "final_kind": "python_source",
+                  "final_size": 1125,
+                  "indicators": [
+                    "subprocess",
+                    "urllib"
+                  ],
+                  "pickle_warning": false,
+                  "depth": 3,
+                  "stop_reason": "leaf_terminal",
+                  "containing_file_sha256": null,
+                  "containing_file_sha512": null,
+                  "details_summary": null,
+                  "details_full": null,
+                  "child_findings": [
+                    {
+                      "signal_id": "STDLIB002",
+                      "severity": "critical",
+                      "line": 12,
+                      "column": 14,
+                      "description": "call to urllib.request.Request() initiates network communication"
+                    },
+                    {
+                      "signal_id": "STDLIB002",
+                      "severity": "critical",
+                      "line": 13,
+                      "column": 13,
+                      "description": "call to urllib.request.urlopen() initiates network communication"
+                    },
+                    {
+                      "signal_id": "STDLIB002",
+                      "severity": "critical",
+                      "line": 21,
+                      "column": 8,
+                      "description": "call to urllib.request.urlretrieve() initiates network communication"
+                    },
+                    {
+                      "signal_id": "STDLIB001",
+                      "severity": "critical",
+                      "line": 23,
+                      "column": 8,
+                      "description": "call to subprocess.Popen() spawns a subprocess or executes a shell command"
+                    }
+                  ],
+                  "children": [],
+                  "ioc_data": {
+                    "original_sha256": "eaa27048776b0ee3139c66b0454ab98fc1b030a0604d372b13ff1d7f87fb6494",
+                    "original_sha512": "ba78e867199a2f7b3a1ca0aa2aabd626e4862bb28a784574dd4d169951f75251ef7abac98debabf85674a82bac10751cb285bac6840c5c6b9e5076a5e4b906d7",
+                    "decoded_sha256": "6cf223aea68b0e8031ff68251e30b6017a0513fe152e235c26f248ba1e15c92a",
+                    "decoded_sha512": "4e3647b15bb92a2623d331768c8e5193e54f370366b7da62a7db720780d0d50a75057d977bca8cbb83c245eaf1f7921e12bf5163bc84c74194a2d4abc58fdf4d",
+                    "decoded_source": null,
+                    "extract_timestamp": "2026-05-16T19:33:43.249029+00:00"
+                  }
+                }
+              ],
+              "ioc_data": {
+                "original_sha256": "c48a899976a8b3cede7d66085cacd52a0fadbda621f58836eaf35c3ab5144bb9",
+                "original_sha512": "85be43de42f6f089851111fd26f53437027308dc2a990352f592004dcae682b448b4c2e34bfd6221f639e9c3ec5d883b1506a259a0fcbb077dfd57756bcd5ab4",
+                "decoded_sha256": "ce681356c8870af8583ed753fff330e2897f4629c45677f8065649a47b20a111",
+                "decoded_sha512": "eeb0d8f021fee9c3c18112fad8279f48223684dd7cb47194fa828a5fdf3f8a007371b240ba3392bcf3561cbca1f3ddd75dc5112edce7c7f89d490bb070766a3c",
+                "decoded_source": null,
+                "extract_timestamp": "2026-05-16T19:33:43.249072+00:00"
+              }
+            }
+          ],
+          "ioc_data": {
+            "original_sha256": "8a7c64171775a25a73da5b6fd11ee3dae425741ca929645d8a7b1c0bbbe19706",
+            "original_sha512": "c4683e444d086c824dc54e38efddbc2a8060735e19507c85fe529ab3dde27a1ec615b36f9b109460b255b39aa8fd62ac7f3eeae5103ab1dbfad4e9c913b90c74",
+            "decoded_sha256": "d6fc0ff06978742a2ef789304bcdbe69a731693ad066a457db0878279830d6a9",
+            "decoded_sha512": "6a0bbd6ed3914a3123bb83c54360cf99ff808bd9f574b092ecb64ca12ca9abe9d6e1003af06e02202ce0ad319f0e3156ee42c3a5828518144250b38625b27492",
+            "decoded_source": null,
+            "extract_timestamp": "2026-05-16T19:33:43.249197+00:00"
+          }
+        }
+      ],
+      "ioc_data": {
+        "original_sha256": "880750b3b4fe09bfaebf44d402721bccdc9119836c9719c341e36ebf5dc43579",
+        "original_sha512": "92c1930c336db50c430dedd3f2be7a882c5f367e8f282ba8b73511366d1f90f7f156b5e8630980b75c13762aeef19dd51bdb5af7823f08cc9d7c0885674df6c4",
+        "decoded_sha256": "880750b3b4fe09bfaebf44d402721bccdc9119836c9719c341e36ebf5dc43579",
+        "decoded_sha512": "92c1930c336db50c430dedd3f2be7a882c5f367e8f282ba8b73511366d1f90f7f156b5e8630980b75c13762aeef19dd51bdb5af7823f08cc9d7c0885674df6c4",
+        "decoded_source": null,
+        "extract_timestamp": "2026-05-16T19:33:43.249346+00:00"
+      }
+    }
+  ]
+}
