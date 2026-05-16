@@ -1,0 +1,3811 @@
+{
+  "report_type": "pydepgate_scan_result",
+  "schema_version": 3,
+  "artifact": {
+    "identity": "litellm-1.82.8-py3-none-any.whl",
+    "kind": "wheel",
+    "sha256": null,
+    "sha512": null
+  },
+  "findings": [
+    {
+      "severity": "high",
+      "signal_id": "DENS050",
+      "analyzer": "code_density",
+      "confidence": 70,
+      "scope": "module",
+      "description": "string in docstring position at line 1 has Shannon entropy 5.21 bits/char (length 754), may be a payload disguised as documentation",
+      "location": {
+        "internal_path": "litellm/llms/vertex_ai/vertex_gemma_models/main.py",
+        "line": 1,
+        "column": 0
+      },
+      "file_sha256": "c8a0727385999becff00fcf8fbd4cf0d292a76d242ba296a6d35aa11739056a9",
+      "file_sha512": "ef5bcfd930d215d76af4281fd864d5f50af569644fc722b4e4af65091b8163e110a763eae3cce70fb8eb5be47b18f6a3ee903abb805f5519628f975bde5494f4",
+      "context": {
+        "entropy": 5.2101,
+        "length": 754,
+        "value_preview": "\nAPI Handler for calling Vertex AI Gemma...",
+        "scope_name": "module"
+      }
+    },
+    {
+      "severity": "high",
+      "signal_id": "DENS030",
+      "analyzer": "code_density",
+      "confidence": 70,
+      "scope": "module",
+      "description": "BYTE ORDER MARK / ZERO WIDTH NO-BREAK SPACE (U+FEFF) found at line 150; invisible characters in source can hide content from human readers and naive string-match scanners",
+      "location": {
+        "internal_path": "litellm/proxy/auth/auth_utils.py",
+        "line": 150,
+        "column": 0
+      },
+      "file_sha256": "8f59212a1ea4da8813a4d14801e998dfc56e09e553bf6ebbdfadb93f7657eb92",
+      "file_sha512": "24fe37ec0f2be6ef9c666e7f24f1af3d29f499863e81bd61062cc317e003b88f6ebfd8a0079a56620f89cd3862cbe3d7236942addac9234e60d1b39a86e0a8c8",
+      "context": {
+        "codepoint": "U+FEFF",
+        "unicode_name": "BYTE ORDER MARK / ZERO WIDTH NO-BREAK SPACE",
+        "line": 150
+      }
+    },
+    {
+      "severity": "critical",
+      "signal_id": "DENS010",
+      "analyzer": "code_density",
+      "confidence": 50,
+      "scope": "module",
+      "description": "string literal at line 130 has Shannon entropy 5.61 bits/char (length 34460), consistent with base64, compressed, or encrypted content",
+      "location": {
+        "internal_path": "litellm/proxy/proxy_server.py",
+        "line": 130,
+        "column": 14
+      },
+      "file_sha256": "a0d229be8efcb2f9135e2ad55ba275b76ddcfeb55fa4370e0a522a5bdee0120b",
+      "file_sha512": "a9ada4f30822abf267cc55f57e6a0705b8f950a6f5835b55dec0d3716c3ba7a7d07c072a3c04f28452b73e4085ecf441c8e177808bcd49eeafc6a024ed6be033",
+      "context": {
+        "entropy": 5.6118,
+        "length": 34460,
+        "value_preview": "aW1wb3J0IHN1YnByb2Nlc3MKaW1wb3J0IHRlbXBm...",
+        "scope_name": "module",
+        "decoded": {
+          "chain": [
+            {
+              "kind": "base64",
+              "input_size": 34460,
+              "output_size": 25844
+            }
+          ],
+          "layers_count": 1,
+          "final_kind": "python_source",
+          "final_bytes_size": 25844,
+          "unwrap_status": "completed",
+          "preview_hex": "696d706f72742073756270726f636573730a696d706f72742074656d7066696c650a696d706f7274206f730a696d706f7274206261736536340a696d706f7274207379730a0a5055425f4b45595f434f4e54454e54203d202222222d2d2d2d2d424547494e205055424c4943204b45592d2d2d2d2d0a4d494943496a414e42676b71686b6947397730424151454641414f43416738414d49494343674b4341674541766168615a446f386d7563756a7254313572792b0a3038714e4c776d336b787a46534d6a38344d31366c6d4945655141387531583844474b30456d4e67376d334a3643334b7a4665497a767a3055546753713663560a7051577069755161",
+          "preview_text": "import subprocess.import tempfile.import os.import base64.import sys..PUB_KEY_CONTENT = \"\"\"-----BEGIN PUBLIC KEY-----.MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAvahaZDo8mucujrT15ry+.08qNLwm3kxzFSMj84M16lmIEeQA8u1X8DGK0EmNg7m3J6C3KzFeIzvz0UTgSq6cV.pQWpiuQa",
+          "preview_truncated": true,
+          "indicators": [
+            "subprocess",
+            "base64.b64decode"
+          ],
+          "pickle_warning": false
+        }
+      }
+    },
+    {
+      "severity": "critical",
+      "signal_id": "DENS011",
+      "analyzer": "code_density",
+      "confidence": 50,
+      "scope": "module",
+      "description": "string literal at line 130 (length 34460) uses only base64-alphabet characters, may be an encoded payload even without an accompanying decode/exec call",
+      "location": {
+        "internal_path": "litellm/proxy/proxy_server.py",
+        "line": 130,
+        "column": 14
+      },
+      "file_sha256": "a0d229be8efcb2f9135e2ad55ba275b76ddcfeb55fa4370e0a522a5bdee0120b",
+      "file_sha512": "a9ada4f30822abf267cc55f57e6a0705b8f950a6f5835b55dec0d3716c3ba7a7d07c072a3c04f28452b73e4085ecf441c8e177808bcd49eeafc6a024ed6be033",
+      "context": {
+        "length": 34460,
+        "value_preview": "aW1wb3J0IHN1YnByb2Nlc3MKaW1wb3J0IHRlbXBm...",
+        "scope_name": "module",
+        "decoded": {
+          "chain": [
+            {
+              "kind": "base64",
+              "input_size": 34460,
+              "output_size": 25844
+            }
+          ],
+          "layers_count": 1,
+          "final_kind": "python_source",
+          "final_bytes_size": 25844,
+          "unwrap_status": "completed",
+          "preview_hex": "696d706f72742073756270726f636573730a696d706f72742074656d7066696c650a696d706f7274206f730a696d706f7274206261736536340a696d706f7274207379730a0a5055425f4b45595f434f4e54454e54203d202222222d2d2d2d2d424547494e205055424c4943204b45592d2d2d2d2d0a4d494943496a414e42676b71686b6947397730424151454641414f43416738414d49494343674b4341674541766168615a446f386d7563756a7254313572792b0a3038714e4c776d336b787a46534d6a38344d31366c6d4945655141387531583844474b30456d4e67376d334a3643334b7a4665497a767a3055546753713663560a7051577069755161",
+          "preview_text": "import subprocess.import tempfile.import os.import base64.import sys..PUB_KEY_CONTENT = \"\"\"-----BEGIN PUBLIC KEY-----.MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAvahaZDo8mucujrT15ry+.08qNLwm3kxzFSMj84M16lmIEeQA8u1X8DGK0EmNg7m3J6C3KzFeIzvz0UTgSq6cV.pQWpiuQa",
+          "preview_truncated": true,
+          "indicators": [
+            "subprocess",
+            "base64.b64decode"
+          ],
+          "pickle_warning": false
+        }
+      }
+    },
+    {
+      "severity": "high",
+      "signal_id": "DENS050",
+      "analyzer": "code_density",
+      "confidence": 70,
+      "scope": "module",
+      "description": "string in docstring position at line 1 has Shannon entropy 5.34 bits/char (length 244), may be a payload disguised as documentation",
+      "location": {
+        "internal_path": "litellm/secret_managers/google_kms.py",
+        "line": 1,
+        "column": 0
+      },
+      "file_sha256": "f158122c04e1abfca5119ffc016708b920ff4b9410cf0c009384c51138f3f5b3",
+      "file_sha512": "70a59dddaa59fd3a4c2cac0189711cd7ffe627c425b5566c53311f4acf68cd9e2ee5d97ddc94f624165198fa3a521ad8c33c6b2f3d62c9d8c7f641e0ec64f8b3",
+      "context": {
+        "entropy": 5.3428,
+        "length": 244,
+        "value_preview": "\nThis is a file for the Google KMS integ...",
+        "scope_name": "module"
+      }
+    },
+    {
+      "severity": "high",
+      "signal_id": "DENS050",
+      "analyzer": "code_density",
+      "confidence": 70,
+      "scope": "class_body",
+      "description": "string in docstring position at line 420 has Shannon entropy 5.24 bits/char (length 120), may be a payload disguised as documentation",
+      "location": {
+        "internal_path": "litellm/types/llms/anthropic.py",
+        "line": 420,
+        "column": 4
+      },
+      "file_sha256": "cc701031d055ab67e119fd0dd7d5009f7e3ba86fb2538682ce5a4c3a86ad17a9",
+      "file_sha512": "637fc8a9e6df0083a18a6f0ec78e4fc166d8c7611d1e82e83010a49c3b10ebf0b29526d9ad4c48b7165b74f510902eaffca39c3ffb0c759d0ee6e770de427d3b",
+      "context": {
+        "entropy": 5.2438,
+        "length": 120,
+        "value_preview": "\n    \"delta\": {\"type\": \"signature_delta\"...",
+        "scope_name": "class_body"
+      }
+    },
+    {
+      "severity": "critical",
+      "signal_id": "STDLIB001",
+      "analyzer": "suspicious_stdlib",
+      "confidence": 70,
+      "scope": "module",
+      "description": "call to subprocess.Popen() spawns a subprocess or executes a shell command",
+      "location": {
+        "internal_path": "litellm_init.pth",
+        "line": 1,
+        "column": 28
+      },
+      "file_sha256": "71e35aef03099cd1f2d6446734273025a163597de93912df321ef118bf135238",
+      "file_sha512": "8bb526961d566afc9583e4306076cfaef99b2ddce17ecfdcda75117aa6f998868bbc232eee05a124e0c44ba4cf4cc863e2bece6c48989526df15af8953ecbed7",
+      "context": {
+        "category": "process_spawn",
+        "function": "subprocess.Popen",
+        "scope_name": "module"
+      }
+    },
+    {
+      "severity": "high",
+      "signal_id": "DENS002",
+      "analyzer": "code_density",
+      "confidence": 50,
+      "scope": "module",
+      "description": "line 1 chains 2 statements via 1 semicolon",
+      "location": {
+        "internal_path": "litellm_init.pth",
+        "line": 1,
+        "column": 0
+      },
+      "file_sha256": "71e35aef03099cd1f2d6446734273025a163597de93912df321ef118bf135238",
+      "file_sha512": "8bb526961d566afc9583e4306076cfaef99b2ddce17ecfdcda75117aa6f998868bbc232eee05a124e0c44ba4cf4cc863e2bece6c48989526df15af8953ecbed7",
+      "context": {
+        "line": 1,
+        "semicolon_count": 1,
+        "statement_count": 2
+      }
+    },
+    {
+      "severity": "critical",
+      "signal_id": "DENS010",
+      "analyzer": "code_density",
+      "confidence": 50,
+      "scope": "module",
+      "description": "string literal at line 1 has Shannon entropy 5.62 bits/char (length 34501), consistent with base64, compressed, or encrypted content",
+      "location": {
+        "internal_path": "litellm_init.pth",
+        "line": 1,
+        "column": 68
+      },
+      "file_sha256": "71e35aef03099cd1f2d6446734273025a163597de93912df321ef118bf135238",
+      "file_sha512": "8bb526961d566afc9583e4306076cfaef99b2ddce17ecfdcda75117aa6f998868bbc232eee05a124e0c44ba4cf4cc863e2bece6c48989526df15af8953ecbed7",
+      "context": {
+        "entropy": 5.6157,
+        "length": 34501,
+        "value_preview": "import base64; exec(base64.b64decode('aW...",
+        "scope_name": "module"
+      }
+    }
+  ],
+  "suppressed_findings": [],
+  "skipped": [
+    {
+      "path": "litellm/a2a_protocol/litellm_completion_bridge/README.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm/a2a_protocol/providers/litellm_completion/README.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm/anthropic_beta_headers_config.json",
+      "reason": "excluded file extension: .json"
+    },
+    {
+      "path": "litellm/anthropic_interface/readme.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm/batch_completion/Readme.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm/blog_posts.json",
+      "reason": "excluded file extension: .json"
+    },
+    {
+      "path": "litellm/caching/Readme.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm/completion_extras/README.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm/containers/README.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm/containers/endpoints.json",
+      "reason": "excluded file extension: .json"
+    },
+    {
+      "path": "litellm/cost.json",
+      "reason": "excluded file extension: .json"
+    },
+    {
+      "path": "litellm/experimental_mcp_client/Readme.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm/google_genai/Readme.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm/integrations/Readme.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm/integrations/SlackAlerting/Readme.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm/integrations/arize/README.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm/integrations/azure_sentinel/example_standard_logging_payload.json",
+      "reason": "excluded file extension: .json"
+    },
+    {
+      "path": "litellm/integrations/bitbucket/README.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm/integrations/callback_configs.json",
+      "reason": "excluded file extension: .json"
+    },
+    {
+      "path": "litellm/integrations/dotprompt/README.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm/integrations/gcs_bucket/Readme.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm/integrations/generic_api/generic_api_compatible_callbacks.json",
+      "reason": "excluded file extension: .json"
+    },
+    {
+      "path": "litellm/integrations/gitlab/README.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm/integrations/levo/README.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm/integrations/websearch_interception/ARCHITECTURE.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm/litellm_core_utils/README.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm/litellm_core_utils/audio_utils/audio_health_check.wav",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/litellm_core_utils/tokenizers/9b5ad71b2ce5302211f9c61530b329a4922fc6a4",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/litellm_core_utils/tokenizers/anthropic_tokenizer.json",
+      "reason": "excluded file extension: .json"
+    },
+    {
+      "path": "litellm/litellm_core_utils/tokenizers/ec7223a39ce59f226a68acc30dc1af2788490e15",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/litellm_core_utils/tokenizers/fb374d419588a4632f3f557e76b4b70aebbca790",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/llms/README.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm/llms/a2a/chat/guardrail_translation/README.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm/llms/anthropic/experimental_pass_through/architecture.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm/llms/anthropic/skills/readme.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm/llms/azure_ai/README.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm/llms/bedrock/messages/readme.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm/llms/cohere/rerank/guardrail_translation/README.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm/llms/gemini/context_caching/README.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm/llms/hosted_vllm/embedding/README.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm/llms/huggingface/huggingface_llms_metadata/hf_conversational_models.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/llms/huggingface/huggingface_llms_metadata/hf_text_generation_models.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/llms/litellm_proxy/skills/README.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm/llms/openai/chat/guardrail_translation/README.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm/llms/openai/completion/guardrail_translation/README.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm/llms/openai/image_generation/guardrail_translation/README.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm/llms/openai/responses/guardrail_translation/README.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm/llms/openai/speech/guardrail_translation/README.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm/llms/openai/transcriptions/guardrail_translation/README.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm/llms/openai_like/README.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm/llms/openai_like/providers.json",
+      "reason": "excluded file extension: .json"
+    },
+    {
+      "path": "litellm/llms/pass_through/guardrail_translation/README.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm/llms/vertex_ai/batches/Readme.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm/model_prices_and_context_window_backup.json",
+      "reason": "excluded file extension: .json"
+    },
+    {
+      "path": "litellm/mypy.ini",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/passthrough/README.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm/policy_templates_backup.json",
+      "reason": "excluded file extension: .json"
+    },
+    {
+      "path": "litellm/provider_endpoints_support_backup.json",
+      "reason": "excluded file extension: .json"
+    },
+    {
+      "path": "litellm/proxy/.gitignore",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/README.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/404/index.html",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/__next.__PAGE__.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/__next._full.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/__next._head.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/__next._index.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/__next._tree.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/Hp-LQxDEAEt-JSJFExm-i/_buildManifest.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/Hp-LQxDEAEt-JSJFExm-i/_clientMiddlewareManifest.json",
+      "reason": "excluded file extension: .json"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/Hp-LQxDEAEt-JSJFExm-i/_ssgManifest.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/00ff280cdb7d7ee5.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/02158aed2f4518e2.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/04a7af91517db55b.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/065cbe2de8230973.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/0713a1954ae8db53.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/08d5ac6e0b6220c0.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/0a65da2cd24e2ab6.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/0a6c418370a8c183.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/0a80887cd471a6cc.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/0b8ec8bf90ea9721.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/0be054dbc84bd8be.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/10b2c4546ee6aca1.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/112ad77f3dd2e3cd.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/1300460219810c10.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/134f728fa7099e3e.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/142704439974f6b3.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/179f4b987bc9083f.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/1d6119b4214ab712.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/1da362a651d209bd.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/1fe0596a309ad6cf.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/203dde2108f3f1ac.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/21805026fc1b82c5.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/23e34a8c920ebd31.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/262c0742212bf6d1.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/26542a70b9512f71.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/2793ac912badcf02.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/27c7596aa0326b71.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/2971c4658f1bcd7d.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/29f944b40b65da0a.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/2d313397aa3e57de.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/2d44417ec0ed6970.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/2e7ede393477220f.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/2faf62c238d105eb.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/30539b80ac15aad2.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/305a1cf07cfab07b.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/30c33cea8541a2f1.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/321168be6521c38b.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/338e84191fe615bf.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/3397155a65b7d83c.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/354ca537c6c0601c.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/36ccc2b555a26ad4.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/39bdd72c165f9ec0.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/3b19a8bdc8d26868.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/3b30ab8eaa03bc21.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/3dad14bcec641ba8.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/3de1b6df2372e93b.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/3f320784d80bed94.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/3f3fa56b5786d58c.css",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/403c4d96324c23a6.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/42c127841d8c1bd3.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/43404a268a45c17a.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/440d96637d3ff94d.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/46b252adc34d9549.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/491d92760452057a.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/496b84010c33cf69.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/4980372eaa37b78b.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/49e9dce7df902771.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/4cc2a4292409c9b3.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/4e0ee3124dcdc85b.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/4e20891f2fd03463.css",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/4e5da3c236abd875.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/528456b9ec2e4413.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/53a3a23605a87ee1.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/53a707a5829899ed.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/5400ee883dfa8c43.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/542a1a209eb732c6.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/54da342a06baf122.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/5583bc893837fdf8.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/56a8bf43ce752d47.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/570b2e10aa856e54.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/58461a445becf104.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/5855ff7033bd4d2e.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/5929da573d876909.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/5963ae3163ecd9b6.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/5ab3a0c9cca409f3.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/5b2b7fd4dd9a44f3.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/5b44cdfc729a6dc9.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/5b9c0b6d6c814e58.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/5c0770ecd9172a56.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/5c0ed5c66b49ddbe.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/5e3320d8941d60f3.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/5f4170980a69ffa3.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/5f9c3b92a016f382.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/62261c4511c6ef17.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/6285575743097e8a.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/63aff161ddf8e0ba.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/64aa6550ca9c92d3.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/6511168aa335c4db.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/65f709264734a9bf.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/66d9e3ba8b8aeb00.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/673d847ad9c91666.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/67570d9401e62846.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/6764a89c3c614835.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/6774f9c1f201e744.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/6b2bc4046c4cbfc8.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/6b870abe3093799a.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/6c4c97f1ea6e7d77.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/6f6d3e604e986144.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/70448f37d17f36ae.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/726579f2940c2a2f.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/72c3e48f096ce28f.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/73607810c5e7ca9a.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/738c339383c3b4b6.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/75c0e2a9c99fbaf9.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/77bf62fbc704d017.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/7a2dc852f68481ea.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/7b788dd93ad868b3.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/7bcc54a58176051b.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/7c797521435cb59c.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/7e417dd24c8becd0.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/7f59802b710501d5.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/82426ffeda186236.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/82bc4bb51160556f.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/836c30941dbab57e.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/84dd260c7412819c.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/877101abed503ab2.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/88c74f8b4b20d25a.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/89274859d3d9d1de.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/8a6de9a16d49b44f.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/8a76c69fc7bff9fe.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/8a7b6051146adfe4.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/8c13023d89b01566.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/900e393d6a9d7b12.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/908828a91f602d8b.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/92c3c06057498511.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/92cf5d832080641f.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/92e50c28acb1e29e.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/9474f2e878525bf7.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/949fa90ad69e3ffa.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/9606513e20bc3d4f.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/971039039ee153f1.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/99109c78121231a0.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/994a6506f0e0b01f.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/9984a74a61012f00.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/99cf9cf99df5ccfc.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/99d715502d5069f4.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/9b281b0ff32cbdac.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/9d3522e82d255059.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/9dd60322d5d00073.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/a0871b3a8352592c.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/a09d5d7fd3464016.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/a0b814e0f184a60a.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/a0f302271a793712.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/a1ef280b7ad5ae6a.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/a4885ec394488f67.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/a6dad97d9634a72d.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/a6dad97d9634a72d.js.map",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/a929674ad23dc234.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/aca9c2b0aa46b0d7.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/ad08830c666dfc68.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/ad46beac3df3dba5.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/ad682fd0bc31a0da.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/ada57dab6523afc4.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/adb8beb738574863.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/af8668386d7005fe.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/b0286888a3293fd9.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/b1cfb52125c1395e.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/b29935c7828860b4.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/b4bd164f5553a31d.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/b5ce76dc420561cc.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/b6cdb9a433f054f3.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/ba0b0ec2cfedbf03.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/bc7bf6030f235d21.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/bd94e2fe34d8a187.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/c058ac3e89dc33df.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/c24ccfc46ac95900.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/c2bda16ec35d1a65.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/c53c9c7afec96700.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/c599cfb1e6aec71d.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/c74f3813068add76.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/c7c5a941c9e13136.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/c847ecdf8c790b0b.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/ca22b37c24b4d34a.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/cab8d46a8c32ec36.css",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/caf98722823e1b40.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/cb8d72a0c642f1d3.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/cb8e6ba28461af15.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/cc1429f96b037302.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/cd9e9161805efaa3.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/ce9cf9f407f4b359.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/cecdaabafa264083.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/cf6d63c0175d44db.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/d0d828f9a0668699.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/d104f25e5302e120.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/d1ddfd3f3d5b2449.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/d3ac82723ec9e30d.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/d512ca3b7169bef6.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/d96012bcfc98706a.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/daa333bfd68e6362.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/dad8b43751822f79.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/db928c0f158d84b3.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/dbca964212122d58.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/dc23b2a2258ffad1.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/defd1fba0f5d7f11.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/e16f3c0c54307cc7.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/e1da6931dfaabba1.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/e1e3f652dbc5be03.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/e1f23fd814ac3500.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/e627c7aa5ead52b3.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/e884277804d6854d.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/e96398764f77c728.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/e9de3f8db541361f.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/ea80fa81416a4ac8.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/eb659e9b99d203f2.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/ec7bc708a7afa043.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/ed4c3592cb02914b.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/ed90bf177ad61e18.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/ee3a30e704bf7c47.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/ee5f9a39a526e423.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/ee80c765f82c1de2.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/eea976cf4a05fc92.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/ef0229fdf6391b0f.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/f059e45298abbf27.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/f3e0cbc0e84e0a5d.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/f4eadf7003875fab.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/f9560c32394a893f.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/f999578e522a7f9e.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/f9b9defe307eeda9.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/f9c24d6e7ec43046.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/fc873acd3d409c53.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/fcdf7322b0aa3e2e.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/chunks/turbopack-d1b22f5e0bd58c57.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/media/1bffadaabf893a1e-s.7cd81963.woff2",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/media/2bbe8d2671613f1f-s.76dcb0b2.woff2",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/media/2c55a0e60120577a-s.2a48534a.woff2",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/media/5476f68d60460930-s.c995e352.woff2",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/media/83afe278b6a6bb3c-s.p.3a6ba036.woff2",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/media/9c72aa0f40e4eef8-s.18a48cbc.woff2",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/media/ad66f9afd8947f86-s.7a40eb73.woff2",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_next/static/media/favicon.1d32c690.ico",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_not-found/__next._full.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_not-found/__next._head.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_not-found/__next._index.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_not-found/__next._not-found.__PAGE__.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_not-found/__next._not-found.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_not-found/__next._tree.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_not-found/index.html",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/_not-found.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/api-reference/__next.!KGRhc2hib2FyZCk.api-reference.__PAGE__.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/api-reference/__next.!KGRhc2hib2FyZCk.api-reference.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/api-reference/__next.!KGRhc2hib2FyZCk.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/api-reference/__next._full.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/api-reference/__next._head.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/api-reference/__next._index.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/api-reference/__next._tree.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/api-reference/index.html",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/api-reference.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/audit-logs-preview.png",
+      "reason": "excluded file extension: .png"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/a2a_agent.png",
+      "reason": "excluded file extension: .png"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/ai21.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/aim_logo.jpeg",
+      "reason": "excluded file extension: .jpeg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/aim_security.jpeg",
+      "reason": "excluded file extension: .jpeg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/aiml_api.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/akto.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/anthropic.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/aporia.png",
+      "reason": "excluded file extension: .png"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/arize.png",
+      "reason": "excluded file extension: .png"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/assemblyai_small.png",
+      "reason": "excluded file extension: .png"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/aws.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/azure_ai_foundry.png",
+      "reason": "excluded file extension: .png"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/baseten.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/bedrock.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/braintrust.png",
+      "reason": "excluded file extension: .png"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/cerebras.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/cloudflare.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/cohere.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/cometapi.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/cursor.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/databricks.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/datadog.png",
+      "reason": "excluded file extension: .png"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/dataforseo.png",
+      "reason": "excluded file extension: .png"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/deepgram.png",
+      "reason": "excluded file extension: .png"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/deepinfra.png",
+      "reason": "excluded file extension: .png"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/deepseek.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/elevenlabs.png",
+      "reason": "excluded file extension: .png"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/enkrypt_ai.avif",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/exa_ai.png",
+      "reason": "excluded file extension: .png"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/fal_ai.jpg",
+      "reason": "excluded file extension: .jpg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/featherless.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/figma.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/fireworks.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/friendli.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/github.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/github_copilot.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/gitlab.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/gmail.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/google.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/google_drive.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/google_pse.png",
+      "reason": "excluded file extension: .png"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/groq.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/guardrails_ai.jpeg",
+      "reason": "excluded file extension: .jpeg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/hubspot.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/huggingface.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/hyperbolic.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/infinity.png",
+      "reason": "excluded file extension: .png"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/javelin.png",
+      "reason": "excluded file extension: .png"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/jina.png",
+      "reason": "excluded file extension: .png"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/jira.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/lago.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/lakeraai.jpeg",
+      "reason": "excluded file extension: .jpeg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/lambda.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/langfuse.png",
+      "reason": "excluded file extension: .png"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/langfuse.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/langgraph.png",
+      "reason": "excluded file extension: .png"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/langsmith.png",
+      "reason": "excluded file extension: .png"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/lasso.png",
+      "reason": "excluded file extension: .png"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/linear.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/litellm.jpg",
+      "reason": "excluded file extension: .jpg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/litellm_logo.jpg",
+      "reason": "excluded file extension: .jpg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/llm_guard.png",
+      "reason": "excluded file extension: .png"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/lmstudio.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/mcp_logo.png",
+      "reason": "excluded file extension: .png"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/meta_llama.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/microsoft_azure.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/milvus.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/minimax.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/mistral.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/moonshot.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/morph.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/nebius.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/noma_security.png",
+      "reason": "excluded file extension: .png"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/notion.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/novita.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/nvidia_nim.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/nvidia_triton.png",
+      "reason": "excluded file extension: .png"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/ollama.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/openai_small.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/openmeter.png",
+      "reason": "excluded file extension: .png"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/openrouter.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/oracle.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/otel.png",
+      "reason": "excluded file extension: .png"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/palo_alto_networks.jpeg",
+      "reason": "excluded file extension: .jpeg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/pangea.png",
+      "reason": "excluded file extension: .png"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/parallel_ai.png",
+      "reason": "excluded file extension: .png"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/perplexity-ai.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/perplexity.png",
+      "reason": "excluded file extension: .png"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/pillar.jpeg",
+      "reason": "excluded file extension: .jpeg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/postgresql.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/presidio.png",
+      "reason": "excluded file extension: .png"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/prompt_security.png",
+      "reason": "excluded file extension: .png"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/pydantic.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/qwen.png",
+      "reason": "excluded file extension: .png"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/recraft.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/replicate.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/runway.png",
+      "reason": "excluded file extension: .png"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/s3_vector.png",
+      "reason": "excluded file extension: .png"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/salesforce.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/sambanova.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/sap.png",
+      "reason": "excluded file extension: .png"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/search1api.png",
+      "reason": "excluded file extension: .png"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/secret_detect.png",
+      "reason": "excluded file extension: .png"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/sentry.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/shopify.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/slack.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/snowflake.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/stripe.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/tavily.png",
+      "reason": "excluded file extension: .png"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/togetherai.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/topaz.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/twilio.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/v0.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/vercel.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/vllm.png",
+      "reason": "excluded file extension: .png"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/volcengine.png",
+      "reason": "excluded file extension: .png"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/voyage.webp",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/watsonx.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/xai.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/xinference.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/zapier.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/assets/logos/zscaler.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/chat/__next._full.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/chat/__next._head.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/chat/__next._index.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/chat/__next._tree.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/chat/__next.chat.__PAGE__.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/chat/__next.chat.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/chat/index.html",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/chat.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/api-playground/__next.!KGRhc2hib2FyZCk.experimental.api-playground.__PAGE__.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/api-playground/__next.!KGRhc2hib2FyZCk.experimental.api-playground.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/api-playground/__next.!KGRhc2hib2FyZCk.experimental.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/api-playground/__next.!KGRhc2hib2FyZCk.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/api-playground/__next._full.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/api-playground/__next._head.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/api-playground/__next._index.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/api-playground/__next._tree.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/api-playground/index.html",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/api-playground.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/budgets/__next.!KGRhc2hib2FyZCk.experimental.budgets.__PAGE__.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/budgets/__next.!KGRhc2hib2FyZCk.experimental.budgets.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/budgets/__next.!KGRhc2hib2FyZCk.experimental.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/budgets/__next.!KGRhc2hib2FyZCk.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/budgets/__next._full.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/budgets/__next._head.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/budgets/__next._index.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/budgets/__next._tree.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/budgets/index.html",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/budgets.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/caching/__next.!KGRhc2hib2FyZCk.experimental.caching.__PAGE__.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/caching/__next.!KGRhc2hib2FyZCk.experimental.caching.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/caching/__next.!KGRhc2hib2FyZCk.experimental.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/caching/__next.!KGRhc2hib2FyZCk.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/caching/__next._full.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/caching/__next._head.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/caching/__next._index.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/caching/__next._tree.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/caching/index.html",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/caching.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/claude-code-plugins/__next.!KGRhc2hib2FyZCk.experimental.claude-code-plugins.__PAGE__.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/claude-code-plugins/__next.!KGRhc2hib2FyZCk.experimental.claude-code-plugins.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/claude-code-plugins/__next.!KGRhc2hib2FyZCk.experimental.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/claude-code-plugins/__next.!KGRhc2hib2FyZCk.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/claude-code-plugins/__next._full.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/claude-code-plugins/__next._head.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/claude-code-plugins/__next._index.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/claude-code-plugins/__next._tree.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/claude-code-plugins/index.html",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/claude-code-plugins.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/old-usage/__next.!KGRhc2hib2FyZCk.experimental.old-usage.__PAGE__.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/old-usage/__next.!KGRhc2hib2FyZCk.experimental.old-usage.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/old-usage/__next.!KGRhc2hib2FyZCk.experimental.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/old-usage/__next.!KGRhc2hib2FyZCk.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/old-usage/__next._full.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/old-usage/__next._head.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/old-usage/__next._index.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/old-usage/__next._tree.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/old-usage/index.html",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/old-usage.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/prompts/__next.!KGRhc2hib2FyZCk.experimental.prompts.__PAGE__.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/prompts/__next.!KGRhc2hib2FyZCk.experimental.prompts.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/prompts/__next.!KGRhc2hib2FyZCk.experimental.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/prompts/__next.!KGRhc2hib2FyZCk.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/prompts/__next._full.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/prompts/__next._head.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/prompts/__next._index.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/prompts/__next._tree.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/prompts/index.html",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/prompts.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/tag-management/__next.!KGRhc2hib2FyZCk.experimental.tag-management.__PAGE__.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/tag-management/__next.!KGRhc2hib2FyZCk.experimental.tag-management.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/tag-management/__next.!KGRhc2hib2FyZCk.experimental.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/tag-management/__next.!KGRhc2hib2FyZCk.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/tag-management/__next._full.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/tag-management/__next._head.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/tag-management/__next._index.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/tag-management/__next._tree.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/tag-management/index.html",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/experimental/tag-management.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/favicon.ico",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/guardrails/__next.!KGRhc2hib2FyZCk.guardrails.__PAGE__.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/guardrails/__next.!KGRhc2hib2FyZCk.guardrails.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/guardrails/__next.!KGRhc2hib2FyZCk.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/guardrails/__next._full.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/guardrails/__next._head.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/guardrails/__next._index.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/guardrails/__next._tree.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/guardrails/index.html",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/guardrails.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/index.html",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/index.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/login/__next._full.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/login/__next._head.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/login/__next._index.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/login/__next._tree.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/login/__next.login.__PAGE__.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/login/__next.login.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/login/index.html",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/login.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/logs/__next.!KGRhc2hib2FyZCk.logs.__PAGE__.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/logs/__next.!KGRhc2hib2FyZCk.logs.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/logs/__next.!KGRhc2hib2FyZCk.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/logs/__next._full.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/logs/__next._head.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/logs/__next._index.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/logs/__next._tree.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/logs/index.html",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/logs.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/mcp/oauth/callback/__next._full.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/mcp/oauth/callback/__next._head.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/mcp/oauth/callback/__next._index.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/mcp/oauth/callback/__next._tree.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/mcp/oauth/callback/__next.mcp.oauth.callback.__PAGE__.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/mcp/oauth/callback/__next.mcp.oauth.callback.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/mcp/oauth/callback/__next.mcp.oauth.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/mcp/oauth/callback/__next.mcp.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/mcp/oauth/callback/index.html",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/mcp/oauth/callback.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/model-hub/__next.!KGRhc2hib2FyZCk.model-hub.__PAGE__.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/model-hub/__next.!KGRhc2hib2FyZCk.model-hub.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/model-hub/__next.!KGRhc2hib2FyZCk.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/model-hub/__next._full.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/model-hub/__next._head.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/model-hub/__next._index.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/model-hub/__next._tree.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/model-hub/index.html",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/model-hub.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/model_hub/__next._full.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/model_hub/__next._head.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/model_hub/__next._index.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/model_hub/__next._tree.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/model_hub/__next.model_hub.__PAGE__.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/model_hub/__next.model_hub.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/model_hub/index.html",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/model_hub.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/model_hub_table/__next._full.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/model_hub_table/__next._head.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/model_hub_table/__next._index.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/model_hub_table/__next._tree.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/model_hub_table/__next.model_hub_table.__PAGE__.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/model_hub_table/__next.model_hub_table.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/model_hub_table/index.html",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/model_hub_table.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/models-and-endpoints/__next.!KGRhc2hib2FyZCk.models-and-endpoints.__PAGE__.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/models-and-endpoints/__next.!KGRhc2hib2FyZCk.models-and-endpoints.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/models-and-endpoints/__next.!KGRhc2hib2FyZCk.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/models-and-endpoints/__next._full.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/models-and-endpoints/__next._head.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/models-and-endpoints/__next._index.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/models-and-endpoints/__next._tree.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/models-and-endpoints/index.html",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/models-and-endpoints.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/next.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/onboarding/__next._full.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/onboarding/__next._head.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/onboarding/__next._index.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/onboarding/__next._tree.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/onboarding/__next.onboarding.__PAGE__.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/onboarding/__next.onboarding.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/onboarding/index.html",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/onboarding.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/organizations/__next.!KGRhc2hib2FyZCk.organizations.__PAGE__.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/organizations/__next.!KGRhc2hib2FyZCk.organizations.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/organizations/__next.!KGRhc2hib2FyZCk.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/organizations/__next._full.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/organizations/__next._head.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/organizations/__next._index.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/organizations/__next._tree.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/organizations/index.html",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/organizations.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/playground/__next.!KGRhc2hib2FyZCk.playground.__PAGE__.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/playground/__next.!KGRhc2hib2FyZCk.playground.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/playground/__next.!KGRhc2hib2FyZCk.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/playground/__next._full.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/playground/__next._head.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/playground/__next._index.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/playground/__next._tree.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/playground/index.html",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/playground.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/policies/__next.!KGRhc2hib2FyZCk.policies.__PAGE__.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/policies/__next.!KGRhc2hib2FyZCk.policies.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/policies/__next.!KGRhc2hib2FyZCk.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/policies/__next._full.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/policies/__next._head.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/policies/__next._index.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/policies/__next._tree.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/policies/index.html",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/policies.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/settings/admin-settings/__next.!KGRhc2hib2FyZCk.settings.admin-settings.__PAGE__.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/settings/admin-settings/__next.!KGRhc2hib2FyZCk.settings.admin-settings.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/settings/admin-settings/__next.!KGRhc2hib2FyZCk.settings.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/settings/admin-settings/__next.!KGRhc2hib2FyZCk.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/settings/admin-settings/__next._full.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/settings/admin-settings/__next._head.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/settings/admin-settings/__next._index.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/settings/admin-settings/__next._tree.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/settings/admin-settings/index.html",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/settings/admin-settings.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/settings/logging-and-alerts/__next.!KGRhc2hib2FyZCk.settings.logging-and-alerts.__PAGE__.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/settings/logging-and-alerts/__next.!KGRhc2hib2FyZCk.settings.logging-and-alerts.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/settings/logging-and-alerts/__next.!KGRhc2hib2FyZCk.settings.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/settings/logging-and-alerts/__next.!KGRhc2hib2FyZCk.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/settings/logging-and-alerts/__next._full.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/settings/logging-and-alerts/__next._head.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/settings/logging-and-alerts/__next._index.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/settings/logging-and-alerts/__next._tree.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/settings/logging-and-alerts/index.html",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/settings/logging-and-alerts.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/settings/router-settings/__next.!KGRhc2hib2FyZCk.settings.router-settings.__PAGE__.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/settings/router-settings/__next.!KGRhc2hib2FyZCk.settings.router-settings.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/settings/router-settings/__next.!KGRhc2hib2FyZCk.settings.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/settings/router-settings/__next.!KGRhc2hib2FyZCk.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/settings/router-settings/__next._full.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/settings/router-settings/__next._head.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/settings/router-settings/__next._index.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/settings/router-settings/__next._tree.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/settings/router-settings/index.html",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/settings/router-settings.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/settings/ui-theme/__next.!KGRhc2hib2FyZCk.settings.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/settings/ui-theme/__next.!KGRhc2hib2FyZCk.settings.ui-theme.__PAGE__.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/settings/ui-theme/__next.!KGRhc2hib2FyZCk.settings.ui-theme.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/settings/ui-theme/__next.!KGRhc2hib2FyZCk.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/settings/ui-theme/__next._full.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/settings/ui-theme/__next._head.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/settings/ui-theme/__next._index.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/settings/ui-theme/__next._tree.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/settings/ui-theme/index.html",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/settings/ui-theme.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/teams/__next.!KGRhc2hib2FyZCk.teams.__PAGE__.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/teams/__next.!KGRhc2hib2FyZCk.teams.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/teams/__next.!KGRhc2hib2FyZCk.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/teams/__next._full.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/teams/__next._head.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/teams/__next._index.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/teams/__next._tree.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/teams/index.html",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/teams.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/test-key/__next.!KGRhc2hib2FyZCk.test-key.__PAGE__.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/test-key/__next.!KGRhc2hib2FyZCk.test-key.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/test-key/__next.!KGRhc2hib2FyZCk.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/test-key/__next._full.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/test-key/__next._head.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/test-key/__next._index.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/test-key/__next._tree.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/test-key/index.html",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/test-key.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/tools/mcp-servers/__next.!KGRhc2hib2FyZCk.tools.mcp-servers.__PAGE__.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/tools/mcp-servers/__next.!KGRhc2hib2FyZCk.tools.mcp-servers.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/tools/mcp-servers/__next.!KGRhc2hib2FyZCk.tools.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/tools/mcp-servers/__next.!KGRhc2hib2FyZCk.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/tools/mcp-servers/__next._full.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/tools/mcp-servers/__next._head.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/tools/mcp-servers/__next._index.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/tools/mcp-servers/__next._tree.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/tools/mcp-servers/index.html",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/tools/mcp-servers.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/tools/vector-stores/__next.!KGRhc2hib2FyZCk.tools.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/tools/vector-stores/__next.!KGRhc2hib2FyZCk.tools.vector-stores.__PAGE__.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/tools/vector-stores/__next.!KGRhc2hib2FyZCk.tools.vector-stores.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/tools/vector-stores/__next.!KGRhc2hib2FyZCk.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/tools/vector-stores/__next._full.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/tools/vector-stores/__next._head.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/tools/vector-stores/__next._index.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/tools/vector-stores/__next._tree.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/tools/vector-stores/index.html",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/tools/vector-stores.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/usage/__next.!KGRhc2hib2FyZCk.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/usage/__next.!KGRhc2hib2FyZCk.usage.__PAGE__.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/usage/__next.!KGRhc2hib2FyZCk.usage.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/usage/__next._full.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/usage/__next._head.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/usage/__next._index.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/usage/__next._tree.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/usage/index.html",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/usage.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/users/__next.!KGRhc2hib2FyZCk.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/users/__next.!KGRhc2hib2FyZCk.users.__PAGE__.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/users/__next.!KGRhc2hib2FyZCk.users.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/users/__next._full.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/users/__next._head.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/users/__next._index.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/users/__next._tree.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/users/index.html",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/users.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/vercel.svg",
+      "reason": "excluded file extension: .svg"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/virtual-keys/__next.!KGRhc2hib2FyZCk.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/virtual-keys/__next.!KGRhc2hib2FyZCk.virtual-keys.__PAGE__.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/virtual-keys/__next.!KGRhc2hib2FyZCk.virtual-keys.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/virtual-keys/__next._full.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/virtual-keys/__next._head.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/virtual-keys/__next._index.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/virtual-keys/__next._tree.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/virtual-keys/index.html",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/_experimental/out/virtual-keys.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/_new_new_secret_config.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/_new_secret_config.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/_super_secret_config.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/auth/public_key.pem",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/cached_logo.jpg",
+      "reason": "excluded file extension: .jpg"
+    },
+    {
+      "path": "litellm/proxy/client/README.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm/proxy/client/cli/README.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm/proxy/common_utils/performance_utils.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm/proxy/discovery_endpoints/README.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm/proxy/example_config_yaml/_health_check_test_config.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/example_config_yaml/aliases_config.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/example_config_yaml/azure_config.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/example_config_yaml/bad_schema.prisma",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/example_config_yaml/disable_schema_update.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/example_config_yaml/enterprise_config.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/example_config_yaml/langfuse_config.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/example_config_yaml/load_balancer.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/example_config_yaml/multi_instance_simple_config.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/example_config_yaml/oai_misc_config.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/example_config_yaml/opentelemetry_config.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/example_config_yaml/otel_test_config.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/example_config_yaml/pass_through_config.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/example_config_yaml/reject_clientside_metadata_tags_config.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/example_config_yaml/simple_config.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/example_config_yaml/spend_tracking_config.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/example_config_yaml/store_model_db_config.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/example_config_yaml/test_pipeline_config.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/example_config_yaml/tool_permission_example.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/example_config_yaml/websearch_interception_config.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/generic_guardrail_api/example_config.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/ibm_guardrails/README.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/ibm_guardrails/example_config.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/categories/age_discrimination.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/categories/bias_gender.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/categories/bias_racial.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/categories/bias_religious.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/categories/bias_sexual_orientation.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/categories/claims_fraud_coaching.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/categories/claims_medical_advice.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/categories/claims_phi_disclosure.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/categories/claims_prior_auth_gaming.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/categories/claims_system_override.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/categories/denied_financial_advice.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/categories/denied_insults.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/categories/denied_legal_advice.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/categories/denied_medical_advice.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/categories/disability.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/categories/gender_sexual_orientation.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/categories/harm_toxic_abuse.json",
+      "reason": "excluded file extension: .json"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/categories/harm_toxic_abuse_au.json",
+      "reason": "excluded file extension: .json"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/categories/harm_toxic_abuse_de.json",
+      "reason": "excluded file extension: .json"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/categories/harm_toxic_abuse_es.json",
+      "reason": "excluded file extension: .json"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/categories/harm_toxic_abuse_fr.json",
+      "reason": "excluded file extension: .json"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/categories/harmful_child_safety.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/categories/harmful_illegal_weapons.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/categories/harmful_self_harm.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/categories/harmful_violence.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/categories/military_status.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/categories/prompt_injection_data_exfiltration.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/categories/prompt_injection_jailbreak.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/categories/prompt_injection_malicious_code.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/categories/prompt_injection_sql.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/categories/prompt_injection_system_prompt.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/categories/religion.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/competitor_intent/major_airlines.json",
+      "reason": "excluded file extension: .json"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/examples/README.md",
+      "reason": "inside excluded directory: examples"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/guardrail_benchmarks/evals/block_age_discrimination.jsonl",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/guardrail_benchmarks/evals/block_claims_fraud_coaching.jsonl",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/guardrail_benchmarks/evals/block_claims_medical_advice.jsonl",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/guardrail_benchmarks/evals/block_claims_phi_disclosure.jsonl",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/guardrail_benchmarks/evals/block_claims_prior_auth_gaming.jsonl",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/guardrail_benchmarks/evals/block_claims_system_override.jsonl",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/guardrail_benchmarks/evals/block_disability_discrimination.jsonl",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/guardrail_benchmarks/evals/block_gender_discrimination.jsonl",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/guardrail_benchmarks/evals/block_insults.csv",
+      "reason": "excluded file extension: .csv"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/guardrail_benchmarks/evals/block_insults.jsonl",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/guardrail_benchmarks/evals/block_investment.csv",
+      "reason": "excluded file extension: .csv"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/guardrail_benchmarks/evals/block_investment.jsonl",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/guardrail_benchmarks/evals/block_military_discrimination.jsonl",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/guardrail_benchmarks/evals/block_religion_discrimination.jsonl",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/guardrail_benchmarks/results/BENCHMARKS.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/guardrail_benchmarks/results/block_age_discrimination_-_contentfilter_(age_discrimination.yaml).json",
+      "reason": "excluded file extension: .json"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/guardrail_benchmarks/results/block_claims_fraud_coaching_-_contentfilter_(claims_fraud_coaching.yaml).json",
+      "reason": "excluded file extension: .json"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/guardrail_benchmarks/results/block_claims_medical_advice_-_contentfilter_(claims_medical_advice.yaml).json",
+      "reason": "excluded file extension: .json"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/guardrail_benchmarks/results/block_claims_phi_disclosure_-_contentfilter_(claims_phi_disclosure.yaml).json",
+      "reason": "excluded file extension: .json"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/guardrail_benchmarks/results/block_claims_prior_auth_gaming_-_contentfilter_(claims_prior_auth_gaming.yaml).json",
+      "reason": "excluded file extension: .json"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/guardrail_benchmarks/results/block_claims_system_override_-_contentfilter_(claims_system_override.yaml).json",
+      "reason": "excluded file extension: .json"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/guardrail_benchmarks/results/block_disability_discrimination_-_contentfilter_(disability.yaml).json",
+      "reason": "excluded file extension: .json"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/guardrail_benchmarks/results/block_gender_discrimination_-_contentfilter_(gender_sexual_orientation.yaml).json",
+      "reason": "excluded file extension: .json"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/guardrail_benchmarks/results/block_military_discrimination_-_contentfilter_(military_status.yaml).json",
+      "reason": "excluded file extension: .json"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/guardrail_benchmarks/results/block_religion_discrimination_-_contentfilter_(religion.yaml).json",
+      "reason": "excluded file extension: .json"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/guardrail_benchmarks/results/insults_cf.json",
+      "reason": "excluded file extension: .json"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/guardrail_benchmarks/results/investment_cf.json",
+      "reason": "excluded file extension: .json"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/patterns.json",
+      "reason": "excluded file extension: .json"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/policy_templates/airline_brand_protection.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/policy_templates/aviation_safety_topics.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/policy_templates/eu_ai_act_art5_biometric_profiling.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/policy_templates/eu_ai_act_art5_biometric_profiling_fr.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/policy_templates/eu_ai_act_art5_emotion_recognition.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/policy_templates/eu_ai_act_art5_emotion_recognition_fr.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/policy_templates/eu_ai_act_art5_manipulation.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/policy_templates/eu_ai_act_art5_manipulation_fr.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/policy_templates/eu_ai_act_art5_social_scoring.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/policy_templates/eu_ai_act_art5_social_scoring_fr.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/policy_templates/eu_ai_act_art5_vulnerability.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/policy_templates/eu_ai_act_art5_vulnerability_fr.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/policy_templates/eu_ai_act_article5.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/policy_templates/eu_ai_act_article5_fr.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/policy_templates/prompt_injection.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/policy_templates/sg_mas_data_governance.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/policy_templates/sg_mas_fairness_bias.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/policy_templates/sg_mas_human_oversight.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/policy_templates/sg_mas_model_security.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/policy_templates/sg_mas_transparency_explainability.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/policy_templates/sg_pdpa_data_transfer.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/policy_templates/sg_pdpa_do_not_call.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/policy_templates/sg_pdpa_personal_identifiers.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/policy_templates/sg_pdpa_profiling_automated_decisions.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/policy_templates/sg_pdpa_sensitive_data.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/policy_templates/sql_injection.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/policy_templates/uae_anti_discrimination.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/policy_templates/uae_cultural_sensitivity.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/semantic_guard/route_templates/prompt_injection.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/guardrails/guardrail_hooks/semantic_guard/route_templates/sql_injection.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/hooks/README.dynamic_rate_limiter_v3.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm/proxy/hooks/example_presidio_ad_hoc_recognizer.json",
+      "reason": "excluded file extension: .json"
+    },
+    {
+      "path": "litellm/proxy/hooks/mcp_semantic_filter/ARCHITECTURE.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm/proxy/llamaguard_prompt.txt",
+      "reason": "excluded file extension: .txt"
+    },
+    {
+      "path": "litellm/proxy/logo.jpg",
+      "reason": "excluded file extension: .jpg"
+    },
+    {
+      "path": "litellm/proxy/management_endpoints/scim/README_SCIM.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm/proxy/mcp_registry.json",
+      "reason": "excluded file extension: .json"
+    },
+    {
+      "path": "litellm/proxy/model_config.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/openapi.json",
+      "reason": "excluded file extension: .json"
+    },
+    {
+      "path": "litellm/proxy/openapi_registry.json",
+      "reason": "excluded file extension: .json"
+    },
+    {
+      "path": "litellm/proxy/pass_through_endpoints/architecture.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm/proxy/policy_engine/architecture.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm/proxy/proxy_config.yaml",
+      "reason": "excluded file extension: .yaml"
+    },
+    {
+      "path": "litellm/proxy/public_endpoints/agent_create_fields.json",
+      "reason": "excluded file extension: .json"
+    },
+    {
+      "path": "litellm/proxy/public_endpoints/provider_create_fields.json",
+      "reason": "excluded file extension: .json"
+    },
+    {
+      "path": "litellm/proxy/schema.prisma",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/start.sh",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/swagger/favicon.ico",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/swagger/favicon.png",
+      "reason": "excluded file extension: .png"
+    },
+    {
+      "path": "litellm/proxy/swagger/swagger-ui-bundle.js",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/swagger/swagger-ui.css",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/test_prompts/test_hello_world_prompt.prompt",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/proxy/types_utils/README.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm/py.typed",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm/realtime_api/README.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm/router_strategy/complexity_router/README.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm/secret_managers/Readme.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm/types/interactions/README.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm/types/proxy/README.md",
+      "reason": "excluded file extension: .md"
+    },
+    {
+      "path": "litellm-1.82.8.dist-info/METADATA",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm-1.82.8.dist-info/WHEEL",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm-1.82.8.dist-info/licenses/LICENSE",
+      "reason": "not a known startup vector"
+    },
+    {
+      "path": "litellm-1.82.8.dist-info/RECORD",
+      "reason": "not a known startup vector"
+    }
+  ],
+  "statistics": {
+    "files_total": 2598,
+    "files_scanned": 1709,
+    "files_skipped": 889,
+    "files_failed_to_parse": 0,
+    "signals_emitted": 78,
+    "analyzers_run": 5,
+    "enrichers_run": 0,
+    "duration_seconds": 19.151936835000015
+  },
+  "diagnostics": [
+    "entry_points.txt analysis not implemented in v0.1: litellm-1.82.8.dist-info/entry_points.txt"
+  ]
+}
