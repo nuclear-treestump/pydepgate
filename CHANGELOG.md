@@ -45,7 +45,8 @@ become binding stability promises with formal deprecation cycles.
   and the gate is the right default for most operators because
   it preserves the serial speed advantage on small inputs while
   unlocking parallel speedup on large ones.
-- **`--workers` CLI flag.** Accepts an integer worker count or
+- **`--workers` CLI flag and `PYDEPGATE_WORKERS` environment
+  variable.** Accepts an integer worker count or
   the string `auto`. The auto path uses
   `os.sched_getaffinity(0)` on Linux for cgroup awareness,
   falling back to `os.cpu_count()` elsewhere. When the resolved
@@ -57,7 +58,8 @@ become binding stability promises with formal deprecation cycles.
   system. The multiplier tiers live as named constants in
   `cli.main` and are not currently configurable from the
   command line.
-- **`--force-parallel` CLI flag.** Maps to `parallel_threshold=0`,
+- **`--force-parallel` CLI flag and `PYDEPGATE_FORCE_PARALLEL`
+  environment variable.** Maps to `parallel_threshold=0`,
   bypassing the file-count gate. Useful when an operator knows
   parallel is the right choice for the workload despite a small
   file count, or for testing the parallel path in CI without
@@ -678,7 +680,7 @@ issues will land in [ROADMAP.md](ROADMAP.md):
   enable a process pool for the per-file scan phase, targeting
   meaningful speedups on multi-megabyte wheels with thousands
   of files.
-  
+
 [Unreleased]: https://github.com/nuclear-treestump/pydepgate/compare/v0.4.5...HEAD
 [0.4.5]: https://github.com/nuclear-treestump/pydepgate/compare/v0.4.2...v0.4.5
 [0.4.2]: https://github.com/nuclear-treestump/pydepgate/compare/v0.4.1...v0.4.2
