@@ -154,6 +154,7 @@ def assemble_document(
                 "invocations": [_build_invocation(result)],
                 "automationDetails": {
                     "id": f"{TOOL_NAME}/{effective_scan_mode}/",
+                    "runID": result.scan_id,
                 },
                 "originalUriBaseIds": _build_uri_base_ids(srcroot),
             },
@@ -198,6 +199,7 @@ def assemble_fallback_document(error_message: str) -> dict:
                         "name": TOOL_NAME,
                         "informationUri": TOOL_INFORMATION_URI,
                         "organization": TOOL_ORGANIZATION,
+                        "RunID": "N/A",
                     },
                 },
                 "results": [],

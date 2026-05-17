@@ -77,9 +77,7 @@ def render(
         if ci_mode:
             stream.write(f"pydepgate: clean ({result.artifact_identity})\n")
         else:
-            green_pre, green_post = (
-                (Color.GREEN, Color.RESET) if color_on else ("", "")
-            )
+            green_pre, green_post = (Color.GREEN, Color.RESET) if color_on else ("", "")
             stream.write(
                 f"{green_pre}No findings{green_post} in "
                 f"{result.artifact_identity}\n"
@@ -99,7 +97,7 @@ def render(
                 map_str = render_density_map(
                     filename=path,
                     findings=file_findings,
-                    total_lines=None,   # approximate from max finding line
+                    total_lines=None,  # approximate from max finding line
                     color=color_on,
                 )
                 if map_str:
@@ -108,9 +106,7 @@ def render(
     # Suppressed findings section.
     if suppressed:
         if not ci_mode:
-            dim_pre, dim_post = (
-                (Color.DIM, Color.RESET) if color_on else ("", "")
-            )
+            dim_pre, dim_post = (Color.DIM, Color.RESET) if color_on else ("", "")
             yellow_pre, yellow_post = (
                 (Color.YELLOW, Color.RESET) if color_on else ("", "")
             )
@@ -131,9 +127,7 @@ def render(
         _render_statistics(result, stream, color_on)
 
 
-def _render_suppressed_finding(
-    sup, stream: TextIO, color: bool, ci_mode: bool
-) -> None:
+def _render_suppressed_finding(sup, stream: TextIO, color: bool, ci_mode: bool) -> None:
     """Render a single suppressed finding."""
     dim_pre, dim_post = (Color.DIM, Color.RESET) if color else ("", "")
     sig = sup.original_finding.signal
@@ -169,7 +163,10 @@ def _render_suppressed_finding(
 
 
 def _render_finding(
-    finding: Finding, stream: TextIO, color: bool, ci_mode: bool,
+    finding: Finding,
+    stream: TextIO,
+    color: bool,
+    ci_mode: bool,
     peek_chain: bool = False,
 ) -> None:
     """Render a single finding."""
@@ -187,9 +184,7 @@ def _render_finding(
             if sig.location.line
             else finding.context.internal_path
         )
-        stream.write(
-            f"{sev_text} {sig.signal_id} {location}: {sig.description}\n"
-        )
+        stream.write(f"{sev_text} {sig.signal_id} {location}: {sig.description}\n")
         return
 
     # Full multi-line format for interactive use.
@@ -207,14 +202,15 @@ def _render_finding(
     stream.write(f"  {sig.description}\n")
     if sig.context:
         interesting_keys = [
-            "resolved_value", "matched_sensitive", "primitive",
-            "decode_function", "namespace",
+            "resolved_value",
+            "matched_sensitive",
+            "primitive",
+            "decode_function",
+            "namespace",
         ]
         for key in interesting_keys:
             if key in sig.context:
-                stream.write(
-                    f"  {dim_pre}{key}: {sig.context[key]!r}{dim_post}\n"
-                )
+                stream.write(f"  {dim_pre}{key}: {sig.context[key]!r}{dim_post}\n")
 
         # Render the payload_peek decoded block, if present. Summary
         # mode runs whenever the block exists; verbose per-layer mode
@@ -222,12 +218,14 @@ def _render_finding(
         decoded = sig.context.get("decoded")
         if decoded is not None:
             scheme = _PEEK_ANSI if color else _PEEK_PLAIN
-            stream.write(render_decoded_block(
-                decoded,
-                verbose=peek_chain,
-                color=scheme,
-                indent="  ",
-            ))
+            stream.write(
+                render_decoded_block(
+                    decoded,
+                    verbose=peek_chain,
+                    color=scheme,
+                    indent="  ",
+                )
+            )
     stream.write("\n")
 
 
@@ -249,3 +247,6 @@ def _render_statistics(result: ScanResult, stream: TextIO, color: bool) -> None:
         stream.write("\n")
         for diag in result.diagnostics:
             stream.write(f"{dim_pre}note: {diag}{dim_post}\n")
+    stream.write("Your Run ID: ")
+    stream.write(result.scan_id)
+    stream.write("\n")

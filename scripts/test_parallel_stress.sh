@@ -42,7 +42,7 @@ while IFS= read -r pkg; do
     err="$OUTPUT_DIR/${pkg}.err"
 
     start=$(date +%s.%N)
-    pydepgate --workers "$WORKERS" $force_flag --format json scan "$pkg" \
+    pydepgate --workers "$WORKERS" $force_flag --format json scan "$pkg" --deep --min-severity high \
         > "$out" 2> "$err"
     rc=$?
     end=$(date +%s.%N)

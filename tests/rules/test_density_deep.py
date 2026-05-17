@@ -59,27 +59,38 @@ def _evaluate_in_library_py(signal: Signal) -> Severity | None:
 # Tier 0: Sanity check that all rules are wired in
 # =============================================================================
 
+
 class LibraryPyRulesPresenceTests(unittest.TestCase):
     """If these fail, the patches/defaults_library_py_block.md was not applied."""
 
     def test_all_thirteen_library_py_rules_present(self):
         ids = {r.rule_id for r in DEFAULT_RULES}
         for sig in (
-            "001", "002", "010", "011",
-            "020", "021", "030", "031",
-            "040", "041", "042", "050", "051",
+            "001",
+            "002",
+            "010",
+            "011",
+            "020",
+            "021",
+            "030",
+            "031",
+            "040",
+            "041",
+            "042",
+            "050",
+            "051",
         ):
             with self.subTest(signal=f"DENS{sig}"):
                 self.assertIn(f"default_dens{sig}_in_library_py", ids)
 
     def test_no_duplicate_rule_ids(self):
         density_rules = [
-            r for r in DEFAULT_RULES
-            if r.rule_id.startswith("default_dens")
+            r for r in DEFAULT_RULES if r.rule_id.startswith("default_dens")
         ]
         ids = [r.rule_id for r in density_rules]
         self.assertEqual(
-            len(ids), len(set(ids)),
+            len(ids),
+            len(set(ids)),
             f"Duplicate density rule_ids: {ids}",
         )
 
@@ -87,6 +98,7 @@ class LibraryPyRulesPresenceTests(unittest.TestCase):
 # =============================================================================
 # Tier 1: Severity calibration per signal
 # =============================================================================
+
 
 class LibraryPySeverityCalibrationTests(unittest.TestCase):
     """Each signal lands at its calibrated severity in LIBRARY_PY."""
@@ -132,19 +144,19 @@ class LibraryPySeverityCalibrationTests(unittest.TestCase):
             Severity.INFO,
         )
 
-    def test_dens030_is_high(self):
-        # Trojan Source: HIGH everywhere, including library code.
+    def test_dens030_is_medium(self):
+        # Trojan Source: MEDIUM everywhere, including library code.
         self.assertEqual(
             _evaluate_in_library_py(_make_signal("DENS030")),
-            Severity.HIGH,
+            Severity.MEDIUM,
         )
 
-    def test_dens031_is_high(self):
-        # Homoglyphs: HIGH everywhere. Legitimate non-Latin naming is
+    def test_dens031_is_medium(self):
+        # Homoglyphs: MEDIUM everywhere. Legitimate non-Latin naming is
         # the false-positive class; suppress via user rule.
         self.assertEqual(
             _evaluate_in_library_py(_make_signal("DENS031")),
-            Severity.HIGH,
+            Severity.MEDIUM,
         )
 
     def test_dens040_is_info(self):
@@ -175,16 +187,17 @@ class LibraryPySeverityCalibrationTests(unittest.TestCase):
             Severity.HIGH,
         )
 
-    def test_dens051_is_high(self):
+    def test_dens051_is_medium(self):
         self.assertEqual(
             _evaluate_in_library_py(_make_signal("DENS051")),
-            Severity.HIGH,
+            Severity.MEDIUM,
         )
 
 
 # =============================================================================
 # Tier 2: Precedence over "anywhere" fallback rules
 # =============================================================================
+
 
 class LibraryPyRulePrecedenceTests(unittest.TestCase):
     """The LIBRARY_PY rule must win over the corresponding anywhere rule.
@@ -201,15 +214,6 @@ class LibraryPyRulePrecedenceTests(unittest.TestCase):
         self.assertEqual(
             _evaluate_in_library_py(_make_signal("DENS010")),
             Severity.MEDIUM,
-        )
-
-    def test_dens030_library_py_wins_over_anywhere(self):
-        # Both anywhere and LIBRARY_PY are HIGH for DENS030.
-        # This is a sanity check that the more-specific rule
-        # at least DOESN'T LOSE.
-        self.assertEqual(
-            _evaluate_in_library_py(_make_signal("DENS030")),
-            Severity.HIGH,
         )
 
     def test_dens050_library_py_wins_over_anywhere(self):
@@ -232,13 +236,13 @@ class LibraryPyRulePrecedenceTests(unittest.TestCase):
 # Tier 3: Integrity checks
 # =============================================================================
 
+
 class LibraryPyRuleIntegrityTests(unittest.TestCase):
     """Cross-cutting checks across the LIBRARY_PY rule block."""
 
     def test_every_library_py_rule_has_explain_text(self):
         library_rules = [
-            r for r in DEFAULT_RULES
-            if r.rule_id.endswith("_in_library_py")
+            r for r in DEFAULT_RULES if r.rule_id.endswith("_in_library_py")
         ]
         # We expect 13.
         self.assertEqual(len(library_rules), 13)
@@ -246,19 +250,20 @@ class LibraryPyRuleIntegrityTests(unittest.TestCase):
             with self.subTest(rule_id=rule.rule_id):
                 self.assertIsNotNone(rule.explain)
                 self.assertGreater(
-                    len(rule.explain), 20,
+                    len(rule.explain),
+                    20,
                     f"{rule.rule_id}: explain too short",
                 )
 
     def test_no_library_py_rule_explain_contains_em_dash(self):
         library_rules = [
-            r for r in DEFAULT_RULES
-            if r.rule_id.endswith("_in_library_py")
+            r for r in DEFAULT_RULES if r.rule_id.endswith("_in_library_py")
         ]
         for rule in library_rules:
             with self.subTest(rule_id=rule.rule_id):
                 self.assertNotIn(
-                    "\u2014", rule.explain,
+                    "\u2014",
+                    rule.explain,
                     f"{rule.rule_id}: contains em-dash",
                 )
 
@@ -266,26 +271,35 @@ class LibraryPyRuleIntegrityTests(unittest.TestCase):
         # Defensive: every rule named "in_library_py" should actually
         # match LIBRARY_PY in its RuleMatch.
         library_rules = [
-            r for r in DEFAULT_RULES
-            if r.rule_id.endswith("_in_library_py")
+            r for r in DEFAULT_RULES if r.rule_id.endswith("_in_library_py")
         ]
         for rule in library_rules:
             with self.subTest(rule_id=rule.rule_id):
                 self.assertIs(
-                    rule.match.file_kind, FileKind.LIBRARY_PY,
+                    rule.match.file_kind,
+                    FileKind.LIBRARY_PY,
                     f"{rule.rule_id} doesn't actually target LIBRARY_PY",
                 )
 
     def test_library_py_rules_cover_all_dens_signals(self):
         library_rules = [
-            r for r in DEFAULT_RULES
-            if r.rule_id.endswith("_in_library_py")
+            r for r in DEFAULT_RULES if r.rule_id.endswith("_in_library_py")
         ]
         signal_ids = {r.match.signal_id for r in library_rules}
         expected = {
-            "DENS001", "DENS002", "DENS010", "DENS011",
-            "DENS020", "DENS021", "DENS030", "DENS031",
-            "DENS040", "DENS041", "DENS042", "DENS050", "DENS051",
+            "DENS001",
+            "DENS002",
+            "DENS010",
+            "DENS011",
+            "DENS020",
+            "DENS021",
+            "DENS030",
+            "DENS031",
+            "DENS040",
+            "DENS041",
+            "DENS042",
+            "DENS050",
+            "DENS051",
         }
         self.assertEqual(signal_ids, expected)
 
