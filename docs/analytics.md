@@ -14,6 +14,7 @@ When you visit a page, GoatCounter records:
 - Page path and view count
 - Session continuity for up to 8 hours (so that reloading a page does not count as a second visit)
 - Referrer URL and campaign parameters
+- Browser name and operating system, derived from the User-Agent header. The raw User-Agent string is not stored.
 
 ## What this site does not collect
 
