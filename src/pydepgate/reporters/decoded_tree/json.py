@@ -40,13 +40,16 @@ def render(tree: DecodedTree, *, include_source: bool = True) -> str:
     schema-versionless output continue to work because the new
     field is additive and existing keys are unchanged.
     """
-    return json.dumps(_tree_to_dict(tree, include_source=include_source), indent=2) + "\n"
+    return (
+        json.dumps(_tree_to_dict(tree, include_source=include_source), indent=2) + "\n"
+    )
 
 
 def _tree_to_dict(tree: DecodedTree, include_source: bool = True) -> dict:
     return {
         "report_type": "pydepgate_decoded_tree",
-        "schema_version": 1,
+        "schema_version": 2,
+        "scan_id": tree.scan_id,
         "target": tree.target,
         "max_depth": tree.max_depth,
         "artifact_sha256": tree.artifact_sha256,
@@ -84,7 +87,9 @@ def _node_to_dict(node: DecodedNode, *, include_source: bool = True) -> dict:
             }
             for cf in node.child_findings
         ],
-        "children": [_node_to_dict(c, include_source=include_source) for c in node.children],
+        "children": [
+            _node_to_dict(c, include_source=include_source) for c in node.children
+        ],
     }
 
     if node.ioc_data is not None:

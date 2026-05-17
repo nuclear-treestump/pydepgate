@@ -101,7 +101,7 @@ from pydepgate.enrichers._unwrap import (
 )
 from pydepgate.enrichers._asn1 import DERClassification
 from pydepgate.traffic_control.triage import FileKind
-
+from pydepgate import run_context
 
 # ---------------------------------------------------------------------------
 # Stop-reason constants
@@ -146,9 +146,11 @@ _SEVERITY_RANK_BY_STRING = {
 # Tree types
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class IOCData:
     """IOC (Indicators of Compromise) for a decoded payload."""
+
     original_sha256: str | None = None
     original_sha512: str | None = None
     decoded_sha256: str | None = None
@@ -160,6 +162,7 @@ class IOCData:
 @dataclass(frozen=True)
 class ChildFinding:
     """One finding observed inside a decoded layer."""
+
     signal_id: str
     severity: str
     line: int
@@ -191,6 +194,7 @@ class DecodedNode:
     terminal had no structured classification (most python_source
     cases, raw zlib output, etc.).
     """
+
     outer_signal_id: str
     outer_severity: str
     outer_location: str
@@ -212,19 +216,23 @@ class DecodedNode:
     details_summary: dict | None = None
     details_full: dict | None = None
 
+
 @dataclass(frozen=True)
 class DecodedTree:
     """The full result of a decoded-payload pass."""
+
     target: str
     max_depth: int
     nodes: tuple[DecodedNode, ...]
     artifact_sha256: str | None = None
     artifact_sha512: str | None = None
+    scan_id: str = run_context.get_current_run_uuid()
 
 
 # ---------------------------------------------------------------------------
 # Driver
 # ---------------------------------------------------------------------------
+
 
 def decode_payloads(
     result: ScanResult,
@@ -260,6 +268,7 @@ def decode_payloads(
         artifact_sha256=getattr(result, "artifact_sha256", None),
         artifact_sha512=getattr(result, "artifact_sha512", None),
     )
+
 
 def _is_payload_bearing(finding: Finding) -> bool:
     """True if the finding has a decoded payload we could recurse into.
@@ -319,9 +328,7 @@ def _dedupe_payload_findings(
     for key in order:
         findings_at_key = groups[key]
         primary = _pick_primary_finding(findings_at_key)
-        all_signal_ids = tuple(
-            sorted({f.signal.signal_id for f in findings_at_key})
-        )
+        all_signal_ids = tuple(sorted({f.signal.signal_id for f in findings_at_key}))
         result.append((primary, all_signal_ids))
     return result
 
@@ -483,7 +490,9 @@ def _decode_one(
     ioc_data = None
     if extract_iocs:
         ioc_data = _extract_iocs(
-            full_value, unwrap_result.final_bytes, unwrap_result.final_kind,
+            full_value,
+            unwrap_result.final_bytes,
+            unwrap_result.final_kind,
         )
 
     details_summary: dict | None = None
@@ -540,8 +549,7 @@ def _extract_iocs(
             decoded_source = final_bytes.decode("utf-8", errors="replace")
         except Exception:
             decoded_source = (
-                f"# Decode failed, hex representation:\n"
-                f"{final_bytes.hex()}"
+                f"# Decode failed, hex representation:\n" f"{final_bytes.hex()}"
             )
 
     return IOCData(
@@ -629,15 +637,13 @@ def _to_child_finding(finding: Finding) -> ChildFinding:
 def _format_location(finding: Finding) -> str:
     """Render a finding's location as 'path:line:column' for the report."""
     loc = finding.signal.location
-    return (
-        f"{finding.context.internal_path}:"
-        f"{loc.line}:{loc.column}"
-    )
+    return f"{finding.context.internal_path}:" f"{loc.line}:{loc.column}"
 
 
 # ---------------------------------------------------------------------------
 # Post-decode severity filter (NEW)
 # ---------------------------------------------------------------------------
+
 
 def filter_tree_by_severity(
     tree: DecodedTree,
@@ -679,10 +685,8 @@ def filter_tree_by_severity(
         return tree
 
     filtered_nodes = tuple(
-        n for n in (
-            _filter_node_by_severity(node, threshold)
-            for node in tree.nodes
-        )
+        n
+        for n in (_filter_node_by_severity(node, threshold) for node in tree.nodes)
         if n is not None
     )
 
@@ -716,20 +720,20 @@ def _filter_node_by_severity(
     threshold. Returns a (possibly trimmed) new node otherwise.
     """
     kept_child_findings = tuple(
-        cf for cf in node.child_findings
+        cf
+        for cf in node.child_findings
         if _SEVERITY_RANK_BY_STRING.get(cf.severity.lower(), 0) >= threshold
     )
 
     kept_children = tuple(
-        c for c in (
-            _filter_node_by_severity(child, threshold)
-            for child in node.children
-        )
+        c
+        for c in (_filter_node_by_severity(child, threshold) for child in node.children)
         if c is not None
     )
 
     own_severity_rank = _SEVERITY_RANK_BY_STRING.get(
-        node.outer_severity.lower(), 0,
+        node.outer_severity.lower(),
+        0,
     )
     own_passes = own_severity_rank >= threshold
     has_kept_descendants = bool(kept_children) or bool(kept_child_findings)
@@ -759,4 +763,3 @@ def _filter_node_by_severity(
         details_summary=node.details_summary,
         details_full=node.details_full,
     )
-
