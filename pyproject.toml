@@ -5,8 +5,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pydepgate"
-version = "0.4.2"
-description = "A zero dependency lightweight static analyzer that detects weird startup behaviors in python."
+version = "0.4.5"
+description = "A zero dependency lightweight static analyzer designed for adversarial-shape code in python to detect supply chain attacks before they reach your interpreter."
 requires-python = ">=3.11"
 readme = "README.md"
 license = "Apache-2.0"

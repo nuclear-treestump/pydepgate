@@ -61,7 +61,6 @@ from pydepgate.enrichers._asn1 import (
     looks_like_der,
 )
 
-
 # How many initial bytes/chars we examine for terminal classification
 # heuristics (Python source detection, indicator scanning).
 _INSPECTION_HEAD_BYTES = 2048
@@ -81,14 +80,14 @@ _ZLIB_MAGIC = (
     b"\x78\xda",  # best compression
 )
 
-_GZIP_MAGIC = b"\x1f\x8b\x08"          # gzip RFC 1952; third byte is method
-_BZIP2_MAGIC = b"BZh"                   # "BZh" + level digit
+_GZIP_MAGIC = b"\x1f\x8b\x08"  # gzip RFC 1952; third byte is method
+_BZIP2_MAGIC = b"BZh"  # "BZh" + level digit
 _LZMA_MAGIC = b"\xfd\x37\x7a\x58\x5a\x00"  # xz format; raw LZMA1 has no magic
 
-_PE_MAGIC = b"MZ"                       # DOS executable / PE wrapper
+_PE_MAGIC = b"MZ"  # DOS executable / PE wrapper
 _ELF_MAGIC = b"\x7fELF"
 _PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
-_ZIP_MAGIC = b"PK\x03\x04"              # zip / wheel / jar / etc.
+_ZIP_MAGIC = b"PK\x03\x04"  # zip / wheel / jar / etc.
 
 # Pickle protocol 2-5 starts with PROTO opcode + version byte.
 # Protocol 0/1 start with various opcodes and are harder to fingerprint
@@ -113,9 +112,7 @@ _PEM_FULL_RE = re.compile(
 
 # Standard + URL-safe base64. Padding char included.
 _BASE64_ALPHABET = frozenset(
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-    "abcdefghijklmnopqrstuvwxyz"
-    "0123456789+/=-_"
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ" "abcdefghijklmnopqrstuvwxyz" "0123456789+/=-_"
 )
 _HEX_ALPHABET = frozenset("0123456789abcdefABCDEF")
 
@@ -128,9 +125,9 @@ _HEX_0X_LIST_SPLITTER = re.compile(r"[,\s]+")
 # encoded payload. Below these we don't bother attempting the decode
 # because the result is too small to identify anything (a 4-byte magic
 # header is the floor).
-_MIN_BASE64_CHARS = 16   # 16 b64 chars -> 12 bytes
-_MIN_HEX_CHARS = 16      # 16 hex chars -> 8 bytes
-_MIN_HEX_0X_TOKENS = 8   # 8 tokens -> 8 bytes
+_MIN_BASE64_CHARS = 16  # 16 b64 chars -> 12 bytes
+_MIN_HEX_CHARS = 16  # 16 hex chars -> 8 bytes
+_MIN_HEX_0X_TOKENS = 8  # 8 tokens -> 8 bytes
 
 
 # ---------------------------------------------------------------------------
@@ -175,6 +172,7 @@ _INDICATOR_KEYWORDS = (
 # Result types
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class FormatDetection:
     """What detect_format() decided about an input.
@@ -197,6 +195,7 @@ class FormatDetection:
             so future format classifiers (JWT, etc.) can use the
             same slot without changing this dataclass.
     """
+
     kind: str
     is_terminal: bool
     details: FormatContext | None = None
@@ -205,6 +204,7 @@ class FormatDetection:
 # ---------------------------------------------------------------------------
 # Binary magic predicates
 # ---------------------------------------------------------------------------
+
 
 def is_zlib(data: bytes) -> bool:
     return any(data.startswith(magic) for magic in _ZLIB_MAGIC)
@@ -217,9 +217,7 @@ def is_gzip(data: bytes) -> bool:
 def is_bzip2(data: bytes) -> bool:
     # "BZh" + a level digit '1' through '9'.
     return (
-        data.startswith(_BZIP2_MAGIC)
-        and len(data) >= 4
-        and data[3:4] in b"123456789"
+        data.startswith(_BZIP2_MAGIC) and len(data) >= 4 and data[3:4] in b"123456789"
     )
 
 
@@ -261,6 +259,7 @@ def is_pickle(data: bytes) -> bool:
 # ---------------------------------------------------------------------------
 # Text-encoding alphabet predicates
 # ---------------------------------------------------------------------------
+
 
 def is_base64(s: str) -> bool:
     """True if s looks like a base64-encoded payload.
@@ -316,6 +315,7 @@ def is_hex_0x_list(s: str) -> bool:
         return False
     return all(_HEX_0X_TOKEN_RE.match(t) for t in tokens)
 
+
 def is_pem(text: str) -> bool:
     """Detect PEM-armored content per RFC 7468.
 
@@ -349,6 +349,7 @@ def is_pem(text: str) -> bool:
     # PEM blocks with only whitespace around them."
     return _PEM_FULL_RE.match(stripped) is not None
 
+
 # ---------------------------------------------------------------------------
 # ASCII-Python heuristic
 # ---------------------------------------------------------------------------
@@ -380,17 +381,42 @@ def _printable_fraction(text: str) -> float:
 def looks_like_python(text: str) -> bool:
     """Heuristic: does this text region read as Python source?
 
-    Two conditions, both required: at least one Python-specific
-    token in the first 2KB, and at least 90% printable characters.
-    Tuned conservatively to minimize false positives on legitimate
-    ASCII content (English prose, JSON, config files), at the cost
-    of missing some pathological obfuscation.
+    Two conditions, both required:
+
+      1. At least one Python token appears in syntactic position
+         within the first 2KB of text. Syntactic position means
+         "at the start of a line, after optional leading whitespace."
+         Real Python code has tokens at statement boundaries; prose
+         has tokens embedded mid-sentence.
+
+      2. The first 2KB is at least 90% printable.
+
+    The line-anchored matching is what makes this heuristic robust
+    against prose that uses Python keywords as English words. A
+    docstring like "Widget class for managing widgets" contains the
+    substring "class " but no line in it starts with "class ", so it
+    correctly classifies as ascii_text rather than python_source.
+
+    Indented code is handled by lstripping each line before the
+    prefix check, so embedded code blocks inside docstrings or
+    larger text containers still classify correctly.
+
+    Tradeoff: a single inline Python statement embedded in prose
+    (e.g. "Run the command: import os; os.system('ls')") will not
+    be detected. The threat model considers this acceptable because
+    inline-Python-in-prose is not a meaningful attack pattern;
+    payload-bearing docstrings put the Python in its own statement
+    block, which has the token at line start.
     """
     head = text[:_INSPECTION_HEAD_BYTES]
     if not head:
         return False
-    has_token = any(tok in head for tok in _PYTHON_HEAD_TOKENS)
-    return has_token and _printable_fraction(head) >= 0.9
+    has_token_in_position = any(
+        line.lstrip().startswith(tok)
+        for line in head.split("\n")
+        for tok in _PYTHON_HEAD_TOKENS
+    )
+    return has_token_in_position and _printable_fraction(head) >= 0.9
 
 
 def _ascii_decode_or_none(data: bytes) -> str | None:
@@ -410,6 +436,7 @@ def _ascii_decode_or_none(data: bytes) -> str | None:
 # ---------------------------------------------------------------------------
 # Top-level detection
 # ---------------------------------------------------------------------------
+
 
 def detect_format(data: str | bytes) -> FormatDetection:
     """Decide what `data` is. Returns a FormatDetection.
@@ -494,6 +521,7 @@ def _detect_bytes(data: bytes) -> FormatDetection:
 # ---------------------------------------------------------------------------
 # Indicator scanning
 # ---------------------------------------------------------------------------
+
 
 def scan_indicators(data: str | bytes) -> tuple[str, ...]:
     """Find any of the indicator keywords in `data`.

@@ -7,7 +7,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-__version__ = "0.4.2"
+__version__ = "0.4.5"  # also updated in pyproject.toml --- KEEP IN SYNC ---
 
 
 def register(subparsers) -> None:

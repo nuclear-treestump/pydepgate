@@ -37,7 +37,8 @@ def render(result: ScanResult, stream: TextIO) -> None:
     """Render a ScanResult as a single JSON object on stdout."""
     payload = {
         "report_type": "pydepgate_scan_result",
-        "schema_version": 3,
+        "schema_version": 4,
+        "scan_id": result.scan_id,
         "artifact": {
             "identity": result.artifact_identity,
             "kind": result.artifact_kind.value,
@@ -49,8 +50,7 @@ def render(result: ScanResult, stream: TextIO) -> None:
             _suppressed_to_dict(s) for s in result.suppressed_findings
         ],
         "skipped": [
-            {"path": s.internal_path, "reason": s.reason}
-            for s in result.skipped
+            {"path": s.internal_path, "reason": s.reason} for s in result.skipped
         ],
         "statistics": {
             "files_total": result.statistics.files_total,
@@ -88,7 +88,9 @@ def _finding_to_dict(finding: Finding) -> dict:
         "signal_id": sig.signal_id,
         "analyzer": sig.analyzer,
         "confidence": int(sig.confidence),
-        "scope": sig.scope.name.lower() if hasattr(sig.scope, "name") else str(sig.scope),
+        "scope": (
+            sig.scope.name.lower() if hasattr(sig.scope, "name") else str(sig.scope)
+        ),
         "description": sig.description,
         "location": {
             "internal_path": finding.context.internal_path,

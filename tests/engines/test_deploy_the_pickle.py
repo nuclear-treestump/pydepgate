@@ -9,7 +9,7 @@ makes it visible.
 
 The contract:
   - FileScanInput is picklable.
-  - FileScanOutput is picklable.
+  - FileScanOutput is picklable (analyzed path and SKIP path).
   - StaticEngine is picklable.
   - A FileScanOutput round-tripped through pickle equals the original.
 
@@ -17,10 +17,7 @@ If any of these break, the planned parallel executor cannot work.
 """
 
 import pickle
-import tempfile
-import textwrap
 import unittest
-from pathlib import Path
 
 from pydepgate.analyzers.density_analyzer import CodeDensityAnalyzer
 from pydepgate.analyzers.dynamic_execution import DynamicExecutionAnalyzer
@@ -34,7 +31,7 @@ from pydepgate.engines.base import (
 )
 from pydepgate.engines.static import StaticEngine
 from pydepgate.traffic_control.triage import FileKind
-
+from pydepgate.enrichers.payload_peek import PayloadPeek
 
 # Source fixtures designed to fire each analyzer at least once. Each
 # fixture is structured so the analyzer-of-interest produces a finding
@@ -94,6 +91,7 @@ def _scan(engine: StaticEngine, content: bytes) -> FileScanOutput:
 # Tier 1: The boundary types pickle
 # =============================================================================
 
+
 class FileScanInputPickleTests(unittest.TestCase):
 
     def test_minimal_input_pickles(self):
@@ -146,7 +144,8 @@ class FileScanOutputPickleTests(unittest.TestCase):
         engine = _make_engine(EncodingAbuseAnalyzer)
         output = _scan(engine, _FIXTURE_ENCODING_ABUSE)
         self.assertGreater(
-            len(output.findings), 0,
+            len(output.findings),
+            0,
             msg="fixture failed to produce findings; test is meaningless",
         )
         round_tripped = pickle.loads(pickle.dumps(output))
@@ -154,8 +153,69 @@ class FileScanOutputPickleTests(unittest.TestCase):
 
 
 # =============================================================================
+# Tier 1b: The SKIP path of _scan_one_file pickles
+# =============================================================================
+
+
+class SkippedOutputPickleTests(unittest.TestCase):
+    """The SKIP early-return path of _scan_one_file pickles.
+
+    Per-analyzer tests below all go through the analyzed path of
+    _scan_one_file. The SKIP early-return is a different path that
+    produces a FileScanOutput with skipped=(SkippedFile,) and
+    findings=(). This test locks the pickle contract for that path
+    so a future SkippedFile field addition doesn't silently break
+    parallelism.
+    """
+
+    def test_triaged_skip_output_pickles(self):
+        # pyproject.toml is in scope for no triage rule and matches the
+        # excluded extension '.toml'. Triage returns SKIP.
+        engine = _make_engine(EncodingAbuseAnalyzer)
+        inp = FileScanInput(
+            content=b"[build-system]\nrequires = []\n",
+            internal_path="pyproject.toml",
+            artifact_kind=ArtifactKind.WHEEL,
+            artifact_identity="test.whl",
+            forced_file_kind=None,
+        )
+        output = engine._scan_one_file(inp)
+        self.assertEqual(
+            len(output.findings),
+            0,
+            msg="SKIP path should produce no findings",
+        )
+        self.assertEqual(
+            len(output.skipped),
+            1,
+            msg="SKIP path should produce exactly one SkippedFile entry",
+        )
+        round_tripped = pickle.loads(pickle.dumps(output))
+        self.assertEqual(round_tripped, output)
+
+    def test_forced_skip_output_pickles(self):
+        # The forced-SKIP path is defensive: callers shouldn't pass
+        # FileKind.SKIP as forced_file_kind, but _resolve_file_kind
+        # handles it gracefully. Verify that branch's output pickles.
+        engine = _make_engine(EncodingAbuseAnalyzer)
+        inp = FileScanInput(
+            content=b"x = 1\n",
+            internal_path="anything.py",
+            artifact_kind=ArtifactKind.LOOSE_FILE,
+            artifact_identity="anything.py",
+            forced_file_kind=FileKind.SKIP,
+        )
+        output = engine._scan_one_file(inp)
+        self.assertEqual(len(output.findings), 0)
+        self.assertEqual(len(output.skipped), 1)
+        round_tripped = pickle.loads(pickle.dumps(output))
+        self.assertEqual(round_tripped, output)
+
+
+# =============================================================================
 # Tier 2: Per-analyzer picklability
 # =============================================================================
+
 
 class PerAnalyzerPickleTests(unittest.TestCase):
     """Pickle a FileScanOutput from each analyzer's findings.
@@ -172,7 +232,8 @@ class PerAnalyzerPickleTests(unittest.TestCase):
         engine = _make_engine(analyzer_class)
         output = _scan(engine, fixture)
         self.assertGreater(
-            len(output.findings) + len(output.suppressed_findings), 0,
+            len(output.findings) + len(output.suppressed_findings),
+            0,
             msg=(
                 f"{analyzer_class.__name__} produced no findings on its "
                 f"fixture; either the fixture is wrong or the analyzer "
@@ -182,35 +243,38 @@ class PerAnalyzerPickleTests(unittest.TestCase):
         try:
             data = pickle.dumps(output)
         except Exception as exc:
-            self.fail(
-                f"{analyzer_class.__name__} output failed to pickle: {exc}"
-            )
+            self.fail(f"{analyzer_class.__name__} output failed to pickle: {exc}")
         round_tripped = pickle.loads(data)
         self.assertEqual(round_tripped, output)
 
     def test_encoding_abuse_picklable(self):
         self._assert_round_trip_clean(
-            EncodingAbuseAnalyzer, _FIXTURE_ENCODING_ABUSE,
+            EncodingAbuseAnalyzer,
+            _FIXTURE_ENCODING_ABUSE,
         )
 
     def test_dynamic_execution_picklable(self):
         self._assert_round_trip_clean(
-            DynamicExecutionAnalyzer, _FIXTURE_DYNAMIC_EXECUTION,
+            DynamicExecutionAnalyzer,
+            _FIXTURE_DYNAMIC_EXECUTION,
         )
 
     def test_string_ops_picklable(self):
         self._assert_round_trip_clean(
-            StringOpsAnalyzer, _FIXTURE_STRING_OPS,
+            StringOpsAnalyzer,
+            _FIXTURE_STRING_OPS,
         )
 
     def test_suspicious_stdlib_picklable(self):
         self._assert_round_trip_clean(
-            SuspiciousStdlibAnalyzer, _FIXTURE_SUSPICIOUS_STDLIB,
+            SuspiciousStdlibAnalyzer,
+            _FIXTURE_SUSPICIOUS_STDLIB,
         )
 
     def test_code_density_picklable(self):
         self._assert_round_trip_clean(
-            CodeDensityAnalyzer, _FIXTURE_CODE_DENSITY,
+            CodeDensityAnalyzer,
+            _FIXTURE_CODE_DENSITY,
         )
 
 
@@ -218,12 +282,15 @@ class PerAnalyzerPickleTests(unittest.TestCase):
 # Tier 3: The engine itself pickles
 # =============================================================================
 
+
 class StaticEnginePickleTests(unittest.TestCase):
     """The engine instance must pickle.
 
     `multiprocessing.Pool.map(self._scan_one_file, inputs)` pickles
-    the bound method, which means it pickles `self`. If the engine
-    ever holds a non-picklable value, parallelism breaks.
+    the bound method, which means it pickles `self`. The chosen
+    Delivery 2 primitive (ProcessPoolExecutor with an initializer)
+    pickles the engine once at pool startup. Either way, the engine
+    must pickle, or parallelism cannot run.
     """
 
     def test_engine_with_no_analyzers_pickles(self):
@@ -249,7 +316,8 @@ class StaticEnginePickleTests(unittest.TestCase):
     def test_engine_with_default_rules_pickles(self):
         # Default rules are loaded from defaults.py. If any rule ever
         # holds a closure or other non-picklable value (e.g. a lambda
-        # in an effect), this fails.
+        # in an effect), this fails. This is the most likely place
+        # for picklability to break in real-world usage.
         engine = StaticEngine(
             analyzers=[CodeDensityAnalyzer()],
             rules=None,  # None triggers DEFAULT_RULES loading
@@ -259,7 +327,10 @@ class StaticEnginePickleTests(unittest.TestCase):
 
     def test_engine_method_is_picklable(self):
         # Bound method picklability is what multiprocessing.Pool.map
-        # actually uses. Test it explicitly.
+        # actually uses. Test it explicitly. Even though Delivery 2
+        # uses ProcessPoolExecutor with an initializer (which pickles
+        # the engine once at startup, not the method per task), this
+        # test locks the stronger contract.
         engine = StaticEngine(analyzers=[CodeDensityAnalyzer()], rules=[])
         method = engine._scan_one_file
         round_tripped = pickle.loads(pickle.dumps(method))
@@ -274,8 +345,87 @@ class StaticEnginePickleTests(unittest.TestCase):
         unpickled_output = round_tripped(inp)
         # Stats include duration_seconds which varies; compare findings.
         self.assertEqual(
-            original_output.findings, unpickled_output.findings,
+            original_output.findings,
+            unpickled_output.findings,
         )
+
+    def test_engine_with_initial_diagnostics_pickles(self):
+        # initial_diagnostics is a tuple of strings, trivially
+        # picklable. Belt-and-suspenders: verify the diagnostics
+        # survive the round trip and surface in a scan result
+        # built by the unpickled engine.
+        engine = StaticEngine(
+            analyzers=[CodeDensityAnalyzer()],
+            rules=[],
+            initial_diagnostics=(
+                "warning: synthetic round-trip test",
+                "note: a second synthetic diagnostic",
+            ),
+        )
+        round_tripped = pickle.loads(pickle.dumps(engine))
+        result = round_tripped.scan_bytes(
+            content=b"x = 1\n",
+            internal_path="setup.py",
+            artifact_kind=ArtifactKind.LOOSE_FILE,
+        )
+        self.assertEqual(
+            result.diagnostics[0],
+            "warning: synthetic round-trip test",
+        )
+        self.assertEqual(
+            result.diagnostics[1],
+            "note: a second synthetic diagnostic",
+        )
+
+
+# =============================================================================
+# Tier 3b: The payload_peek enricher pickles
+# =============================================================================
+
+
+class PayloadPeekPickleTests(unittest.TestCase):
+    """The payload_peek enricher must pickle.
+
+    Its module docstring says picklability follows from the
+    constructor holding only int values. Lock that contract so a
+    future addition of a regex compile, a callback, or any other
+    non-picklable field is caught at test time rather than at
+    pool-startup time in production.
+
+    Also verifies an engine constructed with payload_peek wired in
+    pickles end-to-end, since that's the real-world scan setup
+    that Delivery 2's parallel pool will need.
+    """
+
+    def test_default_config_pickles(self):
+        enricher = PayloadPeek()
+        round_tripped = pickle.loads(pickle.dumps(enricher))
+        self.assertEqual(round_tripped.min_length, enricher.min_length)
+        self.assertEqual(round_tripped.max_depth, enricher.max_depth)
+        self.assertEqual(round_tripped.max_budget, enricher.max_budget)
+        self.assertEqual(round_tripped.name, "payload_peek")
+
+    def test_custom_config_pickles(self):
+        enricher = PayloadPeek(
+            min_length=2048,
+            max_depth=5,
+            max_budget=1024 * 1024,
+        )
+        round_tripped = pickle.loads(pickle.dumps(enricher))
+        self.assertEqual(round_tripped.min_length, 2048)
+        self.assertEqual(round_tripped.max_depth, 5)
+        self.assertEqual(round_tripped.max_budget, 1024 * 1024)
+        self.assertEqual(round_tripped.name, "payload_peek")
+
+    def test_engine_with_payload_peek_pickles(self):
+        engine = StaticEngine(
+            analyzers=[CodeDensityAnalyzer()],
+            rules=[],
+            enrichers=[PayloadPeek()],
+        )
+        round_tripped = pickle.loads(pickle.dumps(engine))
+        self.assertEqual(len(round_tripped.enrichers), 1)
+        self.assertEqual(round_tripped.enrichers[0].name, "payload_peek")
 
 
 if __name__ == "__main__":

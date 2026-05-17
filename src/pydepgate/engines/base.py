@@ -16,6 +16,7 @@ from typing import Any
 
 from pydepgate.analyzers.base import Signal
 from pydepgate.traffic_control.triage import FileKind, TriageDecision
+from pydepgate import run_context
 
 
 class ArtifactKind(Enum):
@@ -26,6 +27,7 @@ class ArtifactKind(Enum):
     triage decisions; that is the triage module's job based on paths
     within the artifact.
     """
+
     WHEEL = "wheel"
     SDIST = "sdist"
     INSTALLED_ENV = "installed_env"
@@ -40,6 +42,7 @@ class Severity(Enum):
     land, they will assign severity based on signal plus context, and
     this mechanical mapping will be replaced.
     """
+
     INFO = "info"
     LOW = "low"
     MEDIUM = "medium"
@@ -67,6 +70,7 @@ class ScanContext:
         file_sha512: SHA512 hex digest of the file's bytes. Same
             semantics as file_sha256.
     """
+
     artifact_kind: ArtifactKind
     artifact_identity: str
     internal_path: str
@@ -74,6 +78,7 @@ class ScanContext:
     triage_reason: str
     file_sha256: str | None = None
     file_sha512: str | None = None
+
 
 @dataclass(frozen=True)
 class Finding:
@@ -88,6 +93,7 @@ class Finding:
         severity: Severity assigned to this finding.
         context: The scan context in which the signal was observed.
     """
+
     signal: Signal
     severity: Severity
     context: ScanContext
@@ -115,6 +121,7 @@ class SuppressedFinding:
             suppressing rule was itself a default; different when
             user/system rules overrode a stronger default.
     """
+
     original_finding: "Finding"
     suppressing_rule_id: str
     suppressing_rule_source: str
@@ -128,6 +135,7 @@ class SkippedFile:
     Kept in the ScanResult for debugging and auditing. Users who want
     to understand why pydepgate missed a file can inspect this list.
     """
+
     internal_path: str
     reason: str
 
@@ -140,6 +148,7 @@ class ScanStatistics:
     finalizes the result. Kept as a plain dataclass rather than frozen
     so the engine can update it incrementally.
     """
+
     files_total: int = 0
     files_scanned: int = 0
     files_skipped: int = 0
@@ -166,6 +175,8 @@ class ScanResult:
     """
     artifact_sha256: str | None = None
     artifact_sha512: str | None = None
+    scan_id: str = field(default_factory=run_context.get_current_run_uuid)
+
 
 @dataclass(frozen=True)
 class FileScanInput:
@@ -192,6 +203,7 @@ class FileScanInput:
             FileKind.SKIP at the public API boundary; callers
             handle that case before constructing this input.
     """
+
     content: bytes
     internal_path: str
     artifact_kind: ArtifactKind
@@ -199,6 +211,7 @@ class FileScanInput:
     forced_file_kind: FileKind | None = None
     file_sha256: str | None = None
     file_sha512: str | None = None
+
 
 @dataclass(frozen=True)
 class FileScanOutput:
@@ -226,6 +239,7 @@ class FileScanOutput:
             the inverse; signals_emitted is the count of raw
             signals before rule evaluation.
     """
+
     internal_path: str
     findings: tuple[Finding, ...]
     skipped: tuple[SkippedFile, ...]
@@ -234,6 +248,7 @@ class FileScanOutput:
     statistics: ScanStatistics
     file_sha256: str | None = None
     file_sha512: str | None = None
+
 
 @dataclass(frozen=True)
 class FileStatsEntry:
@@ -254,12 +269,13 @@ class FileStatsEntry:
         findings_count: Number of findings retained after rule
             evaluation. Suppressed findings are not counted here.
     """
+
     internal_path: str
     duration_seconds: float
     signals_emitted: int
     findings_count: int
 
-    
+
 def confidence_to_severity_v01(confidence: int) -> Severity:
     """Map a Signal's confidence (IntEnum value) to a default severity.
 

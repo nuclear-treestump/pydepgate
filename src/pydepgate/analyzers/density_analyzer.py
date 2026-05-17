@@ -82,12 +82,15 @@ from collections import Counter
 from typing import Iterable
 
 from pydepgate.analyzers.base import (
-    Analyzer, Confidence, Scope, Signal,
+    Analyzer,
+    Confidence,
+    Scope,
+    Signal,
 )
 from pydepgate.analyzers._visitor import _ScopeTracker
 from pydepgate.parsers.pysource import ParsedPySource, SourceLocation
+from pydepgate.enrichers._magic import detect_format
 from pydepgate.analyzers._enrichment import stash_value
-
 
 # ---------------------------------------------------------------------------
 # DENS001 thresholds: single-line token compression
@@ -97,7 +100,7 @@ from pydepgate.analyzers._enrichment import stash_value
 # legitimate Python (long function signatures, chained calls) rarely
 # exceeds 30-35 tokens on one line. 80+ is almost certainly generated.
 _THRESHOLD_TOKENS_PER_LINE_MEDIUM = 50
-_THRESHOLD_TOKENS_PER_LINE_HIGH   = 100
+_THRESHOLD_TOKENS_PER_LINE_HIGH = 100
 
 # ---------------------------------------------------------------------------
 # DENS002 thresholds: semicolon chaining
@@ -106,7 +109,7 @@ _THRESHOLD_TOKENS_PER_LINE_HIGH   = 100
 # One semicolon is unusual but not unheard of in legitimate code.
 # Two or more on the same line is virtually always obfuscation.
 _THRESHOLD_SEMICOLONS_MEDIUM = 1
-_THRESHOLD_SEMICOLONS_HIGH   = 3
+_THRESHOLD_SEMICOLONS_HIGH = 3
 
 # ---------------------------------------------------------------------------
 # DENS010 thresholds: high-entropy string literals
@@ -124,8 +127,8 @@ _THRESHOLD_SEMICOLONS_HIGH   = 3
 # The rules engine promotes AMBIGUOUS to MEDIUM or higher for .pth files
 # and setup.py, where there is no legitimate reason for encoded content.
 _THRESHOLD_ENTROPY_AMBIGUOUS = 5.2
-_THRESHOLD_ENTROPY_MEDIUM    = 5.5
-_THRESHOLD_ENTROPY_HIGH      = 5.8
+_THRESHOLD_ENTROPY_MEDIUM = 5.5
+_THRESHOLD_ENTROPY_HIGH = 5.8
 # Minimum string length before entropy is computed. Short strings have
 # noisily high entropy by chance (e.g. "q4" has entropy 1.0).
 _MIN_LEN_FOR_ENTROPY = 80
@@ -150,19 +153,45 @@ _B64_ALPHABET = frozenset(
 # Vowel ratio = vowels / len(identifier). English words average ~0.38.
 # Names with no vowels at all (ratio 0.0) are suspicious when long enough.
 _VOWELS = frozenset("aeiouAEIOU")
-_THRESHOLD_VOWEL_RATIO = 0.10   # below this is suspicious
-_MIN_LEN_FOR_VOWEL_CHECK = 6    # don't flag short abbreviations
+_THRESHOLD_VOWEL_RATIO = 0.10  # below this is suspicious
+_MIN_LEN_FOR_VOWEL_CHECK = 8  # don't flag short abbreviations
 
 # Identifiers to skip entirely: builtins, dunders, common abbreviations
 # that legitimately have no vowels.
-_SKIP_IDENTIFIERS = frozenset({
-    # Python builtins
-    "print", "len", "str", "int", "float", "bool", "list", "dict",
-    "set", "tuple", "type", "None", "True", "False",
-    # Common single-word abbreviations that are vowel-free
-    "cls", "ctx", "fmt", "fn", "fs", "idx", "msg", "num", "ptr",
-    "rc", "ret", "tmp", "typ", "val",
-})
+_SKIP_IDENTIFIERS = frozenset(
+    {
+        # Python builtins
+        "print",
+        "len",
+        "str",
+        "int",
+        "float",
+        "bool",
+        "list",
+        "dict",
+        "set",
+        "tuple",
+        "type",
+        "None",
+        "True",
+        "False",
+        # Common single-word abbreviations that are vowel-free
+        "cls",
+        "ctx",
+        "fmt",
+        "fn",
+        "fs",
+        "idx",
+        "msg",
+        "num",
+        "ptr",
+        "rc",
+        "ret",
+        "tmp",
+        "typ",
+        "val",
+    }
+)
 
 # ---------------------------------------------------------------------------
 # DENS021: confusable single-character identifiers
@@ -188,7 +217,7 @@ _INVISIBLE_CODEPOINTS: dict[str, str] = {
     "\u202b": "RIGHT-TO-LEFT EMBEDDING",
     "\u202c": "POP DIRECTIONAL FORMATTING",
     "\u202d": "LEFT-TO-RIGHT OVERRIDE",
-    "\u202e": "RIGHT-TO-LEFT OVERRIDE",   # highest risk: changes visual order
+    "\u202e": "RIGHT-TO-LEFT OVERRIDE",  # highest risk: changes visual order
     "\u2066": "LEFT-TO-RIGHT ISOLATE",
     "\u2067": "RIGHT-TO-LEFT ISOLATE",
     "\u2068": "FIRST STRONG ISOLATE",
@@ -248,19 +277,19 @@ _HOMOGLYPHS: dict[str, str] = {
 # A 100-line file with AST depth 500 is almost certainly generated or
 # obfuscated.
 _THRESHOLD_DEPTH_RATIO_MEDIUM = 4.0
-_THRESHOLD_DEPTH_RATIO_HIGH   = 8.0
-_MIN_LINE_COUNT_FOR_DEPTH     = 5   # don't flag tiny files
+_THRESHOLD_DEPTH_RATIO_HIGH = 8.0
+_MIN_LINE_COUNT_FOR_DEPTH = 5  # don't flag tiny files
 
 # ---------------------------------------------------------------------------
 # DENS041 thresholds: lambda/comprehension nesting
 # ---------------------------------------------------------------------------
-_THRESHOLD_NEST_DEPTH = 3   # lambdas or comprehensions nested beyond this
+_THRESHOLD_NEST_DEPTH = 3  # lambdas or comprehensions nested beyond this
 
 # ---------------------------------------------------------------------------
 # DENS042 thresholds: integer literal arrays
 # ---------------------------------------------------------------------------
-_THRESHOLD_INT_ARRAY_LEN    = 24    # minimum element count to flag
-_THRESHOLD_INT_ARRAY_RATIO  = 0.80  # proportion that must be 0-255 ints
+_THRESHOLD_INT_ARRAY_LEN = 24  # minimum element count to flag
+_THRESHOLD_INT_ARRAY_RATIO = 0.80  # proportion that must be 0-255 ints
 
 # ---------------------------------------------------------------------------
 # DENS050 thresholds: high-entropy docstrings
@@ -269,12 +298,13 @@ _THRESHOLD_INT_ARRAY_RATIO  = 0.80  # proportion that must be 0-255 ints
 # We use a slightly lower length threshold because docstrings that are
 # encoded payloads tend to be shorter than standalone payload variables.
 _MIN_LEN_FOR_DOCSTRING_ENTROPY = 60
-_THRESHOLD_DOCSTRING_ENTROPY   = 5.2   # slightly more sensitive than DENS010
+_THRESHOLD_DOCSTRING_ENTROPY = 5.6  # slightly more sensitive than DENS010
 
 
 # ===========================================================================
 # Shared utility functions
 # ===========================================================================
+
 
 def _shannon_entropy(text: str) -> float:
     """Compute the Shannon entropy of a string in bits per character.
@@ -329,17 +359,40 @@ def _is_docstring_position(node: ast.Expr, parent: ast.AST) -> bool:
     if not isinstance(node.value.value, str):
         return False
     body: list[ast.stmt] | None = None
-    if isinstance(parent, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef,
-                           ast.ClassDef)):
+    if isinstance(
+        parent, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+    ):
         body = parent.body  # type: ignore[assignment]
     if body and body[0] is node:
         return True
     return False
 
 
+def _docstring_looks_like_prose(content: str) -> bool:
+    """True if content classifies as plain ASCII prose.
+
+    Uses _magic.detect_format to identify content shape. Returns True
+    only when the result is a terminal `ascii_text` classification,
+    which is the single shape that means "ordinary text, not encoded,
+    not Python source, not binary." Every other classification (any
+    encoding shape, Python source, pickle, binary executable, image,
+    archive, unknown binary, etc.) returns False because those are
+    all signals worth flagging in a docstring context.
+
+    Empty content returns False conservatively. An empty docstring
+    is unusual enough that we'd rather keep the DENS051 finding than
+    suppress on it.
+    """
+    if not content:
+        return False
+    result = detect_format(content)
+    return result.is_terminal and result.kind == "ascii_text"
+
+
 # ===========================================================================
 # Token-level analysis (operates on raw source text)
 # ===========================================================================
+
 
 def _analyze_token_density(
     source_text: str,
@@ -358,15 +411,20 @@ def _analyze_token_density(
     # Map physical line number to list of token types seen on that line.
     # We use token.start[0] (1-based) as the line key.
     tokens_by_line: dict[int, list[int]] = {}
-    semis_by_line:  dict[int, int]       = {}
+    semis_by_line: dict[int, int] = {}
 
     buf = io.BytesIO(source_text.encode("utf-8", errors="replace"))
     try:
         for tok in tokenize.tokenize(buf.readline):
-            if tok.type in (tokenize.NEWLINE, tokenize.NL,
-                            tokenize.INDENT, tokenize.DEDENT,
-                            tokenize.COMMENT, tokenize.ENCODING,
-                            tokenize.ENDMARKER):
+            if tok.type in (
+                tokenize.NEWLINE,
+                tokenize.NL,
+                tokenize.INDENT,
+                tokenize.DEDENT,
+                tokenize.COMMENT,
+                tokenize.ENCODING,
+                tokenize.ENDMARKER,
+            ):
                 continue
             line_no = tok.start[0]
             tokens_by_line.setdefault(line_no, []).append(tok.type)
@@ -385,26 +443,28 @@ def _analyze_token_density(
             confidence = Confidence.MEDIUM
         else:
             continue
-        signals.append(Signal(
-            analyzer=analyzer_name,
-            signal_id="DENS001",
-            confidence=confidence,
-            scope=file_scope,
-            location=SourceLocation(line=line_no, column=0),
-            description=(
-                f"line {line_no} contains {count} tokens, "
-                f"consistent with minification or deliberate compression"
-            ),
-            context={
-                "line": line_no,
-                "token_count": count,
-                "threshold": (
-                    _THRESHOLD_TOKENS_PER_LINE_HIGH
-                    if confidence == Confidence.HIGH
-                    else _THRESHOLD_TOKENS_PER_LINE_MEDIUM
+        signals.append(
+            Signal(
+                analyzer=analyzer_name,
+                signal_id="DENS001",
+                confidence=confidence,
+                scope=file_scope,
+                location=SourceLocation(line=line_no, column=0),
+                description=(
+                    f"line {line_no} contains {count} tokens, "
+                    f"consistent with minification or deliberate compression"
                 ),
-            },
-        ))
+                context={
+                    "line": line_no,
+                    "token_count": count,
+                    "threshold": (
+                        _THRESHOLD_TOKENS_PER_LINE_HIGH
+                        if confidence == Confidence.HIGH
+                        else _THRESHOLD_TOKENS_PER_LINE_MEDIUM
+                    ),
+                },
+            )
+        )
 
     # DENS002: semicolon chaining
     for line_no, count in semis_by_line.items():
@@ -416,22 +476,24 @@ def _analyze_token_density(
             continue
         # Approximate statement count as semicolons + 1
         stmt_count = count + 1
-        signals.append(Signal(
-            analyzer=analyzer_name,
-            signal_id="DENS002",
-            confidence=confidence,
-            scope=file_scope,
-            location=SourceLocation(line=line_no, column=0),
-            description=(
-                f"line {line_no} chains {stmt_count} statements "
-                f"via {count} semicolon{'s' if count != 1 else ''}"
-            ),
-            context={
-                "line": line_no,
-                "semicolon_count": count,
-                "statement_count": stmt_count,
-            },
-        ))
+        signals.append(
+            Signal(
+                analyzer=analyzer_name,
+                signal_id="DENS002",
+                confidence=confidence,
+                scope=file_scope,
+                location=SourceLocation(line=line_no, column=0),
+                description=(
+                    f"line {line_no} chains {stmt_count} statements "
+                    f"via {count} semicolon{'s' if count != 1 else ''}"
+                ),
+                context={
+                    "line": line_no,
+                    "semicolon_count": count,
+                    "statement_count": stmt_count,
+                },
+            )
+        )
 
     return signals
 
@@ -439,6 +501,7 @@ def _analyze_token_density(
 # ===========================================================================
 # Raw-text Unicode analysis (operates on source_text directly)
 # ===========================================================================
+
 
 def _analyze_unicode_anomalies(
     source_text: str,
@@ -489,23 +552,25 @@ def _analyze_unicode_anomalies(
                     if ch in ("\u202e", "\u202d")
                     else Confidence.HIGH
                 )
-                signals.append(Signal(
-                    analyzer=analyzer_name,
-                    signal_id="DENS030",
-                    confidence=confidence,
-                    scope=Scope.MODULE,
-                    location=SourceLocation(line=line_no, column=0),
-                    description=(
-                        f"{name} ({codepoint}) found at line {line_no}; "
-                        f"invisible characters in source can hide content "
-                        f"from human readers and naive string-match scanners"
-                    ),
-                    context={
-                        "codepoint": codepoint,
-                        "unicode_name": name,
-                        "line": line_no,
-                    },
-                ))
+                signals.append(
+                    Signal(
+                        analyzer=analyzer_name,
+                        signal_id="DENS030",
+                        confidence=confidence,
+                        scope=Scope.MODULE,
+                        location=SourceLocation(line=line_no, column=0),
+                        description=(
+                            f"{name} ({codepoint}) found at line {line_no}; "
+                            f"invisible characters in source can hide content "
+                            f"from human readers and naive string-match scanners"
+                        ),
+                        context={
+                            "codepoint": codepoint,
+                            "unicode_name": name,
+                            "line": line_no,
+                        },
+                    )
+                )
 
         # DENS031: homoglyph characters
         if ch in _HOMOGLYPHS:
@@ -519,26 +584,28 @@ def _analyze_unicode_anomalies(
                     unicode_name = unicodedata.name(ch, "UNKNOWN")
                 except ValueError:
                     unicode_name = "UNKNOWN"
-                signals.append(Signal(
-                    analyzer=analyzer_name,
-                    signal_id="DENS031",
-                    confidence=Confidence.DEFINITE,
-                    scope=Scope.MODULE,
-                    location=SourceLocation(line=line_no, column=0),
-                    description=(
-                        f"{unicode_name} ({codepoint}) at line {line_no} "
-                        f"is visually identical to ASCII '{ascii_lookalike}' "
-                        f"but is a distinct character; enables evasion of "
-                        f"string-match scanners (e.g. cyrillic-mixed "
-                        f"identifiers can evade an 'exec' string match)"
-                    ),
-                    context={
-                        "codepoint": codepoint,
-                        "unicode_name": unicode_name,
-                        "ascii_lookalike": ascii_lookalike,
-                        "line": line_no,
-                    },
-                ))
+                signals.append(
+                    Signal(
+                        analyzer=analyzer_name,
+                        signal_id="DENS031",
+                        confidence=Confidence.DEFINITE,
+                        scope=Scope.MODULE,
+                        location=SourceLocation(line=line_no, column=0),
+                        description=(
+                            f"{unicode_name} ({codepoint}) at line {line_no} "
+                            f"is visually identical to ASCII '{ascii_lookalike}' "
+                            f"but is a distinct character; enables evasion of "
+                            f"string-match scanners (e.g. cyrillic-mixed "
+                            f"identifiers can evade an 'exec' string match)"
+                        ),
+                        context={
+                            "codepoint": codepoint,
+                            "unicode_name": unicode_name,
+                            "ascii_lookalike": ascii_lookalike,
+                            "line": line_no,
+                        },
+                    )
+                )
 
     return signals
 
@@ -546,6 +613,7 @@ def _analyze_unicode_anomalies(
 # ===========================================================================
 # AST visitor
 # ===========================================================================
+
 
 class _Visitor(_ScopeTracker):
     """
@@ -577,6 +645,14 @@ class _Visitor(_ScopeTracker):
         # to avoid building the whole map upfront.
         self._parent_stack: list[ast.AST] = []
 
+        # For DENS051 resolution: index of top-level definitions by
+        # name. Populated when entering the module. Used to resolve
+        # `.__doc__` references where obj is a name defined at
+        # module top level. Nested definitions are not indexed for
+        # simplicity; references that can't be resolved fall through
+        # to conservative emit-anyway behavior.
+        self._top_level_defs: dict[str, ast.AST] = {}
+
     # ------------------------------------------------------------------
     # Parent tracking helpers
     # ------------------------------------------------------------------
@@ -598,12 +674,26 @@ class _Visitor(_ScopeTracker):
 
     def visit_Module(self, node: ast.Module) -> None:
         self._push_parent(node)
+        # Build top-level definitions index for DENS051 resolution.
+        # We only index top-level names; nested definitions are
+        # resolved conservatively (emit the finding rather than
+        # try harder).
+        for stmt in node.body:
+            if isinstance(
+                stmt,
+                (
+                    ast.FunctionDef,
+                    ast.AsyncFunctionDef,
+                    ast.ClassDef,
+                ),
+            ):
+                self._top_level_defs[stmt.name] = stmt
         self.generic_visit(node)
         self._pop_parent()
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
         self._push_parent(node)
-        super().visit_FunctionDef(node)   # handles scope stack + generic_visit
+        super().visit_FunctionDef(node)  # handles scope stack + generic_visit
         self._pop_parent()
 
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
@@ -623,10 +713,12 @@ class _Visitor(_ScopeTracker):
     def visit_Expr(self, node: ast.Expr) -> None:
         """Handle bare expression statements, catching docstrings."""
         parent = self._current_parent
-        if (parent is not None
-                and _is_docstring_position(node, parent)
-                and isinstance(node.value, ast.Constant)
-                and isinstance(node.value.value, str)):
+        if (
+            parent is not None
+            and _is_docstring_position(node, parent)
+            and isinstance(node.value, ast.Constant)
+            and isinstance(node.value.value, str)
+        ):
             self._check_docstring_entropy(node.value)
             # Do NOT generic_visit here: the inner Constant would
             # otherwise be re-visited by visit_Constant and produce a
@@ -683,20 +775,23 @@ class _Visitor(_ScopeTracker):
         }
         if truncated:
             dens010_context["_full_value_truncated"] = True
-        self.signals.append(Signal(
-            analyzer=self._analyzer_name,
-            signal_id="DENS010",
-            confidence=confidence,
-            scope=self.current_scope,
-            location=SourceLocation(line=node.lineno, column=node.col_offset),
-            description=(
-                f"string literal at line {node.lineno} has Shannon entropy "
-                f"{entropy:.2f} bits/char (length {len(s)}), "
-                f"consistent with base64, compressed, or encrypted content"
-            ),
-            context=dens010_context,
-            enrichment_hints=frozenset({"payload_peek"}),
-        ))
+        self.signals.append(
+            Signal(
+                analyzer=self._analyzer_name,
+                signal_id="DENS010",
+                confidence=confidence,
+                scope=self.current_scope,
+                location=SourceLocation(line=node.lineno, column=node.col_offset),
+                description=(
+                    f"string literal at line {node.lineno} has Shannon entropy "
+                    f"{entropy:.2f} bits/char (length {len(s)}), "
+                    f"consistent with base64, compressed, or encrypted content"
+                ),
+                context=dens010_context,
+                enrichment_hints=frozenset({"payload_peek"}),
+            )
+        )
+
     def _check_b64_alphabet(
         self,
         node: ast.Constant,
@@ -720,8 +815,8 @@ class _Visitor(_ScopeTracker):
         if not all(ch in _B64_ALPHABET for ch in s):
             return
 
-        has_upper  = any(ch.isupper() for ch in s)
-        has_lower  = any(ch.islower() for ch in s)
+        has_upper = any(ch.isupper() for ch in s)
+        has_lower = any(ch.islower() for ch in s)
         has_digits = any(ch.isdigit() for ch in s)
         if not (has_upper and has_lower and has_digits):
             return
@@ -739,20 +834,22 @@ class _Visitor(_ScopeTracker):
         }
         if truncated:
             dens011_context["_full_value_truncated"] = True
-        self.signals.append(Signal(
-            analyzer=self._analyzer_name,
-            signal_id="DENS011",
-            confidence=Confidence.MEDIUM,
-            scope=self.current_scope,
-            location=SourceLocation(line=node.lineno, column=node.col_offset),
-            description=(
-                f"string literal at line {node.lineno} (length {len(s)}) "
-                f"uses only base64-alphabet characters, may be an encoded "
-                f"payload even without an accompanying decode/exec call"
-            ),
-            context=dens011_context,
-            enrichment_hints=frozenset({"payload_peek"}),
-        ))
+        self.signals.append(
+            Signal(
+                analyzer=self._analyzer_name,
+                signal_id="DENS011",
+                confidence=Confidence.MEDIUM,
+                scope=self.current_scope,
+                location=SourceLocation(line=node.lineno, column=node.col_offset),
+                description=(
+                    f"string literal at line {node.lineno} (length {len(s)}) "
+                    f"uses only base64-alphabet characters, may be an encoded "
+                    f"payload even without an accompanying decode/exec call"
+                ),
+                context=dens011_context,
+                enrichment_hints=frozenset({"payload_peek"}),
+            )
+        )
 
     def _check_docstring_entropy(self, node: ast.Constant) -> None:
         """DENS050: high-entropy string in docstring position."""
@@ -766,24 +863,26 @@ class _Visitor(_ScopeTracker):
         if entropy < _THRESHOLD_DOCSTRING_ENTROPY:
             return
 
-        self.signals.append(Signal(
-            analyzer=self._analyzer_name,
-            signal_id="DENS050",
-            confidence=Confidence.HIGH,
-            scope=self.current_scope,
-            location=SourceLocation(line=node.lineno, column=node.col_offset),
-            description=(
-                f"string in docstring position at line {node.lineno} has "
-                f"Shannon entropy {entropy:.2f} bits/char (length {len(s)}), "
-                f"may be a payload disguised as documentation"
-            ),
-            context={
-                "entropy": round(entropy, 4),
-                "length": len(s),
-                "value_preview": _value_preview(s),
-                "scope_name": self.current_scope.name.lower(),
-            },
-        ))
+        self.signals.append(
+            Signal(
+                analyzer=self._analyzer_name,
+                signal_id="DENS050",
+                confidence=Confidence.HIGH,
+                scope=self.current_scope,
+                location=SourceLocation(line=node.lineno, column=node.col_offset),
+                description=(
+                    f"string in docstring position at line {node.lineno} has "
+                    f"Shannon entropy {entropy:.2f} bits/char (length {len(s)}), "
+                    f"may be a payload disguised as documentation"
+                ),
+                context={
+                    "entropy": round(entropy, 4),
+                    "length": len(s),
+                    "value_preview": _value_preview(s),
+                    "scope_name": self.current_scope.name.lower(),
+                },
+            )
+        )
 
     # ------------------------------------------------------------------
     # DENS020 + DENS021: identifier analysis
@@ -814,26 +913,26 @@ class _Visitor(_ScopeTracker):
 
         # DENS021: confusable single characters
         if len(name) == 1 and name in _CONFUSABLE_SINGLE_CHARS:
-            self.signals.append(Signal(
-                analyzer=self._analyzer_name,
-                signal_id="DENS021",
-                confidence=Confidence.LOW,
-                scope=self.current_scope,
-                location=SourceLocation(line=line, column=col),
-                description=(
-                    f"single-character identifier {name!r} at line {line} "
-                    f"is visually confusable with a digit (PEP 8 "
-                    f"'Names to avoid')"
-                ),
-                context={
-                    "identifier": name,
-                    "confusable_with": (
-                        "1" if name == "l"
-                        else "0" if name == "O"
-                        else "1"  # I
+            self.signals.append(
+                Signal(
+                    analyzer=self._analyzer_name,
+                    signal_id="DENS021",
+                    confidence=Confidence.LOW,
+                    scope=self.current_scope,
+                    location=SourceLocation(line=line, column=col),
+                    description=(
+                        f"single-character identifier {name!r} at line {line} "
+                        f"is visually confusable with a digit (PEP 8 "
+                        f"'Names to avoid')"
                     ),
-                },
-            ))
+                    context={
+                        "identifier": name,
+                        "confusable_with": (
+                            "1" if name == "l" else "0" if name == "O" else "1"  # I
+                        ),
+                    },
+                )
+            )
             return
 
         # DENS020: low vowel ratio
@@ -844,27 +943,26 @@ class _Visitor(_ScopeTracker):
         if ratio <= _THRESHOLD_VOWEL_RATIO:
             # Slightly higher confidence for longer names (harder to
             # accidentally have no vowels in a 10-char English word).
-            confidence = (
-                Confidence.MEDIUM if len(name) >= 10
-                else Confidence.LOW
+            confidence = Confidence.MEDIUM if len(name) >= 10 else Confidence.LOW
+            self.signals.append(
+                Signal(
+                    analyzer=self._analyzer_name,
+                    signal_id="DENS020",
+                    confidence=confidence,
+                    scope=self.current_scope,
+                    location=SourceLocation(line=line, column=col),
+                    description=(
+                        f"identifier {name!r} at line {line} has a vowel ratio "
+                        f"of {ratio:.2f}, consistent with randomly generated "
+                        f"or machine-produced names"
+                    ),
+                    context={
+                        "identifier": name,
+                        "vowel_ratio": round(ratio, 4),
+                        "length": len(name),
+                    },
+                )
             )
-            self.signals.append(Signal(
-                analyzer=self._analyzer_name,
-                signal_id="DENS020",
-                confidence=confidence,
-                scope=self.current_scope,
-                location=SourceLocation(line=line, column=col),
-                description=(
-                    f"identifier {name!r} at line {line} has a vowel ratio "
-                    f"of {ratio:.2f}, consistent with randomly generated "
-                    f"or machine-produced names"
-                ),
-                context={
-                    "identifier": name,
-                    "vowel_ratio": round(ratio, 4),
-                    "length": len(name),
-                },
-            ))
 
     # ------------------------------------------------------------------
     # DENS040: disproportionate AST depth (handled post-walk in analyzer)
@@ -883,26 +981,28 @@ class _Visitor(_ScopeTracker):
         node_label: str,
     ) -> None:
         if self._nest_depth > _THRESHOLD_NEST_DEPTH:
-            self.signals.append(Signal(
-                analyzer=self._analyzer_name,
-                signal_id="DENS041",
-                confidence=Confidence.MEDIUM,
-                scope=self.current_scope,
-                location=SourceLocation(
-                    line=node.lineno,       # type: ignore[attr-defined]
-                    column=node.col_offset, # type: ignore[attr-defined]
-                ),
-                description=(
-                    f"{node_label} at line {node.lineno} is nested "  # type: ignore[attr-defined]
-                    f"{self._nest_depth} levels deep inside other "
-                    f"lambdas or comprehensions; deep nesting is a "
-                    f"common functional-style obfuscation technique"
-                ),
-                context={
-                    "nesting_depth": self._nest_depth,
-                    "node_type": node_label,
-                },
-            ))
+            self.signals.append(
+                Signal(
+                    analyzer=self._analyzer_name,
+                    signal_id="DENS041",
+                    confidence=Confidence.MEDIUM,
+                    scope=self.current_scope,
+                    location=SourceLocation(
+                        line=node.lineno,  # type: ignore[attr-defined]
+                        column=node.col_offset,  # type: ignore[attr-defined]
+                    ),
+                    description=(
+                        f"{node_label} at line {node.lineno} is nested "  # type: ignore[attr-defined]
+                        f"{self._nest_depth} levels deep inside other "
+                        f"lambdas or comprehensions; deep nesting is a "
+                        f"common functional-style obfuscation technique"
+                    ),
+                    context={
+                        "nesting_depth": self._nest_depth,
+                        "node_type": node_label,
+                    },
+                )
+            )
 
     def visit_Lambda(self, node: ast.Lambda) -> None:
         self._enter_nest()
@@ -949,10 +1049,13 @@ class _Visitor(_ScopeTracker):
 
         # Count how many elements are integer constants in 0-255.
         byte_range_count = sum(
-            1 for e in elts
-            if (isinstance(e, ast.Constant)
+            1
+            for e in elts
+            if (
+                isinstance(e, ast.Constant)
                 and isinstance(e.value, int)
-                and 0 <= e.value <= 255)
+                and 0 <= e.value <= 255
+            )
         )
         ratio = byte_range_count / len(elts)
         if ratio < _THRESHOLD_INT_ARRAY_RATIO:
@@ -964,28 +1067,30 @@ class _Visitor(_ScopeTracker):
             if isinstance(e, ast.Constant) and isinstance(e.value, int):
                 preview.append(e.value)
 
-        self.signals.append(Signal(
-            analyzer=self._analyzer_name,
-            signal_id="DENS042",
-            confidence=Confidence.MEDIUM,
-            scope=self.current_scope,
-            location=SourceLocation(
-                line=node.lineno,
-                column=node.col_offset,
-            ),
-            description=(
-                f"{label} at line {node.lineno} contains {len(elts)} "
-                f"elements, {byte_range_count} of which are byte-range "
-                f"integers (0-255), a pattern consistent with shellcode "
-                f"or payload byte array staging"
-            ),
-            context={
-                "element_count": len(elts),
-                "byte_range_count": byte_range_count,
-                "byte_range_ratio": round(ratio, 4),
-                "value_preview": preview,
-            },
-        ))
+        self.signals.append(
+            Signal(
+                analyzer=self._analyzer_name,
+                signal_id="DENS042",
+                confidence=Confidence.MEDIUM,
+                scope=self.current_scope,
+                location=SourceLocation(
+                    line=node.lineno,
+                    column=node.col_offset,
+                ),
+                description=(
+                    f"{label} at line {node.lineno} contains {len(elts)} "
+                    f"elements, {byte_range_count} of which are byte-range "
+                    f"integers (0-255), a pattern consistent with shellcode "
+                    f"or payload byte array staging"
+                ),
+                context={
+                    "element_count": len(elts),
+                    "byte_range_count": byte_range_count,
+                    "byte_range_ratio": round(ratio, 4),
+                    "value_preview": preview,
+                },
+            )
+        )
 
     def visit_List(self, node: ast.List) -> None:
         self._check_int_array(node, "list literal")
@@ -1000,14 +1105,32 @@ class _Visitor(_ScopeTracker):
     # ------------------------------------------------------------------
 
     def visit_Call(self, node: ast.Call) -> None:
-        """Check if any argument to a call is a __doc__ reference."""
+        """Check if any argument to a call is a __doc__ reference.
+
+        Before emitting DENS051, attempt to resolve the actual
+        docstring content. If the content classifies as plain
+        ASCII prose via _magic.detect_format, suppress the finding
+        (this is documentation tooling, not payload hiding). If
+        the content classifies as anything else, or cannot be
+        resolved, emit DENS051 as before.
+        """
         all_args = list(node.args) + [kw.value for kw in node.keywords]
         for arg in all_args:
             doc_ref = self._get_doc_ref(arg)
-            if doc_ref is not None:
-                # What function is being called?
-                callee = self._callee_name(node.func)
-                self.signals.append(Signal(
+            if doc_ref is None:
+                continue
+
+            # Attempt resolution + prose check. If the docstring
+            # resolves and looks like prose, suppress.
+            content = self._resolve_docstring_content(arg)
+            if content is not None and _docstring_looks_like_prose(content):
+                continue
+
+            # Otherwise emit. Conservative on unresolvable references:
+            # we'd rather over-flag than miss an attack.
+            callee = self._callee_name(node.func)
+            self.signals.append(
+                Signal(
                     analyzer=self._analyzer_name,
                     signal_id="DENS051",
                     confidence=Confidence.HIGH,
@@ -1025,7 +1148,8 @@ class _Visitor(_ScopeTracker):
                         "reference": doc_ref,
                         "callee": callee,
                     },
-                ))
+                )
+            )
         self.generic_visit(node)
 
     @staticmethod
@@ -1033,8 +1157,7 @@ class _Visitor(_ScopeTracker):
         """If node is a __doc__ reference, return its textual form."""
         if isinstance(node, ast.Name) and node.id == "__doc__":
             return "__doc__"
-        if (isinstance(node, ast.Attribute)
-                and node.attr == "__doc__"):
+        if isinstance(node, ast.Attribute) and node.attr == "__doc__":
             return "<obj>.__doc__"
         return None
 
@@ -1045,12 +1168,83 @@ class _Visitor(_ScopeTracker):
             return func.id
         if isinstance(func, ast.Attribute):
             return func.attr
-        return "<unknown>"
+        return ""
+
+    def _resolve_docstring_content(
+        self,
+        arg_node: ast.expr,
+    ) -> str | None:
+        """Resolve the actual docstring text for a __doc__ reference.
+
+        Two cases:
+
+          Bare `__doc__`: look up the scope whose docstring this
+          reference resolves to at runtime, per Python's name
+          resolution rules. See _find_docstring_scope_for_bare_doc
+          for the rules.
+
+          `.__doc__` where obj is a Name: look up obj in the
+          top-level definitions index. If obj is a FunctionDef,
+          AsyncFunctionDef, or ClassDef defined at module top level,
+          return its docstring.
+
+        Returns the docstring string on success, None when the
+        reference cannot be resolved statically. None causes the
+        caller to fall through to conservative emit.
+        """
+        if isinstance(arg_node, ast.Name) and arg_node.id == "__doc__":
+            scope = self._find_docstring_scope_for_bare_doc()
+            if scope is None:
+                return None
+            return ast.get_docstring(scope, clean=False)
+
+        if (
+            isinstance(arg_node, ast.Attribute)
+            and arg_node.attr == "__doc__"
+            and isinstance(arg_node.value, ast.Name)
+        ):
+            target = self._top_level_defs.get(arg_node.value.id)
+            if target is None:
+                return None
+            return ast.get_docstring(target, clean=False)
+
+        return None
+
+    def _find_docstring_scope_for_bare_doc(self) -> ast.AST | None:
+        """Find the scope a bare __doc__ reference resolves to.
+
+        Python's runtime semantics for `__doc__` as a bare name:
+
+          - At module top level: the module's __doc__ attribute.
+          - Inside a class body (but not in a nested function): the
+            class's __doc__ attribute.
+          - Inside a function body (regardless of class containment):
+            falls through to module's __doc__ via name resolution.
+
+        Walks the parent stack from innermost outward. If a Function
+        or AsyncFunction is encountered before any ClassDef, the
+        reference is module-scoped. If a ClassDef is encountered
+        first, the reference is class-scoped. Otherwise (no enclosing
+        scope), we're at module level.
+        """
+        for parent in reversed(self._parent_stack):
+            if isinstance(parent, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                # Inside a function; bare __doc__ resolves to module.
+                break
+            if isinstance(parent, ast.ClassDef):
+                # In class body, not in a nested function: class doc.
+                return parent
+        # Fall through to module scope.
+        for parent in self._parent_stack:
+            if isinstance(parent, ast.Module):
+                return parent
+        return None
 
 
 # ===========================================================================
 # The analyzer
 # ===========================================================================
+
 
 class CodeDensityAnalyzer(Analyzer):
     """
@@ -1062,6 +1256,7 @@ class CodeDensityAnalyzer(Analyzer):
     alphabet, and Unicode anomalies) since .pth exec lines are single
     statements and AST-depth or docstring checks are not meaningful.
     """
+
     safe_for_library_scan = True
 
     @property
@@ -1118,24 +1313,26 @@ class CodeDensityAnalyzer(Analyzer):
             else:
                 confidence = None
             if confidence is not None:
-                signals.append(Signal(
-                    analyzer=self.name,
-                    signal_id="DENS040",
-                    confidence=confidence,
-                    scope=Scope.MODULE,
-                    location=SourceLocation(line=1, column=0),
-                    description=(
-                        f"AST depth {depth} is {ratio:.1f}x the line count "
-                        f"({parsed.line_count}), disproportionate nesting "
-                        f"consistent with expression compression or "
-                        f"generated code"
-                    ),
-                    context={
-                        "ast_depth": depth,
-                        "line_count": parsed.line_count,
-                        "ratio": round(ratio, 4),
-                    },
-                ))
+                signals.append(
+                    Signal(
+                        analyzer=self.name,
+                        signal_id="DENS040",
+                        confidence=confidence,
+                        scope=Scope.MODULE,
+                        location=SourceLocation(line=1, column=0),
+                        description=(
+                            f"AST depth {depth} is {ratio:.1f}x the line count "
+                            f"({parsed.line_count}), disproportionate nesting "
+                            f"consistent with expression compression or "
+                            f"generated code"
+                        ),
+                        context={
+                            "ast_depth": depth,
+                            "line_count": parsed.line_count,
+                            "ratio": round(ratio, 4),
+                        },
+                    )
+                )
 
         return signals
 
@@ -1154,14 +1351,10 @@ class CodeDensityAnalyzer(Analyzer):
         signals: list[Signal] = []
 
         # Token density and semicolons (DENS001, DENS002).
-        signals.extend(
-            _analyze_token_density(line_text, self.name, Scope.MODULE)
-        )
+        signals.extend(_analyze_token_density(line_text, self.name, Scope.MODULE))
 
         # Unicode anomalies (DENS030, DENS031).
-        signals.extend(
-            _analyze_unicode_anomalies(line_text, self.name)
-        )
+        signals.extend(_analyze_unicode_anomalies(line_text, self.name))
 
         # String entropy and base64 alphabet (DENS010, DENS011).
         # Parse the line as a mini module to get an AST.
@@ -1178,14 +1371,16 @@ class CodeDensityAnalyzer(Analyzer):
         for sig in visitor.signals:
             if sig.signal_id in ("DENS010", "DENS011"):
                 # Re-stamp the location to use the .pth file's actual line.
-                signals.append(Signal(
-                    analyzer=sig.analyzer,
-                    signal_id=sig.signal_id,
-                    confidence=sig.confidence,
-                    scope=sig.scope,
-                    location=location,
-                    description=sig.description,
-                    context=sig.context,
-                ))
+                signals.append(
+                    Signal(
+                        analyzer=sig.analyzer,
+                        signal_id=sig.signal_id,
+                        confidence=sig.confidence,
+                        scope=sig.scope,
+                        location=location,
+                        description=sig.description,
+                        context=sig.context,
+                    )
+                )
 
         return signals
