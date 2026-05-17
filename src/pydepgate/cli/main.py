@@ -260,6 +260,38 @@ def _color_default_from_env() -> str:
     return COLOR_AUTO
 
 
+def _workers_default_from_env() -> WorkersSpec | None:
+    """Compute the default value for --workers from the environment.
+
+    Reads PYDEPGATE_WORKERS and runs it through _parse_workers,
+    returning the resulting WorkersSpec on success or None when the
+    env var is unset, empty, or contains an invalid value.
+
+    Silently swallowing parse failures matches the convention from
+    _color_default_from_env: a bogus env value (typo, leftover
+    fragment from a misformatted assignment, etc.) falls back to
+    "as if unset" rather than crashing argparse before parse can
+    surface a useful error. The user's actual CLI invocation gets
+    the chance to override it, and the absence of an applied env
+    default does not surprise anyone.
+
+    Accepted env values match the CLI grammar exactly:
+      PYDEPGATE_WORKERS=serial   -> WorkersSpec(value=None, was_auto=False)
+      PYDEPGATE_WORKERS=auto     -> WorkersSpec(value=<cpus>, was_auto=True)
+      PYDEPGATE_WORKERS=<int>    -> WorkersSpec(value=int, was_auto=False)
+
+    Anything else (negative integers, zero, non-numeric strings,
+    floating point) is silently ignored.
+    """
+    value = os.environ.get("PYDEPGATE_WORKERS", "").strip()
+    if not value:
+        return None
+    try:
+        return _parse_workers(value)
+    except argparse.ArgumentTypeError:
+        return None
+
+
 def _add_global_flags(
     parser: argparse.ArgumentParser,
     is_subparser: bool = False,
@@ -385,7 +417,7 @@ def _add_global_flags(
     parser.add_argument(
         "--workers",
         type=_parse_workers,
-        default=argparse.SUPPRESS if is_subparser else None,
+        default=(argparse.SUPPRESS if is_subparser else _workers_default_from_env()),
         metavar="WORKERS",
         help=(
             "Number of worker processes for per-file scans. Accepts "
@@ -393,16 +425,20 @@ def _add_global_flags(
             "available CPUs, respects CI CPU limits via "
             "sched_getaffinity on Linux). Below the file-count "
             "threshold (1000 files), parallel is downgraded to "
-            "serial with a diagnostic in the scan report."
+            "serial with a diagnostic in the scan report. "
+            "Env: PYDEPGATE_WORKERS"
         ),
     )
     parser.add_argument(
         "--force-parallel",
         action="store_true",
-        default=argparse.SUPPRESS if is_subparser else False,
+        default=(
+            argparse.SUPPRESS if is_subparser else _env_bool("PYDEPGATE_FORCE_PARALLEL")
+        ),
         help=(
             "Run parallel regardless of file count (bypasses the "
-            "1000-file threshold). No effect without --workers >= 2."
+            "1000-file threshold). No effect without --workers >= 2. "
+            "Env: PYDEPGATE_FORCE_PARALLEL"
         ),
     )
 
