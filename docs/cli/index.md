@@ -61,6 +61,13 @@ the subcommand name.
 |---|---|---|---|---|
 | `--rules-file` | path | auto-discover | `PYDEPGATE_RULES_FILE` | Path to a `.gate` rules file. Auto-discovery checks `./pydepgate.gate` then `~/.config/pydepgate/pydepgate.gate`. |
 
+### Engine parallelism
+
+| Flag | Values | Default | Env variable | Description |
+|---|---|---|---|---|
+| `--workers` | integer or `auto` | unset (serial) | `PYDEPGATE_WORKERS` | Worker count for the per-file scan pool. `auto` resolves to CPU count (cgroup-aware on Linux via `sched_getaffinity`, falling back to `cpu_count` elsewhere). Below 1000 files in scope, the pool is suppressed and execution runs serial regardless of this setting. Warns at 2x available CPUs, severe warning at 4x, refuses with exit code 3 at 8x. |
+| `--force-parallel` | | `false` | `PYDEPGATE_FORCE_PARALLEL` | Bypass the 1000-file threshold and run parallel regardless of file count. Useful when the operator knows parallel is the right choice for the workload, or for testing the parallel path in CI without a large fixture. |
+
 ### Payload peek
 
 | Flag | Values | Default | Env variable | Description |
