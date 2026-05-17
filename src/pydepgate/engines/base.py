@@ -175,7 +175,7 @@ class ScanResult:
     """
     artifact_sha256: str | None = None
     artifact_sha512: str | None = None
-    scan_id: str = field(default_factory=lambda: run_context.get_current_run_uuid())
+    scan_id: str = field(default_factory=run_context.get_current_run_uuid)
 
 
 @dataclass(frozen=True)
