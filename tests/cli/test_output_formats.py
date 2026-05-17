@@ -217,7 +217,14 @@ class ColorFlagTests(unittest.TestCase):
         def _strip_duration(text):
             return re.sub(r"\d+ms", "Nms", text)
 
-        self.assertEqual(_strip_duration(out1), _strip_duration(out2))
+        def _strip_run_id(text):
+            return re.sub(r"Your Run ID: .+", "Your Run ID: <redacted>", text)
+
+        # Run ID needs to be redacted before comparing because it's a new addition to the output and is unique per run, so it would cause the outputs to differ even if everything else is the same.
+
+        self.assertEqual(
+            _strip_duration(_strip_run_id(out1)), _strip_duration(_strip_run_id(out2))
+        )
 
     # --- always overrides redirection --------------------------------------
 

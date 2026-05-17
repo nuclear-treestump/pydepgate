@@ -32,18 +32,18 @@ from pydepgate.enrichers.decode_payloads import (
 )
 from pydepgate.reporters.decoded_tree._helpers import _signal_repr
 
-
 # Tree-drawing connector strings (private, text-only).
 _T_BRANCH = "+-- "
-_T_LAST   = "`-- "
-_T_PIPE   = "|   "
-_T_BLANK  = "    "
+_T_LAST = "`-- "
+_T_PIPE = "|   "
+_T_BLANK = "    "
 
 
 def render(tree: DecodedTree, *, include_iocs: bool = False) -> str:
     """Render the tree as ASCII text suitable for the report file."""
     lines: list[str] = []
     lines.append(f"decoded payload report for {tree.target}")
+    lines.append(f"scan ID: {tree.scan_id}")
     lines.append(f"max recursion depth: {tree.max_depth}")
     if tree.artifact_sha256:
         lines.append(f"artifact SHA256: {tree.artifact_sha256}")
@@ -98,9 +98,7 @@ def _render_ioc_section(tree: DecodedTree) -> list[str]:
 
     for i, node in enumerate(nodes_with_iocs, 1):
         ioc = node.ioc_data
-        lines.append(
-            f"IOC #{i}: {node.outer_location} ({_signal_repr(node)})"
-        )
+        lines.append(f"IOC #{i}: {node.outer_location} ({_signal_repr(node)})")
         lines.append("-" * 60)
 
         if ioc.extract_timestamp:
@@ -122,7 +120,8 @@ def _render_ioc_section(tree: DecodedTree) -> list[str]:
             lines.append("DECODED SOURCE CODE:")
             lines.append("-" * 40)
             for line_num, source_line in enumerate(
-                ioc.decoded_source.splitlines(), 1,
+                ioc.decoded_source.splitlines(),
+                1,
             ):
                 lines.append(f"{line_num:4d}: {source_line}")
             lines.append("-" * 40)
@@ -173,32 +172,24 @@ def _render_der_details(
         lines.append(f"{inner}issuer CN:  {summary['issuer_cn']}")
     if summary.get("not_before") and summary.get("not_after"):
         lines.append(
-            f"{inner}validity:   "
-            f"{summary['not_before']} to {summary['not_after']}"
+            f"{inner}validity:   " f"{summary['not_before']} to {summary['not_after']}"
         )
     if summary.get("serial"):
         lines.append(f"{inner}serial:     {summary['serial']}")
     if summary.get("signature_oid"):
-        lines.append(
-            f"{inner}sig OID:    {summary['signature_oid']}"
-        )
+        lines.append(f"{inner}sig OID:    {summary['signature_oid']}")
 
     san_summary = summary.get("san_summary")
     if san_summary:
         if len(san_summary) <= 3:
             san_str = ", ".join(san_summary)
         else:
-            san_str = (
-                f"{', '.join(san_summary[:3])} "
-                f"(+{len(san_summary) - 3} more)"
-            )
+            san_str = f"{', '.join(san_summary[:3])} " f"(+{len(san_summary) - 3} more)"
         lines.append(f"{inner}SAN:        {san_str}")
 
     extension_oids = summary.get("extension_oids")
     if extension_oids:
-        critical_count = sum(
-            1 for e in extension_oids if e.get("critical")
-        )
+        critical_count = sum(1 for e in extension_oids if e.get("critical"))
         ext_str = f"{len(extension_oids)} total"
         if critical_count:
             ext_str += f" ({critical_count} critical)"
@@ -241,17 +232,12 @@ def _render_node_text(
 
     if node.chain:
         chain_repr = " -> ".join(node.chain) + f" -> {node.final_kind}"
-        lines.append(
-            f"{body_prefix}chain: {chain_repr} "
-            f"({node.final_size} bytes)"
-        )
+        lines.append(f"{body_prefix}chain: {chain_repr} " f"({node.final_size} bytes)")
     else:
         lines.append(f"{body_prefix}chain: (no transforms applied)")
 
     if node.indicators:
-        lines.append(
-            f"{body_prefix}indicators: {', '.join(node.indicators)}"
-        )
+        lines.append(f"{body_prefix}indicators: {', '.join(node.indicators)}")
 
     if node.pickle_warning:
         lines.append(
@@ -261,12 +247,12 @@ def _render_node_text(
     # DER classification block (currently the only structured details
     # emitter; future formats will plug in here).
     if node.details_summary is not None:
-        _render_der_details(lines, body_prefix, node.details_full or node.details_summary)
+        _render_der_details(
+            lines, body_prefix, node.details_full or node.details_summary
+        )
 
     if node.stop_reason == STOP_DEPTH_LIMIT:
-        lines.append(
-            f"{body_prefix}(stopped: recursion depth limit reached)"
-        )
+        lines.append(f"{body_prefix}(stopped: recursion depth limit reached)")
     elif node.stop_reason == STOP_NON_PYTHON:
         # When we have structured details, the stop reason should
         # reflect that we DID classify the terminal, just that DER
@@ -289,8 +275,7 @@ def _render_node_text(
         )
     elif node.stop_reason == STOP_NO_FULL_VALUE:
         lines.append(
-            f"{body_prefix}(stopped: outer signal had no full value "
-            f"to decode)"
+            f"{body_prefix}(stopped: outer signal had no full value " f"to decode)"
         )
     elif node.stop_reason == STOP_NO_INNER_FINDINGS:
         lines.append(
@@ -310,7 +295,7 @@ def _render_node_text(
         if not node.child_findings:
             lines.append(f"{body_prefix}inner findings:")
         for i, child in enumerate(node.children):
-            child_is_last = (i == len(node.children) - 1)
+            child_is_last = i == len(node.children) - 1
             _render_node_text(
                 child,
                 lines,

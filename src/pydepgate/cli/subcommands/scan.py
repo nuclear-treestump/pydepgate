@@ -245,6 +245,11 @@ def run(args: argparse.Namespace) -> int:
     peek_enricher = build_peek_enricher(args)
     if peek_enricher is not None:
         enrichers.append(peek_enricher)
+    # Workers config comes from _resolve_workers_config in main.py,
+    # which stashes the resolved values on args before subcommand
+    # dispatch. getattr-with-default keeps this resilient against
+    # test paths that bypass main() and call run() directly with a
+    # minimal namespace.
     engine = StaticEngine(
         analyzers=[
             EncodingAbuseAnalyzer(),
@@ -256,10 +261,18 @@ def run(args: argparse.Namespace) -> int:
         enrichers=enrichers,
         rules=all_rules,
         deep_mode=args.deep,
+        workers=getattr(args, "_workers_count", None),
+        parallel_threshold=getattr(args, "_workers_threshold", 1000),
+        initial_diagnostics=getattr(args, "_workers_diagnostics", ()),
     )
 
     if args.single:
-        result = _dispatch_single(engine, args.single, args.as_kind)
+        result = _dispatch_single(
+            engine,
+            args.single,
+            args.as_kind,
+            initial_diagnostics=getattr(args, "_workers_diagnostics", ()),
+        )
     else:
         # Build the progress bar callbacks. The factory returns
         # no-ops when --no-bar is set or stderr isn't a TTY, so
@@ -338,6 +351,7 @@ def _dispatch_single(
     engine: StaticEngine,
     path_str: str,
     as_kind: str | None,
+    initial_diagnostics: tuple[str, ...] = (),
 ) -> ScanResult:
     """Scan a single loose file via the engine's bypass-triage entry point.
 
@@ -345,12 +359,25 @@ def _dispatch_single(
     diagnostic messages rather than raw OSError text. Once we know
     the file is real, hand off to engine.scan_loose_file_as which
     preserves the real path through to the report.
+
+    `initial_diagnostics` is threaded into the pre-engine error
+    paths so CLI warnings appear in the output even when the file
+    doesn't exist or isn't a regular file. The engine itself
+    handles the success path via its own initial_diagnostics.
     """
     path = Path(path_str)
     if not path.exists():
-        return _empty_result_with_diag(path, f"file not found: {path}")
+        return _empty_result_with_diag(
+            path,
+            f"file not found: {path}",
+            initial_diagnostics,
+        )
     if not path.is_file():
-        return _empty_result_with_diag(path, f"not a regular file: {path}")
+        return _empty_result_with_diag(
+            path,
+            f"not a regular file: {path}",
+            initial_diagnostics,
+        )
 
     file_kind = _file_kind_for_single(path, as_kind)
     return engine.scan_loose_file_as(path, file_kind)
@@ -378,15 +405,25 @@ def _file_kind_for_single(path: Path, as_kind: str | None) -> FileKind:
     return FileKind.SETUP_PY
 
 
-def _empty_result_with_diag(path: Path, diagnostic: str) -> ScanResult:
-    """Build an empty ScanResult carrying a single diagnostic message."""
+def _empty_result_with_diag(
+    path: Path,
+    diagnostic: str,
+    initial_diagnostics: tuple[str, ...] = (),
+) -> ScanResult:
+    """Build an empty ScanResult carrying a single diagnostic message.
+
+    `initial_diagnostics` is prepended ahead of the per-failure
+    diagnostic so CLI-level warnings (--workers thrashing, etc.)
+    still appear in the output of a --single scan that never
+    reached the engine because the user-supplied path was bad.
+    """
     return ScanResult(
         artifact_identity=str(path),
         artifact_kind=ArtifactKind.LOOSE_FILE,
         findings=(),
         skipped=(),
         statistics=ScanStatistics(),
-        diagnostics=(diagnostic,),
+        diagnostics=tuple(initial_diagnostics) + (diagnostic,),
     )
 
 
