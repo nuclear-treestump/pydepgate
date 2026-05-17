@@ -14,6 +14,156 @@ become binding stability promises with formal deprecation cycles.
 
 (no changes yet)
 
+## [0.4.5] - 2026-05-17
+ 
+### Added
+ 
+- **Engine parallelism.** The static engine now supports running
+  per-file analysis in a process pool. The `StaticEngine`
+  constructor accepts a `workers` parameter (positive integer
+  or `None` for serial) and a `parallel_threshold` parameter
+  (file count below which parallel is suppressed even when
+  workers is greater than one, default 1000). The pool primitive
+  is `ProcessPoolExecutor` with a worker initializer that pickles
+  the engine once per worker rather than once per task. The
+  picklability contract documented in CONTRIBUTING.md is
+  preserved; `FileScanInput`, `FileScanOutput`, and all default
+  analyzers continue to round-trip through pickle cleanly.
+  Default behavior is unchanged: serial execution when workers
+  is None, automatic fallback to serial when the in-scope file
+  count is below the threshold. Parallelism pays off when
+  per-file work is large enough to amortize the
+  ProcessPoolExecutor startup cost (roughly 200 to 400
+  milliseconds per pool). In benchmark runs across 137 real
+  PyPI packages with warm caches, non-deep mode is fastest in
+  serial at 29.7 seconds; parallel with workers=4 ran 31.9
+  seconds with the threshold gate engaged and 37.9 seconds with
+  `--force-parallel` enabled, because pool startup dominates the
+  small-file workload typical of non-deep scans. Deep mode is
+  the opposite story: workers=4 on a 4-core runner ran 59.5
+  seconds versus 79.4 seconds serial, a 25 percent improvement,
+  and the gate is the right default for most operators because
+  it preserves the serial speed advantage on small inputs while
+  unlocking parallel speedup on large ones.
+- **`--workers` CLI flag.** Accepts an integer worker count or
+  the string `auto`. The auto path uses
+  `os.sched_getaffinity(0)` on Linux for cgroup awareness,
+  falling back to `os.cpu_count()` elsewhere. When the resolved
+  count exceeds 2x the available CPU count, the CLI emits a
+  thrashing warning to stderr and surfaces it as a diagnostic
+  in `ScanResult.diagnostics`. Beyond 4x the warning is severe.
+  Beyond 8x the run is refused with exit code 3 (TOOL_ERROR)
+  and a clear message rather than silently over-subscribing the
+  system. The multiplier tiers live as named constants in
+  `cli.main` and are not currently configurable from the
+  command line.
+- **`--force-parallel` CLI flag.** Maps to `parallel_threshold=0`,
+  bypassing the file-count gate. Useful when an operator knows
+  parallel is the right choice for the workload despite a small
+  file count, or for testing the parallel path in CI without
+  needing a large fixture.
+- **`ScanResult.scan_id` field.** Every scan now carries a UUID4
+  generated at scan start, threaded through `ScanResult` and
+  emitted by all reporters (JSON, text, IOC sidecar, SARIF,
+  decoded payload tree). This is the same shape and intent as
+  the `METADATA_KEY_LAST_IMPORT_RUN_UUID` introduced for the
+  `cvedb` subsystem in 0.4.2: every invocation produces a
+  unique identifier that downstream consumers can use for
+  cross-report correlation, audit trails, and answering the
+  "which invocation produced this output" question without
+  relying on timestamp guessing.
+- **`initial_diagnostics` parameter on `StaticEngine`.**
+  CLI-level diagnostics (workers thrashing warnings, threshold
+  fallback notices, configuration soft warnings) are passed into
+  the engine at construction and threaded through every
+  `ScanResult` construction site. A warning that appears on the
+  terminal is now also visible to JSON consumers and SARIF
+  ingest, which makes it possible to audit the configuration
+  of a scan after the fact rather than only at run time.
+- **Picklability contract tests.** New `tests/test_pickle_contract.py`
+  module with 20 tests asserting that `FileScanInput`,
+  `FileScanOutput`, every default analyzer, the engine instance,
+  and the `PayloadPeek` enricher all round-trip through pickle
+  without loss. The default-rules construction inside the
+  engine is exercised specifically as a load-bearing test for
+  cross-process behavior. These tests are infrastructure for the
+  parallelism work and run on every CI invocation as a
+  regression guard against future analyzer changes that
+  accidentally break the picklability contract.
+### Changed
+ 
+- **DENS051 emission gated by docstring content.** The signal
+  previously fired on any `__doc__` reference passed to a
+  callable, on the threat-model premise that payloads can be
+  hidden in docstring text and executed via that pattern. It
+  now resolves the target docstring statically (handling bare
+  `__doc__` per Python's runtime semantics, where a class body
+  resolves to the class docstring and a function body or module
+  top level resolves to the module docstring, and
+  `<obj>.__doc__` where obj is a top-level name in the same
+  file) and consults `_magic.detect_format()` on the resolved
+  content. When the content classifies as terminal `ascii_text`,
+  the finding is suppressed. For any other classification (any
+  encoding shape, Python source, pickle, binary), the finding
+  emits as before. Unresolvable references emit conservatively.
+  The motivating false positive set was libraries using
+  sphinx-style docformat patterns; scipy alone accounted for 38
+  such false positives in the stress test corpus before this
+  change. The threat-model coverage is preserved: payload-bearing
+  docstrings (base64, hex, embedded Python source, pickle)
+  classify as non-`ascii_text` and continue to emit.
+- **`_magic.looks_like_python()` requires syntactic position.**
+  Python token detection now requires the token to appear at
+  the start of a line (after optional leading whitespace)
+  rather than anywhere in the first 2KB of text. The previous
+  substring containment fired on prose using Python keywords
+  as English words; phrases like "the multivariate class for"
+  or "import duties were levied" both classified as
+  `python_source` under the old heuristic. Line-anchored
+  matching distinguishes prose from source correctly because
+  Python statements appear at statement boundaries and prose
+  embeds keywords mid-sentence. Indented code inside docstrings
+  or examples continues to classify correctly because each line
+  is lstripped before the prefix check. The narrow tradeoff is
+  that single-line Python embedded mid-sentence in prose (the
+  shape `"Run this: import os; os.system('ls')"`) no longer
+  classifies as Python, which is not a meaningful attack
+  pattern.
+- **Density analyzer signal weights.** Several signal confidences
+  in the code-density analyzer were adjusted based on stress
+  testing across a 137-package real-world corpus that surfaced
+  noisier-than-intended emission tiers at the previous
+  calibration. The threat-model signal IDs and their emission
+  conditions are unchanged; the weights determine how
+  aggressively each signal propagates to blocking severity in
+  default rule sets. The exact deltas are in the analyzer
+  source, and the post-calibration stress run on the same
+  corpus produces 11 findings across 4 packages (down from
+  hundreds across 20 packages), each of which is a correct
+  detection of high-entropy content that operators may choose
+  to suppress at the rule layer for their own workloads (test
+  fixtures, embedded shell scripts, Unicode data tables, known
+  distribution `.pth` files).
+- **`StaticEngine._aggregate_outputs` signature.** Accepts an
+  `extra_diagnostics` parameter for diagnostics produced after
+  engine construction (parallel fallback notices, etc.) so they
+  can appear alongside the initial diagnostics in
+  `ScanResult.diagnostics`. The signature change is internal;
+  no public-API consumers are affected.
+### Security
+ 
+No security advisories in this release. The DENS051 and
+`_magic.looks_like_python` calibrations are false positive
+reductions: the underlying detection of payload-bearing
+docstring patterns (encoded content, embedded Python source,
+pickle data) is unchanged, the unwrap loop is unaffected, and
+the threat-model coverage of the canonical LiteLLM 1.82.8
+attack pattern was re-verified after the calibration work.
+The engine parallelism work preserves the picklability
+contract for the per-file scan path; analyzer behavior is
+identical whether the engine runs serial or parallel, and
+the picklability tests guard against accidental divergence.
+
 ## [0.4.2] - 2026-05-15
 
 ### Added
@@ -528,8 +678,9 @@ issues will land in [ROADMAP.md](ROADMAP.md):
   enable a process pool for the per-file scan phase, targeting
   meaningful speedups on multi-megabyte wheels with thousands
   of files.
-
-[Unreleased]: https://github.com/nuclear-treestump/pydepgate/compare/v0.4.0...HEAD
+  
+[Unreleased]: https://github.com/nuclear-treestump/pydepgate/compare/v0.4.5...HEAD
+[0.4.5]: https://github.com/nuclear-treestump/pydepgate/compare/v0.4.2...v0.4.5
 [0.4.2]: https://github.com/nuclear-treestump/pydepgate/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/nuclear-treestump/pydepgate/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/nuclear-treestump/pydepgate/compare/v0.3.3...v0.4.0
