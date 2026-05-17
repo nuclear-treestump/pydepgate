@@ -120,6 +120,7 @@ class StaticEngine:
         enrichers: list[Enricher] | None = None,
         workers: int | None = None,
         parallel_threshold: int = 1000,
+        initial_diagnostics: tuple[str, ...] = (),
     ) -> None:
         self._analyzers: tuple[Analyzer, ...] = tuple(analyzers)
         # Default to bundled rules if none provided. Allows tests to
@@ -132,8 +133,24 @@ class StaticEngine:
         self._rules = list(rules)
         self._deep_mode = deep_mode
         self._enrichers: tuple[Enricher, ...] = tuple(enrichers or ())
+        # Parallel execution knobs. workers=None means serial
+        # (current behavior preserved exactly). Integer >= 2 means
+        # that many worker processes. workers=1 is treated as serial
+        # because a pool of one is overhead without benefit.
+        # parallel_threshold gates the parallel path on file count;
+        # callers (or the CLI's --force-parallel flag) can set 0 to
+        # disable the threshold.
         self._workers = workers
         self._parallel_threshold = parallel_threshold
+        # CLI-level diagnostics threaded into every ScanResult this
+        # engine produces. The CLI uses this to surface warnings
+        # (--workers thrashing notes, --workers auto resolved to 1
+        # on single-CPU, --force-parallel with non-parallel workers,
+        # and so on) in the scan output so downstream tooling sees
+        # them in JSON/SARIF reports, not just on stderr at
+        # invocation time. Empty tuple by default preserves prior
+        # behavior exactly.
+        self._initial_diagnostics = tuple(initial_diagnostics)
 
     @property
     def rules(self) -> list:
@@ -165,7 +182,9 @@ class StaticEngine:
         Uses the filename to let triage determine the file's kind,
         then routes to the appropriate parser and analyzer set.
         Returns an empty ScanResult with a diagnostic if the file
-        cannot be read.
+        cannot be read. CLI-level diagnostics from
+        self._initial_diagnostics are prepended to keep --workers
+        warnings visible even when the read fails.
         """
         try:
             content = path.read_bytes()
@@ -176,7 +195,8 @@ class StaticEngine:
                 findings=(),
                 skipped=(),
                 statistics=ScanStatistics(),
-                diagnostics=(f"failed to read {path}: {exc}",),
+                diagnostics=self._initial_diagnostics
+                + (f"failed to read {path}: {exc}",),
             )
         return self.scan_bytes(
             content=content,
@@ -253,9 +273,9 @@ class StaticEngine:
                 findings=(),
                 skipped=(),
                 statistics=ScanStatistics(),
-                diagnostics=(f"failed to read {path}: {exc}",),
+                diagnostics=self._initial_diagnostics
+                + (f"failed to read {path}: {exc}",),
             )
-
         sha256, sha512 = hash_pair(content)
 
         inp = FileScanInput(
@@ -405,7 +425,8 @@ class StaticEngine:
                 findings=(),
                 skipped=(),
                 statistics=ScanStatistics(),
-                diagnostics=(f"package not installed: {package_name}",),
+                diagnostics=self._initial_diagnostics
+                + (f"package not installed: {package_name}",),
             )
         return self._scan_artifact_with_enumerator(
             identity=package_name,
@@ -862,7 +883,8 @@ class StaticEngine:
                 statistics=ScanStatistics(
                     duration_seconds=time.perf_counter() - started_at,
                 ),
-                diagnostics=(f"failed to enumerate {identity}: {exc}",),
+                diagnostics=self._initial_diagnostics
+                + (f"failed to enumerate {identity}: {exc}",),
                 artifact_sha256=artifact_sha256,
                 artifact_sha512=artifact_sha512,
             )
@@ -991,13 +1013,23 @@ class StaticEngine:
     ) -> ScanResult:
         """Combine per-file outputs into an artifact-level ScanResult.
 
-        `extra_diagnostics` are scan-level diagnostics that do not belong
-        to any single FileScanOutput, such as the below-threshold
-        fallback notice from the Phase 2 dispatcher.
+        Diagnostic ordering in the final ScanResult.diagnostics tuple:
+          1. self._initial_diagnostics: CLI-level warnings from
+             engine construction (--workers thrashing, etc.).
+          2. extra_diagnostics: scan-level diagnostics from the
+             Phase 2 dispatcher (e.g. below-threshold fallback).
+          3. Per-file diagnostics aggregated from each
+             FileScanOutput.
+
+        This ordering puts the most invocation-level context first
+        so downstream report readers see "the user passed too many
+        workers" before "file 47 had an analyzer hiccup."
         """
         all_findings: list[Finding] = []
         all_skipped: list[SkippedFile] = list(pre_skipped)
-        all_diagnostics: list[str] = list(extra_diagnostics)
+        all_diagnostics: list[str] = list(self._initial_diagnostics) + list(
+            extra_diagnostics
+        )
         all_suppressed: list[SuppressedFinding] = []
         per_file_stats: list[FileStatsEntry] = []
 
@@ -1055,7 +1087,10 @@ class StaticEngine:
         Used by scan_bytes and scan_loose_file_as. Per-file statistics
         are intentionally NOT populated for single-file scans because
         the data would be redundant with `result.statistics` and
-        `result.findings` for one entry.
+        `result.findings` for one entry. CLI-level diagnostics from
+        self._initial_diagnostics are prepended ahead of the file's
+        own diagnostics so downstream reports surface invocation
+        context first.
         """
         return ScanResult(
             artifact_identity=identity,
@@ -1063,7 +1098,7 @@ class StaticEngine:
             findings=output.findings,
             skipped=output.skipped,
             statistics=output.statistics,
-            diagnostics=output.diagnostics,
+            diagnostics=self._initial_diagnostics + output.diagnostics,
             suppressed_findings=output.suppressed_findings,
             artifact_sha256=artifact_sha256,
             artifact_sha512=artifact_sha512,

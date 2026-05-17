@@ -349,6 +349,34 @@ class StaticEnginePickleTests(unittest.TestCase):
             unpickled_output.findings,
         )
 
+    def test_engine_with_initial_diagnostics_pickles(self):
+        # initial_diagnostics is a tuple of strings, trivially
+        # picklable. Belt-and-suspenders: verify the diagnostics
+        # survive the round trip and surface in a scan result
+        # built by the unpickled engine.
+        engine = StaticEngine(
+            analyzers=[CodeDensityAnalyzer()],
+            rules=[],
+            initial_diagnostics=(
+                "warning: synthetic round-trip test",
+                "note: a second synthetic diagnostic",
+            ),
+        )
+        round_tripped = pickle.loads(pickle.dumps(engine))
+        result = round_tripped.scan_bytes(
+            content=b"x = 1\n",
+            internal_path="setup.py",
+            artifact_kind=ArtifactKind.LOOSE_FILE,
+        )
+        self.assertEqual(
+            result.diagnostics[0],
+            "warning: synthetic round-trip test",
+        )
+        self.assertEqual(
+            result.diagnostics[1],
+            "note: a second synthetic diagnostic",
+        )
+
 
 # =============================================================================
 # Tier 3b: The payload_peek enricher pickles
