@@ -992,8 +992,9 @@ class StaticEngine:
             initializer=_init_parallel_worker,
             initargs=(self,),
         ) as pool:
+            chunk = max(1, total // (self._workers * 4))
             for i, output in enumerate(
-                pool.map(_parallel_scan_one, inputs),
+                pool.map(_parallel_scan_one, inputs, chunksize=chunk),
                 start=1,
             ):
                 outputs.append(output)

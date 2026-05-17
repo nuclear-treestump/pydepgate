@@ -84,7 +84,6 @@ RULES = [
             "severity: surfaces the observation without crying wolf."
         ),
     ),
-
     # -----------------------------------------------------------------------
     # DENS002: semicolon chaining
     # -----------------------------------------------------------------------
@@ -121,7 +120,6 @@ RULES = [
             "stricter rules can promote it."
         ),
     ),
-
     # -----------------------------------------------------------------------
     # DENS010: high-entropy string literal
     # -----------------------------------------------------------------------
@@ -217,7 +215,6 @@ RULES = [
             "(UUIDs, hashes, fixture data). LOW severity baseline."
         ),
     ),
-
     # -----------------------------------------------------------------------
     # DENS011: base64-alphabet string literal
     # -----------------------------------------------------------------------
@@ -286,7 +283,6 @@ RULES = [
             "(embedded assets, certificates, test fixtures). LOW baseline."
         ),
     ),
-
     # -----------------------------------------------------------------------
     # DENS020: low-vowel-ratio identifier
     # -----------------------------------------------------------------------
@@ -302,7 +298,6 @@ RULES = [
             "as a contributing signal, not a standalone alert."
         ),
     ),
-
     # -----------------------------------------------------------------------
     # DENS021: confusable single-character identifier
     # -----------------------------------------------------------------------
@@ -317,7 +312,6 @@ RULES = [
             "purposes without contributing to exit-code escalation."
         ),
     ),
-
     # -----------------------------------------------------------------------
     # DENS030: invisible Unicode character
     # -----------------------------------------------------------------------
@@ -356,14 +350,13 @@ RULES = [
         rule_id="default_dens030_anywhere",
         source=RuleSource.DEFAULT,
         match=RuleMatch(signal_id="DENS030"),
-        effect=_set_severity(Severity.HIGH),
+        effect=_set_severity(Severity.MEDIUM),
         explain=(
             "Invisible Unicode anywhere in source is suspicious. The "
             "Trojan Source attack class (CVE-2021-42574) is precisely "
-            "this. HIGH baseline; specific file kinds elevate to CRITICAL."
+            "this. MEDIUM baseline; specific file kinds elevate to CRITICAL."
         ),
     ),
-
     # -----------------------------------------------------------------------
     # DENS031: Unicode homoglyph in identifier
     # -----------------------------------------------------------------------
@@ -381,26 +374,25 @@ RULES = [
         rule_id="default_dens031_in_setup_py",
         source=RuleSource.DEFAULT,
         match=RuleMatch(signal_id="DENS031", file_kind=FileKind.SETUP_PY),
-        effect=_set_severity(Severity.CRITICAL),
+        effect=_set_severity(Severity.HIGH),
         explain=(
             "Cyrillic or Greek lookalikes in setup.py identifiers exist "
             "to evade scanners that match on 'exec', 'os.system', etc. "
-            "CRITICAL."
+            "HIGH."
         ),
     ),
     Rule(
         rule_id="default_dens031_anywhere",
         source=RuleSource.DEFAULT,
         match=RuleMatch(signal_id="DENS031"),
-        effect=_set_severity(Severity.HIGH),
+        effect=_set_severity(Severity.MEDIUM),
         explain=(
             "Homoglyph characters in identifiers are almost always an "
             "attack indicator. The known false positive (legitimate "
             "non-Latin variable names in non-English codebases) does "
-            "occur, so HIGH rather than CRITICAL as a baseline."
+            "occur, so MEDIUM rather than CRITICAL as a baseline."
         ),
     ),
-
     # -----------------------------------------------------------------------
     # DENS040: disproportionate AST depth
     # -----------------------------------------------------------------------
@@ -435,7 +427,6 @@ RULES = [
             "baseline; rules promote for sensitive file kinds."
         ),
     ),
-
     # -----------------------------------------------------------------------
     # DENS041: deep lambda/comprehension nesting
     # -----------------------------------------------------------------------
@@ -469,7 +460,6 @@ RULES = [
             "stylistic. LOW baseline outside startup vectors."
         ),
     ),
-
     # -----------------------------------------------------------------------
     # DENS042: large integer literal array
     # -----------------------------------------------------------------------
@@ -504,7 +494,6 @@ RULES = [
             "assets. LOW baseline; review-worthy, not block-worthy."
         ),
     ),
-
     # -----------------------------------------------------------------------
     # DENS050: high-entropy docstring
     # -----------------------------------------------------------------------
@@ -573,7 +562,6 @@ RULES = [
             "pattern (docstring-as-payload). MEDIUM baseline."
         ),
     ),
-
     # -----------------------------------------------------------------------
     # DENS051: dynamic __doc__ reference passed to a callable
     # -----------------------------------------------------------------------
@@ -601,14 +589,13 @@ RULES = [
         rule_id="default_dens051_anywhere",
         source=RuleSource.DEFAULT,
         match=RuleMatch(signal_id="DENS051"),
-        effect=_set_severity(Severity.HIGH),
+        effect=_set_severity(Severity.MEDIUM),
         explain=(
             "__doc__ piped to a callable is unusual outside introspection "
-            "tooling. HIGH baseline; users with legitimate introspection "
+            "tooling. MEDIUM baseline; users with legitimate introspection "
             "code can suppress."
         ),
     ),
-
     # -----------------------------------------------------------------------
     # Rules: LIBRARY_PY context (deep mode)
     #
@@ -689,7 +676,7 @@ RULES = [
         rule_id="default_dens030_in_library_py",
         source=RuleSource.DEFAULT,
         match=RuleMatch(signal_id="DENS030", file_kind=FileKind.LIBRARY_PY),
-        effect=_set_severity(Severity.HIGH),
+        effect=_set_severity(Severity.MEDIUM),
         explain=(
             "Invisible Unicode characters in library code have no benign "
             "use case. Trojan Source / CVE-2021-42574 territory regardless "
@@ -700,7 +687,7 @@ RULES = [
         rule_id="default_dens031_in_library_py",
         source=RuleSource.DEFAULT,
         match=RuleMatch(signal_id="DENS031", file_kind=FileKind.LIBRARY_PY),
-        effect=_set_severity(Severity.HIGH),
+        effect=_set_severity(Severity.MEDIUM),
         explain=(
             "Homoglyph identifiers in library code are almost always an "
             "attack indicator. The legitimate-non-Latin-naming false "
@@ -758,9 +745,9 @@ RULES = [
         rule_id="default_dens051_in_library_py",
         source=RuleSource.DEFAULT,
         match=RuleMatch(signal_id="DENS051", file_kind=FileKind.LIBRARY_PY),
-        effect=_set_severity(Severity.HIGH),
+        effect=_set_severity(Severity.MEDIUM),
         explain=(
-            "Reading __doc__ and passing it to a callable is rare in "
+            "Reading __doc__ and passing it to a callable isn't rare in "
             "library code. Introspection tooling does this legitimately "
             "(can be suppressed via user rule); the rest is the "
             "execution half of docstring-payload smuggling."
@@ -859,8 +846,7 @@ SIGNAL_EXPLANATIONS = {
     },
     "DENS021": {
         "description": (
-            "Single-character identifier 'l', 'O', or 'I' used as a "
-            "variable name."
+            "Single-character identifier 'l', 'O', or 'I' used as a " "variable name."
         ),
         "why_it_matters": (
             "PEP 8 explicitly prohibits these because they are visually "
@@ -964,8 +950,7 @@ SIGNAL_EXPLANATIONS = {
     },
     "DENS051": {
         "description": (
-            "A reference to __doc__ is passed as an argument to a "
-            "function call."
+            "A reference to __doc__ is passed as an argument to a " "function call."
         ),
         "why_it_matters": (
             "Reading __doc__ and handing it to a callable is the "
@@ -1021,7 +1006,6 @@ RULE_EXPLANATIONS = {
         "applies_to": "All DENS001 signals",
         "effect": "severity = LOW",
     },
-
     # DENS002
     "default_dens002_in_pth": {
         "description": "Promotes DENS002 in .pth files to HIGH severity.",
@@ -1050,7 +1034,6 @@ RULE_EXPLANATIONS = {
         "applies_to": "All DENS002 signals",
         "effect": "severity = LOW",
     },
-
     # DENS010
     "default_dens010_in_pth": {
         "description": "Promotes DENS010 in .pth files to CRITICAL.",
@@ -1143,7 +1126,6 @@ RULE_EXPLANATIONS = {
         ),
         "effect": "Severity set to HIGH",
     },
-
     # DENS011
     "default_dens011_huge_anywhere": {
         "description": (
@@ -1207,7 +1189,6 @@ RULE_EXPLANATIONS = {
         "applies_to": "All DENS011 signals",
         "effect": "severity = LOW",
     },
-
     # DENS020
     "default_dens020_anywhere": {
         "description": "Sets DENS020 anywhere to LOW severity.",
@@ -1219,7 +1200,6 @@ RULE_EXPLANATIONS = {
         "applies_to": "All DENS020 signals",
         "effect": "severity = LOW",
     },
-
     # DENS021
     "default_dens021_anywhere": {
         "description": "Sets DENS021 anywhere to INFO severity.",
@@ -1231,7 +1211,6 @@ RULE_EXPLANATIONS = {
         "applies_to": "All DENS021 signals",
         "effect": "severity = INFO",
     },
-
     # DENS030
     "default_dens030_in_pth": {
         "description": "Promotes DENS030 in .pth files to CRITICAL.",
@@ -1269,7 +1248,6 @@ RULE_EXPLANATIONS = {
         "applies_to": "All DENS030 signals",
         "effect": "severity = HIGH",
     },
-
     # DENS031
     "default_dens031_in_pth": {
         "description": "Promotes DENS031 in .pth files to CRITICAL.",
@@ -1299,7 +1277,6 @@ RULE_EXPLANATIONS = {
         "applies_to": "All DENS031 signals",
         "effect": "severity = HIGH",
     },
-
     # DENS040
     "default_dens040_in_pth": {
         "description": "Promotes DENS040 in .pth files to HIGH.",
@@ -1328,7 +1305,6 @@ RULE_EXPLANATIONS = {
         "applies_to": "All DENS040 signals",
         "effect": "severity = LOW",
     },
-
     # DENS041
     "default_dens041_in_setup_py": {
         "description": "Promotes DENS041 in setup.py to HIGH.",
@@ -1357,7 +1333,6 @@ RULE_EXPLANATIONS = {
         "applies_to": "All DENS041 signals",
         "effect": "severity = LOW",
     },
-
     # DENS042
     "default_dens042_in_pth": {
         "description": "Promotes DENS042 in .pth files to CRITICAL.",
@@ -1386,7 +1361,6 @@ RULE_EXPLANATIONS = {
         "applies_to": "All DENS042 signals",
         "effect": "severity = LOW",
     },
-
     # DENS050
     "default_dens050_huge_anywhere": {
         "description": (
@@ -1453,7 +1427,6 @@ RULE_EXPLANATIONS = {
         "applies_to": "All DENS050 signals",
         "effect": "severity = MEDIUM",
     },
-
     # DENS051
     "default_dens051_in_pth": {
         "description": "Promotes DENS051 in .pth files to CRITICAL.",
@@ -1484,7 +1457,6 @@ RULE_EXPLANATIONS = {
         "applies_to": "All DENS051 signals",
         "effect": "severity = HIGH",
     },
-
     # LIBRARY_PY context (deep mode)
     "default_dens001_in_library_py": {
         "description": "Sets DENS001 in library .py files (deep mode) to LOW.",
