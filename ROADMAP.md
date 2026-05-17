@@ -58,7 +58,7 @@ the chronological account of how things landed see CHANGELOG.
 
 ## v0.4.x: stabilization and parallelism
 
-- [ ] Engine parallelism. No later than v0.4.5. The picklability
+- [x] Engine parallelism. No later than v0.4.5. The picklability
       contract for `FileScanInput`/`FileScanOutput` has been preserved
       since v0.1, so the per-file scan phase can move to a process pool
       without engine refactoring. Target is meaningful speedup on
