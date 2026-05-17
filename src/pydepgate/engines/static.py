@@ -58,10 +58,44 @@ from pydepgate.engines.base import (
     confidence_to_severity_v01,
 )
 from pydepgate.parsers.pth import parse_pth, LineKind
-from pydepgate.parsers.pysource import SourceLocation, parse_python_source, ParsedPySource
+from pydepgate.parsers.pysource import (
+    SourceLocation,
+    parse_python_source,
+    ParsedPySource,
+)
 from pydepgate.rules.base import evaluate_signal
 from pydepgate.traffic_control.triage import FileKind, triage
 from pydepgate.enrichers.base import Enricher
+
+# Module-level. Workers pickle these by name.
+_worker_engine: "StaticEngine | None" = None
+
+
+def _init_parallel_worker(engine: "StaticEngine") -> None:
+    """ProcessPoolExecutor initializer: stash the engine in worker globals.
+
+    Called once per worker process at pool startup. The engine pickles
+    once here, not once per task. The picklability contract for the
+    engine, its analyzers, rules, and enrichers is locked in
+    tests/test_pickle_contract.py.
+    """
+    global _worker_engine
+    _worker_engine = engine
+
+
+def _parallel_scan_one(inp: FileScanInput) -> FileScanOutput:
+    """Worker-side per-file scan. Reaches the engine via module global.
+
+    Raises RuntimeError if called before `_init_parallel_worker` has
+    populated the global. That indicates a pool-startup bug; ordinary
+    use should never see this path.
+    """
+    if _worker_engine is None:
+        raise RuntimeError(
+            "parallel worker called before _init_parallel_worker; "
+            "this indicates a pool startup bug"
+        )
+    return _worker_engine._scan_one_file(inp)
 
 
 class StaticEngine:
@@ -84,6 +118,8 @@ class StaticEngine:
         rules: list | None = None,
         deep_mode: bool = False,
         enrichers: list[Enricher] | None = None,
+        workers: int | None = None,
+        parallel_threshold: int = 1000,
     ) -> None:
         self._analyzers: tuple[Analyzer, ...] = tuple(analyzers)
         # Default to bundled rules if none provided. Allows tests to
@@ -91,10 +127,13 @@ class StaticEngine:
         # callers can pass custom rules including user rules.
         if rules is None:
             from pydepgate.rules.defaults import DEFAULT_RULES
+
             rules = list(DEFAULT_RULES)
         self._rules = list(rules)
         self._deep_mode = deep_mode
         self._enrichers: tuple[Enricher, ...] = tuple(enrichers or ())
+        self._workers = workers
+        self._parallel_threshold = parallel_threshold
 
     @property
     def rules(self) -> list:
@@ -105,7 +144,7 @@ class StaticEngine:
     def analyzers(self) -> tuple[Analyzer, ...]:
         """The analyzers configured for this engine, in registration order."""
         return self._analyzers
-    
+
     @property
     def enrichers(self) -> tuple[Enricher, ...]:
         """The enrichers configured for this engine, in registration order."""
@@ -291,6 +330,7 @@ class StaticEngine:
             artifact_sha256=artifact_sha256,
             artifact_sha512=artifact_sha512,
         )
+
     def scan_sdist(
         self,
         path: Path,
@@ -335,6 +375,7 @@ class StaticEngine:
             artifact_sha256=artifact_sha256,
             artifact_sha512=artifact_sha512,
         )
+
     def scan_installed(
         self,
         package_name: str,
@@ -354,6 +395,7 @@ class StaticEngine:
             iter_installed_package_files,
             InstalledPackageNotFound,
         )
+
         try:
             files_iter = iter_installed_package_files(package_name)
         except InstalledPackageNotFound:
@@ -423,10 +465,12 @@ class StaticEngine:
             return FileScanOutput(
                 internal_path=inp.internal_path,
                 findings=(),
-                skipped=(SkippedFile(
-                    internal_path=decided_path,
-                    reason=decided_reason,
-                ),),
+                skipped=(
+                    SkippedFile(
+                        internal_path=decided_path,
+                        reason=decided_reason,
+                    ),
+                ),
                 diagnostics=(),
                 suppressed_findings=(),
                 statistics=ScanStatistics(
@@ -438,7 +482,7 @@ class StaticEngine:
                 file_sha512=inp.file_sha512,
             )
 
-    # Step 3: Build the context and run the analyzer/rule pipeline.
+        # Step 3: Build the context and run the analyzer/rule pipeline.
         context = ScanContext(
             artifact_kind=inp.artifact_kind,
             artifact_identity=inp.artifact_identity,
@@ -450,7 +494,10 @@ class StaticEngine:
         )
         diagnostics: list[str] = []
         signals = self._analyze_file(
-            inp.content, decided_kind, context, diagnostics,
+            inp.content,
+            decided_kind,
+            context,
+            diagnostics,
         )
 
         # Step 3.5: Run enrichers on the signal stream.
@@ -460,7 +507,10 @@ class StaticEngine:
         # cannot block delivery of analyzer findings.
         if self._enrichers:
             signals = self._run_enrichers(
-                signals, inp.content, context, diagnostics,
+                signals,
+                inp.content,
+                context,
+                diagnostics,
             )
 
         # Step 4: Evaluate signals against rules.
@@ -471,20 +521,24 @@ class StaticEngine:
             if result.finding is not None:
                 findings.append(result.finding)
             elif result.suppressed_finding is not None:
-                suppressed.append(SuppressedFinding(
-                    original_finding=result.suppressed_finding,
-                    suppressing_rule_id=(
-                        result.suppressing_rule.rule_id
-                        if result.suppressing_rule else "unknown"
-                    ),
-                    suppressing_rule_source=(
-                        result.suppressing_rule.source.value
-                        if result.suppressing_rule else "unknown"
-                    ),
-                    would_have_been=(
-                        result.would_have_been or result.suppressed_finding
-                    ),
-                ))
+                suppressed.append(
+                    SuppressedFinding(
+                        original_finding=result.suppressed_finding,
+                        suppressing_rule_id=(
+                            result.suppressing_rule.rule_id
+                            if result.suppressing_rule
+                            else "unknown"
+                        ),
+                        suppressing_rule_source=(
+                            result.suppressing_rule.source.value
+                            if result.suppressing_rule
+                            else "unknown"
+                        ),
+                        would_have_been=(
+                            result.would_have_been or result.suppressed_finding
+                        ),
+                    )
+                )
 
         duration = time.perf_counter() - started_at
         return FileScanOutput(
@@ -548,8 +602,7 @@ class StaticEngine:
         """
         if file_kind is FileKind.LIBRARY_PY:
             return tuple(
-                a for a in self._analyzers
-                if getattr(a, "safe_for_library_scan", False)
+                a for a in self._analyzers if getattr(a, "safe_for_library_scan", False)
             )
         return self._analyzers
 
@@ -609,7 +662,10 @@ class StaticEngine:
             parsed = parse_python_source(content, context.internal_path)
             if parsed.is_parseable:
                 return self._run_python_analyzers(
-                    parsed, context, diagnostics, analyzers,
+                    parsed,
+                    context,
+                    diagnostics,
+                    analyzers,
                 )
             # Slow path: Python parsing failed (typically a path-
             # addition line). Fall back to per-EXEC-line analysis,
@@ -619,7 +675,10 @@ class StaticEngine:
         # All other in-scope kinds are Python source files:
         # SETUP_PY, INIT_PY, SITECUSTOMIZE, USERCUSTOMIZE, LIBRARY_PY.
         return self._analyze_python_source(
-            content, context, diagnostics, analyzers,
+            content,
+            context,
+            diagnostics,
+            analyzers,
         )
 
     def _run_enrichers(
@@ -679,9 +738,11 @@ class StaticEngine:
         """
         parsed = parse_python_source(content, context.internal_path)
         return self._run_python_analyzers(
-            parsed, context, diagnostics, analyzers,
+            parsed,
+            context,
+            diagnostics,
+            analyzers,
         )
-
 
     def _run_python_analyzers(
         self,
@@ -747,9 +808,12 @@ class StaticEngine:
             for analyzer in analyzers:
                 try:
                     for signal in analyzer.analyze_python(parsed_snippet):
-                        signals.append(_remap_signal_location(
-                            signal, line.line_number,
-                        ))
+                        signals.append(
+                            _remap_signal_location(
+                                signal,
+                                line.line_number,
+                            )
+                        )
                 except Exception as exc:
                     diagnostics.append(
                         f"analyzer {analyzer.name} raised on exec line "
@@ -821,22 +885,46 @@ class StaticEngine:
             # under 100ms.
             file_sha256, file_sha512 = hash_pair(content)
 
-            inputs.append(FileScanInput(
-                content=content,
-                internal_path=internal_path,
-                artifact_kind=artifact_kind,
-                artifact_identity=identity,
-                forced_file_kind=None,
-                file_sha256=file_sha256,
-                file_sha512=file_sha512,
-            ))
+            inputs.append(
+                FileScanInput(
+                    content=content,
+                    internal_path=internal_path,
+                    artifact_kind=artifact_kind,
+                    artifact_identity=identity,
+                    forced_file_kind=None,
+                    file_sha256=file_sha256,
+                    file_sha512=file_sha512,
+                )
+            )
 
-        # ---- Phase 2: per-file scans (unchanged) --------------------------
+        # ---- Phase 2: per-file scans (serial or parallel) -----------------
         total = len(inputs)
         outputs: list[FileScanOutput] = []
-        for i, inp in enumerate(inputs, start=1):
-            outputs.append(self._scan_one_file(inp))
-            _safe_progress(progress_callback, i, total)
+        extra_diagnostics: list[str] = []
+
+        use_parallel = (
+            self._workers is not None
+            and self._workers > 1
+            and total >= self._parallel_threshold
+        )
+
+        if use_parallel:
+            outputs.extend(self._run_parallel(inputs, progress_callback, total))
+        else:
+            # If the caller asked for parallel but file count is below
+            # threshold, surface that decision in diagnostics so they
+            # know their workers request was downgraded.
+            # workers=None and workers=1 are intentional-serial and do
+            # NOT produce this diagnostic.
+            if self._workers is not None and self._workers > 1 and total > 0:
+                extra_diagnostics.append(
+                    f"workers={self._workers} requested but only {total} "
+                    f"files in scope (threshold={self._parallel_threshold}); "
+                    f"running serial"
+                )
+            for i, inp in enumerate(inputs, start=1):
+                outputs.append(self._scan_one_file(inp))
+                _safe_progress(progress_callback, i, total)
 
         # ---- Phase 3: aggregate -------------------------------------------
         return self._aggregate_outputs(
@@ -847,7 +935,48 @@ class StaticEngine:
             started_at=started_at,
             artifact_sha256=artifact_sha256,
             artifact_sha512=artifact_sha512,
+            extra_diagnostics=tuple(extra_diagnostics),
         )
+
+    def _run_parallel(
+        self,
+        inputs: list[FileScanInput],
+        progress_callback: Callable[[int, int], None] | None,
+        total: int,
+    ) -> list[FileScanOutput]:
+        """Phase 2 parallel path.
+
+        Uses ProcessPoolExecutor with an initializer that stashes the
+        engine in each worker's module globals. The engine pickles once
+        at pool startup; thereafter each task only pickles the
+        FileScanInput and the returned FileScanOutput.
+
+        Uses ordered map() so output order matches input order, which
+        preserves the existing finding-ordering contract. The trade-off
+        is that a single slow file stalls the iteration: results yield
+        in submission order, so file N+1 is held back until file N is
+        complete even if it finished earlier. For pydepgate's workload
+        (per-file scan times are roughly homogeneous within an
+        artifact) this is not a meaningful penalty.
+
+        The progress callback is invoked in the parent process from the
+        result loop, so monotonic counting is preserved without locks.
+        """
+        from concurrent.futures import ProcessPoolExecutor
+
+        outputs: list[FileScanOutput] = []
+        with ProcessPoolExecutor(
+            max_workers=self._workers,
+            initializer=_init_parallel_worker,
+            initargs=(self,),
+        ) as pool:
+            for i, output in enumerate(
+                pool.map(_parallel_scan_one, inputs),
+                start=1,
+            ):
+                outputs.append(output)
+                _safe_progress(progress_callback, i, total)
+        return outputs
 
     def _aggregate_outputs(
         self,
@@ -858,11 +987,17 @@ class StaticEngine:
         started_at: float,
         artifact_sha256: str | None = None,
         artifact_sha512: str | None = None,
+        extra_diagnostics: tuple[str, ...] = (),
     ) -> ScanResult:
-        """Combine per-file outputs into an artifact-level ScanResult."""
+        """Combine per-file outputs into an artifact-level ScanResult.
+
+        `extra_diagnostics` are scan-level diagnostics that do not belong
+        to any single FileScanOutput, such as the below-threshold
+        fallback notice from the Phase 2 dispatcher.
+        """
         all_findings: list[Finding] = []
         all_skipped: list[SkippedFile] = list(pre_skipped)
-        all_diagnostics: list[str] = []
+        all_diagnostics: list[str] = list(extra_diagnostics)
         all_suppressed: list[SuppressedFinding] = []
         per_file_stats: list[FileStatsEntry] = []
 
@@ -882,12 +1017,14 @@ class StaticEngine:
             combined.files_skipped += output.statistics.files_skipped
             combined.signals_emitted += output.statistics.signals_emitted
 
-            per_file_stats.append(FileStatsEntry(
-                internal_path=output.internal_path,
-                duration_seconds=output.statistics.duration_seconds,
-                signals_emitted=output.statistics.signals_emitted,
-                findings_count=len(output.findings),
-            ))
+            per_file_stats.append(
+                FileStatsEntry(
+                    internal_path=output.internal_path,
+                    duration_seconds=output.statistics.duration_seconds,
+                    signals_emitted=output.statistics.signals_emitted,
+                    findings_count=len(output.findings),
+                )
+            )
 
         combined.analyzers_run = len(self._analyzers)
         combined.duration_seconds = time.perf_counter() - started_at
@@ -946,6 +1083,7 @@ def _remap_signal_location(signal: Signal, base_line: int):
         column=signal.location.column,
     )
     return replace(signal, location=new_location)
+
 
 def _safe_progress(
     callback: Callable[[int, int], None] | None,
