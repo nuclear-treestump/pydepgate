@@ -41,6 +41,14 @@ pip install pydepgate
 
 Requires Python 3.11 or later. No third-party runtime dependencies.
 
+## Docker Usage
+
+```bash
+docker pull ghcr.io/nuclear-treestump/pydepgate:0.4.5
+```
+
+[See Docker README.md for usage details and suggested workflows](docker/README.md)
+
 ## Quickstart
 
 ```bash
