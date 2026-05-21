@@ -2,6 +2,7 @@
 title: CI Integration
 parent: Guides
 nav_order: 1
+render_with_liquid: false
 ---
 # CI Integration
 
@@ -12,6 +13,7 @@ for commit-time scanning. This page covers all three.
 ## Exit code contract
 
 All three integration paths depend on pydepgate's exit codes:
+
 
 | Code | Meaning |
 |---|---|
@@ -108,8 +110,8 @@ published for `linux/amd64` and `linux/arm64`.
 
 ```bash
 docker pull ghcr.io/nuclear-treestump/pydepgate:latest
-docker pull ghcr.io/nuclear-treestump/pydepgate:0.4.0
-docker pull ghcr.io/nuclear-treestump/pydepgate:0.4
+docker pull ghcr.io/nuclear-treestump/pydepgate:x.y.z
+docker pull ghcr.io/nuclear-treestump/pydepgate:x.y
 ```
 
 Scan a wheel from the host filesystem:
@@ -274,6 +276,7 @@ pre-commit:
 
 ## Recommended thresholds
 
+
 | Context | Recommended flag | Rationale |
 |---|---|---|
 | CI artifact scan | `--ci --min-severity high` | JSON output, no color, blocking only on HIGH/CRITICAL |
@@ -284,7 +287,7 @@ pre-commit:
 
 ## JSON output for downstream processing
 
-To consume pydepgate output in a downstream step rather than failing
+ To consume pydepgate output in a downstream step rather than failing
 the pipeline directly:
 
 ```bash

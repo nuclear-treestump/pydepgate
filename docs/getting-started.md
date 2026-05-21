@@ -16,7 +16,7 @@ pydepgate version
 ```
 
 ```
-pydepgate 0.4.0
+pydepgate x.y.z
 ```
 
 Requirements: Python 3.11 or later. No third-party dependencies are installed.
@@ -129,9 +129,7 @@ if [ $? -eq 2 ]; then
 fi
 ```
 
-Or use `--ci`, which sets `--min-severity high` and `--no-color` and exits `2`
-on any finding (since `--min-severity high` filters everything below HIGH before
-the exit code is computed):
+Or use `--ci`, which sets `--format json` and `--no-color` and exits `2`:
 
 ```bash
 pydepgate scan --ci some-package.whl

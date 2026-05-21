@@ -5,7 +5,7 @@ nav_order: 5
 ---
 # Signals Reference
 
-pydepgate emits 30 signals across five analyzer namespaces. Each signal
+pydepgate emits signals across five analyzer namespaces. Each signal
 represents a specific detection pattern.
 
 ## How severity is assigned
@@ -423,8 +423,8 @@ class ([CVE-2021-42574](https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2021-
 | `pth` | CRITICAL |
 | `setup_py` | CRITICAL |
 | `sitecustomize` | CRITICAL |
-| `library_py` (deep mode) | HIGH |
-| All other file kinds (anywhere rule) | HIGH |
+| `library_py` (deep mode) | MEDIUM |
+| All other file kinds (anywhere rule) | MEDIUM |
 
 ### DENS031
 
@@ -436,8 +436,8 @@ identifier. Enables steganographic evasion of string-match scanners.
 |---|---|
 | `pth` | CRITICAL |
 | `setup_py` | CRITICAL |
-| `library_py` (deep mode) | HIGH |
-| All other file kinds (anywhere rule) | HIGH |
+| `library_py` (deep mode) | MEDIUM |
+| All other file kinds (anywhere rule) | MEDIUM |
 
 ### DENS040
 
@@ -494,7 +494,7 @@ payload) with DENS051 (executing it).
 | `setup_py` | CRITICAL |
 | Any file, length >= 10240 bytes | CRITICAL |
 | Length >= 1024 bytes | HIGH |
-| `library_py` (deep mode) | HIGH |
+| `library_py` (deep mode) | MEDIUM |
 | All other file kinds (anywhere rule) | MEDIUM |
 
 ### DENS051
@@ -510,5 +510,5 @@ suppressed via a user rule.
 |---|---|
 | `pth` | CRITICAL |
 | `setup_py` | CRITICAL |
-| `library_py` (deep mode) | HIGH |
-| All other file kinds (anywhere rule) | HIGH |
+| `library_py` (deep mode) | MEDIUM |
+| All other file kinds (anywhere rule) | MEDIUM |
