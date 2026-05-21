@@ -14,7 +14,7 @@ pydepgate version
 ## Output
 
 ```
-pydepgate 0.4.2
+pydepgate x.y.z
 ```
 
 ## Alternatives
