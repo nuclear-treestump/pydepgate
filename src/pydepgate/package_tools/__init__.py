@@ -3,29 +3,24 @@
 Subsystems that operate on Python packages as units of work rather
 than on files inside packages. Static analyzers and enrichers under
 pydepgate/analyzers and pydepgate/enrichers operate on file content;
-the modules here operate on package identity (name, version, declared
-dependencies, published vulnerabilities).
+the modules here operate on package identity, package metadata,
+published vulnerabilities, and future artifact-level policy.
 
 Currently houses:
 
-  metadata.py
-            Artifact-level package identity and metadata extraction.
-            Provides the reusable name/version source for future
-            package_tools consumers.
+  metadata      Artifact-level package identity and metadata
+                extraction. Wheels are the first supported artifact
+                type.
 
-  cvedb/    OSV PyPI vulnerability database import, storage, and
-            lookup. Backs the depscan CVE pass that lands in
-            v0.6.0.
+  cvedb/        OSV PyPI vulnerability database import, storage, and
+                lookup.
 
-A shared base class for package_tools lands when multiple
-package-level tools need a common lifecycle; until then the surface
-is too small to abstract without guessing at requirements.
+  cvescanner/   Artifact-level CVE scanner. Consumes metadata and
+                cvedb lookup results, and returns scanner-shaped
+                package vulnerability findings.
 
-Base expectation would be a PackageTool class that intakes a
-Metadata or PackageInfo object and produces a Finding object.
-This DOES mean I will have to implement both V2, V3, and V4 of
-CVSS math in the CVE pass, but that's a problem for future me.
-
-TODO: Add a base class for package tools, and refactor cvedb to use it.
-
+A shared base class for package_tools should land only after the
+scanner and future package-level tools prove the common contract. The
+current split keeps file scanning, metadata extraction, cvedb storage,
+and CVE scan policy in separate modules.
 """

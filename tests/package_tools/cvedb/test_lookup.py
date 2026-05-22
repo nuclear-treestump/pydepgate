@@ -8,8 +8,10 @@ Coverage:
   * Aliases are returned in deterministic order.
   * Duplicate exact and ALL rows collapse to one match, preferring
     the exact-version row.
-  * affected_ranges rows are surfaced as unevaluated range hints, not
-    as definite matches.
+  * ECOSYSTEM affected_ranges rows are evaluated with the private
+    PEP 440 helper.
+  * Unsupported or unparseable affected_ranges rows are surfaced as
+    unevaluated range hints, not definite matches.
   * Empty name or version inputs return warnings without touching DB
     schema state.
   * File-backed lookup opens and closes the database.
@@ -26,6 +28,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from pydepgate.package_tools import cvedb
 from pydepgate.package_tools.cvedb import constants
 from pydepgate.package_tools.cvedb import importer
 from pydepgate.package_tools.cvedb import lookup
@@ -264,7 +267,7 @@ class LookupPackageTests(unittest.TestCase):
         finally:
             conn.close()
 
-    def test_range_rows_are_reported_but_not_matched(self):
+    def test_fixed_range_row_matches_when_version_is_inside_range(self):
         conn = _make_conn()
         try:
             _insert_vulnerability(conn, "CVE-2025-0007")
@@ -278,6 +281,100 @@ class LookupPackageTests(unittest.TestCase):
 
             result = lookup.lookup_package(conn, "setuptools", "70.0.0")
 
+            self.assertFalse(result.has_unevaluated_ranges)
+            self.assertEqual(result.warnings, ())
+            self.assertEqual(len(result.matches), 1)
+            match = result.matches[0]
+            self.assertEqual(match.canonical_id, "CVE-2025-0007")
+            self.assertEqual(match.match_type, lookup.MATCH_TYPE_RANGE_FIXED)
+            self.assertEqual(match.database_package_name, "setuptools")
+            self.assertEqual(match.database_version, "")
+            self.assertEqual(match.range_type, "ECOSYSTEM")
+            self.assertEqual(match.introduced, "0")
+            self.assertEqual(match.fixed, "78.1.1")
+            self.assertEqual(match.last_affected, "")
+        finally:
+            conn.close()
+
+    def test_fixed_range_row_does_not_match_when_version_is_after_fix(self):
+        conn = _make_conn()
+        try:
+            _insert_vulnerability(conn, "CVE-2025-0010")
+            _insert_range(
+                conn,
+                "CVE-2025-0010",
+                "setuptools",
+                introduced="0",
+                fixed="78.1.1",
+            )
+
+            result = lookup.lookup_package(conn, "setuptools", "78.1.1")
+
+            self.assertEqual(result.matches, ())
+            self.assertEqual(result.unevaluated_ranges, ())
+            self.assertEqual(result.warnings, ())
+        finally:
+            conn.close()
+
+    def test_last_affected_range_row_matches_inclusive_upper_bound(self):
+        conn = _make_conn()
+        try:
+            _insert_vulnerability(conn, "CVE-2025-0011")
+            _insert_range(
+                conn,
+                "CVE-2025-0011",
+                "example-pkg",
+                introduced="1.0",
+                fixed="",
+                last_affected="1.5",
+            )
+
+            result = lookup.lookup_package(conn, "example-pkg", "1.5")
+
+            self.assertEqual(len(result.matches), 1)
+            self.assertEqual(
+                result.matches[0].match_type,
+                lookup.MATCH_TYPE_RANGE_LAST_AFFECTED,
+            )
+            self.assertEqual(result.matches[0].last_affected, "1.5")
+        finally:
+            conn.close()
+
+    def test_open_range_row_matches_from_introduced_onward(self):
+        conn = _make_conn()
+        try:
+            _insert_vulnerability(conn, "CVE-2025-0012")
+            _insert_range(
+                conn,
+                "CVE-2025-0012",
+                "example-pkg",
+                introduced="2.0",
+                fixed="",
+                last_affected="",
+            )
+
+            result = lookup.lookup_package(conn, "example-pkg", "2.1")
+
+            self.assertEqual(len(result.matches), 1)
+            self.assertEqual(result.matches[0].match_type, lookup.MATCH_TYPE_RANGE_OPEN)
+            self.assertEqual(result.matches[0].introduced, "2.0")
+        finally:
+            conn.close()
+
+    def test_unparseable_range_row_is_reported_but_not_matched(self):
+        conn = _make_conn()
+        try:
+            _insert_vulnerability(conn, "CVE-2025-0013")
+            _insert_range(
+                conn,
+                "CVE-2025-0013",
+                "setuptools",
+                introduced="not-a-version",
+                fixed="78.1.1",
+            )
+
+            result = lookup.lookup_package(conn, "setuptools", "70.0.0")
+
             self.assertEqual(result.matches, ())
             self.assertTrue(result.has_unevaluated_ranges)
             self.assertIn(
@@ -286,10 +383,104 @@ class LookupPackageTests(unittest.TestCase):
             )
             self.assertEqual(len(result.unevaluated_ranges), 1)
             range_hint = result.unevaluated_ranges[0]
-            self.assertEqual(range_hint.canonical_id, "CVE-2025-0007")
+            self.assertEqual(range_hint.canonical_id, "CVE-2025-0013")
             self.assertEqual(range_hint.package_name, "setuptools")
-            self.assertEqual(range_hint.introduced, "0")
+            self.assertEqual(range_hint.introduced, "not-a-version")
             self.assertEqual(range_hint.fixed, "78.1.1")
+            self.assertEqual(
+                range_hint.reason,
+                lookup.UNEVALUATED_REASON_UNPARSEABLE_VERSION_RANGE,
+            )
+        finally:
+            conn.close()
+
+    def test_git_range_row_is_reported_but_not_compared(self):
+        conn = _make_conn()
+        try:
+            _insert_vulnerability(conn, "CVE-2025-0018")
+            _insert_range(
+                conn,
+                "CVE-2025-0018",
+                "luigi",
+                introduced="0",
+                fixed="b5d1b965ead7d9f777a3216369b5baf23ec08999",
+                range_type="GIT",
+            )
+
+            result = lookup.lookup_package(conn, "luigi", "3.6.0")
+
+            self.assertEqual(result.matches, ())
+            self.assertTrue(result.has_unevaluated_ranges)
+            self.assertIn(
+                lookup.WARNING_RANGE_ROWS_UNEVALUATED,
+                result.warnings,
+            )
+            self.assertEqual(len(result.unevaluated_ranges), 1)
+            range_hint = result.unevaluated_ranges[0]
+            self.assertEqual(range_hint.canonical_id, "CVE-2025-0018")
+            self.assertEqual(range_hint.package_name, "luigi")
+            self.assertEqual(range_hint.range_type, "GIT")
+            self.assertEqual(range_hint.introduced, "0")
+            self.assertEqual(
+                range_hint.fixed,
+                "b5d1b965ead7d9f777a3216369b5baf23ec08999",
+            )
+            self.assertEqual(
+                range_hint.reason,
+                lookup.UNEVALUATED_REASON_UNSUPPORTED_RANGE_TYPE,
+            )
+        finally:
+            conn.close()
+
+    def test_exact_row_preferred_over_range_row_for_same_canonical(self):
+        conn = _make_conn()
+        try:
+            _insert_vulnerability(conn, "CVE-2025-0014")
+            _insert_range(
+                conn,
+                "CVE-2025-0014",
+                "example-pkg",
+                introduced="0",
+                fixed="2.0",
+            )
+            _insert_version(conn, "CVE-2025-0014", "example-pkg", "1.0")
+
+            result = lookup.lookup_package(conn, "example-pkg", "1.0")
+
+            self.assertEqual(len(result.matches), 1)
+            self.assertEqual(
+                result.matches[0].match_type,
+                lookup.MATCH_TYPE_EXACT_VERSION,
+            )
+            self.assertEqual(result.matches[0].database_version, "1.0")
+        finally:
+            conn.close()
+
+    def test_range_row_preferred_over_all_row_for_same_canonical(self):
+        conn = _make_conn()
+        try:
+            _insert_vulnerability(conn, "CVE-2025-0015")
+            _insert_version(
+                conn,
+                "CVE-2025-0015",
+                "example-pkg",
+                importer.ALL_VERSIONS_SENTINEL,
+            )
+            _insert_range(
+                conn,
+                "CVE-2025-0015",
+                "example-pkg",
+                introduced="0",
+                fixed="2.0",
+            )
+
+            result = lookup.lookup_package(conn, "example-pkg", "1.0")
+
+            self.assertEqual(len(result.matches), 1)
+            self.assertEqual(
+                result.matches[0].match_type, lookup.MATCH_TYPE_RANGE_FIXED
+            )
+            self.assertEqual(result.matches[0].fixed, "2.0")
         finally:
             conn.close()
 
@@ -410,6 +601,43 @@ class PickleSafetyTests(unittest.TestCase):
             self.assertEqual(restored, result)
         finally:
             conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Public cvedb shim
+# ---------------------------------------------------------------------------
+
+
+class PublicCvedbShimTests(unittest.TestCase):
+    def test_lookup_package_shim_delegates_to_lookup_module(self):
+        conn = _make_conn()
+        try:
+            _insert_vulnerability(conn, "CVE-2025-0016")
+            _insert_version(conn, "CVE-2025-0016", "example-pkg", "1.0")
+
+            result = cvedb.lookup_package(conn, "example-pkg", "1.0")
+
+            self.assertEqual(len(result.matches), 1)
+            self.assertEqual(result.matches[0].canonical_id, "CVE-2025-0016")
+        finally:
+            conn.close()
+
+    def test_lookup_package_in_db_shim_delegates_to_lookup_module(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "cvedb.sqlite"
+            conn = schema.connect(db_path)
+            try:
+                schema.initialize_schema(conn)
+                _insert_vulnerability(conn, "CVE-2025-0017")
+                _insert_version(conn, "CVE-2025-0017", "example-pkg", "1.0")
+                conn.commit()
+            finally:
+                conn.close()
+
+            result = cvedb.lookup_package_in_db(db_path, "example-pkg", "1.0")
+
+            self.assertEqual(len(result.matches), 1)
+            self.assertEqual(result.matches[0].canonical_id, "CVE-2025-0017")
 
 
 if __name__ == "__main__":
