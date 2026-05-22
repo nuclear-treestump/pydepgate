@@ -14,6 +14,100 @@ become binding stability promises with formal deprecation cycles.
 
 (no changes yet)
 
+## [0.4.6] - 2026-05-22
+
+### Added
+
+- **Package metadata extraction for artifacts.** New
+  `pydepgate.package_tools.metadata` module for reading package
+  identity and artifact-level metadata from Python wheels. The
+  reader prefers root `.dist-info/METADATA` `Name` and `Version`
+  fields, records `.dist-info/WHEEL` values when present, parses
+  `direct_url.json` as artifact-declared provenance evidence, and
+  falls back to wheel filename identity only when core metadata is
+  missing or incomplete. The result objects are frozen and
+  pickle-safe so future package-level scanners can reuse the same
+  metadata layer without reopening or reinterpreting artifacts.
+
+- **CVE database lookup layer.** New
+  `pydepgate.package_tools.cvedb.lookup` module for querying the
+  local OSV PyPI SQLite database by package name and version. The
+  lookup layer supports exact affected-version rows, the
+  importer's `ALL` sentinel, normalized package-name matching, and
+  evaluated `ECOSYSTEM` advisory ranges. It returns immutable
+  `LookupResult`, `VulnerabilityMatch`, and `UnevaluatedRange`
+  records instead of CLI-specific output so scanner, report, and
+  future policy code can consume the same query primitive.
+
+- **Private PEP 440 version helper.** New private
+  `pydepgate.package_tools.cvedb._pepver` helper for conservative,
+  stdlib-only package version comparison. It handles the supported
+  PEP 440 shapes needed by OSV ecosystem ranges, including release
+  segments, epochs, pre-releases, post releases, dev releases, and
+  local versions. Unsupported or unparseable comparisons return
+  unknown instead of falling back to string comparison, which avoids
+  silent false negatives in range evaluation.
+
+- **Package-level CVE scanner package.** New
+  `pydepgate.package_tools.cvescanner` package for scanning a
+  package identity against the local CVE database. The scanner
+  exposes artifact, metadata, and direct identity entrypoints,
+  preserves metadata warnings, returns package-level
+  `CveFinding` records, and keeps unevaluated advisory ranges as
+  separate evidence rather than pretending they are findings. An
+  optional `applied_policy_result` value is accepted and preserved
+  on scan results so future policy ingestion can influence the CVE
+  scanner without changing the public call shape.
+
+- **`pydepgate cvescan` CLI command.** New standalone CLI command
+  for scanning wheel artifacts against the local CVE database. The
+  command reads package identity from wheel metadata, queries the
+  `cvedb` database, and emits human or JSON output. It supports
+  `--db-path`, `--ignore-missing-db`, `--format human|json`,
+  `--min-severity`, and `--strict-exit`. The normal
+  `pydepgate scan` command is unchanged; `cvescan` is intentionally
+  package-level while `scan` remains file and startup-vector
+  focused.
+
+- **CVE scanner documentation.** New CLI documentation page for
+  `pydepgate cvescan`, covering setup with `pydepgate cvedb
+  update`, supported artifacts, human and JSON output, match types,
+  unevaluated ranges, flags, exit codes, database behavior, and the
+  relationship between `scan` and `cvescan`.
+
+### Changed
+
+- **OSV range rows are now evaluated for CVE scanning.**
+  `ECOSYSTEM` rows from the `affected_ranges` table are evaluated
+  using the private PEP 440 helper. Supported range outcomes are
+  surfaced as `range-fixed`, `range-last-affected`, or `range-open`
+  matches. Non-ecosystem ranges such as `GIT` ranges are preserved
+  as unevaluated advisory evidence with an explicit reason instead
+  of being compared against Python package versions.
+
+- **`cvedb` package exports lookup shims.** The
+  `pydepgate.package_tools.cvedb` package now exposes
+  `lookup_package()` and `lookup_package_in_db()` as public shims
+  over the storage-focused lookup module. This gives callers a
+  stable import point without moving scanner policy or CLI behavior
+  into the database package.
+
+### Security
+
+No security advisories in this release.
+
+This release adds a package-level known-vulnerability scanner. It
+does not change the existing static file-analysis threat model or
+make `pydepgate scan` perform CVE lookups implicitly. CVE data is
+read from the local OSV-derived SQLite database and processed as
+data only. Unsupported advisory range types, including Git commit
+ranges, are not coerced into Python version comparisons.
+
+The new scanner was exercised against 200 random packages chosen
+from affected entries in the OSV DB and correctly reports 
+exact-version malware records, fixed-bound vulnerability ranges,
+ and last-affected malicious package ranges from the OSV PyPI dataset.
+
 ## [0.4.5] - 2026-05-17
  
 ### Added
@@ -681,7 +775,8 @@ issues will land in [ROADMAP.md](ROADMAP.md):
   meaningful speedups on multi-megabyte wheels with thousands
   of files.
 
-[Unreleased]: https://github.com/nuclear-treestump/pydepgate/compare/v0.4.5...HEAD
+[Unreleased]: https://github.com/nuclear-treestump/pydepgate/compare/v0.4.6...HEAD
+[0.4.6]: https://github.com/nuclear-treestump/pydepgate/compare/v0.4.5...v0.4.6
 [0.4.5]: https://github.com/nuclear-treestump/pydepgate/compare/v0.4.2...v0.4.5
 [0.4.2]: https://github.com/nuclear-treestump/pydepgate/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/nuclear-treestump/pydepgate/compare/v0.4.0...v0.4.1
