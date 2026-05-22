@@ -9,12 +9,16 @@ rendering, or artifact scan policy. Those callers should supply a
 package name and version, then decide how to display or merge the
 result.
 
-The first lookup generation handles only exact affected-version rows
-and the importer's ALL sentinel. affected_ranges rows are surfaced as
-unevaluated range hints and as warnings, but they are not evaluated
-against the supplied version yet. That is deliberate: Python package
-version comparison needs a careful stdlib-only implementation before
-range matching can be trusted.
+Lookup handles three definite match sources:
+
+  * exact rows from affected_versions
+  * the importer's ALL sentinel in affected_versions
+  * evaluable rows from affected_ranges
+
+Version range checks are delegated to cvedb._pepver for ECOSYSTEM
+ranges. If a range row uses a different range type or cannot be
+evaluated safely, lookup.py returns it as an unevaluated range and
+emits a warning instead of guessing.
 
 Public surface:
 
@@ -43,6 +47,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Sequence
 
+from pydepgate.package_tools.cvedb import _pepver
 from pydepgate.package_tools.cvedb import constants
 from pydepgate.package_tools.cvedb import importer
 from pydepgate.package_tools.cvedb import schema
@@ -53,10 +58,17 @@ from pydepgate.package_tools.cvedb import schema
 
 MATCH_TYPE_EXACT_VERSION = "exact-version"
 MATCH_TYPE_ALL_VERSIONS = "all-versions"
+MATCH_TYPE_RANGE_FIXED = "range-fixed"
+MATCH_TYPE_RANGE_LAST_AFFECTED = "range-last-affected"
+MATCH_TYPE_RANGE_OPEN = "range-open"
 
 WARNING_RANGE_ROWS_UNEVALUATED = "range-rows-unevaluated"
 WARNING_EMPTY_PACKAGE_NAME = "empty-package-name"
 WARNING_EMPTY_PACKAGE_VERSION = "empty-package-version"
+
+RANGE_TYPE_ECOSYSTEM = "ECOSYSTEM"
+UNEVALUATED_REASON_UNSUPPORTED_RANGE_TYPE = "unsupported-range-type"
+UNEVALUATED_REASON_UNPARSEABLE_VERSION_RANGE = "unparseable-version-range"
 
 _SQL_NORMALIZE_PACKAGE = "pydepgate_normalize_package"
 _NAME_NORMALIZER = re.compile(r"[-_.]+")
@@ -85,16 +97,21 @@ class VulnerabilityMatch:
             surrounding whitespace was stripped.
         database_package_name: Package name stored in cvedb for the
             matched row.
-        database_version: Version stored in affected_versions. This is
-            either the queried version for exact matches or the ALL
-            sentinel for universal matches.
-        match_type: MATCH_TYPE_EXACT_VERSION or
-            MATCH_TYPE_ALL_VERSIONS.
+        database_version: Version stored in affected_versions for
+            exact and ALL matches. Empty for range matches because the
+            match came from affected_ranges instead.
+        match_type: Stable match-type string. Exact version rows use
+            MATCH_TYPE_EXACT_VERSION, ALL rows use
+            MATCH_TYPE_ALL_VERSIONS, and range rows use one of the
+            MATCH_TYPE_RANGE_* constants.
         summary, details, published, modified, cvss_v3, cvss_v4,
         severity: Vulnerability attributes copied from the
             vulnerabilities table.
         versions_complete: Boolean projection of the DB row's
             versions_complete flag.
+        range_type, introduced, fixed, last_affected: affected_ranges
+            details for range matches. Empty for affected_versions
+            matches.
     """
 
     canonical_id: str
@@ -113,16 +130,21 @@ class VulnerabilityMatch:
     cvss_v4: str | None
     severity: str | None
     versions_complete: bool
+    range_type: str = ""
+    introduced: str = ""
+    fixed: str = ""
+    last_affected: str = ""
 
 
 @dataclass(frozen=True)
 class UnevaluatedRange:
-    """affected_ranges row that belongs to the queried package.
+    """affected_ranges row that could not be evaluated safely.
 
-    Range rows are useful evidence but are not findings in this first
-    lookup generation. They are returned so cvescan can warn users that
-    a package has range-based advisory data that lookup.py could not
-    yet evaluate.
+    Unevaluated ranges are evidence, not findings. lookup.py returns
+    them so cvescan can warn users that advisory data exists but could
+    not be compared against the queried version without guessing. The
+    reason field is a stable machine-readable explanation for why the
+    row was not evaluated.
     """
 
     canonical_id: str
@@ -131,6 +153,7 @@ class UnevaluatedRange:
     introduced: str
     fixed: str
     last_affected: str
+    reason: str = ""
 
 
 @dataclass(frozen=True)
@@ -145,9 +168,10 @@ class LookupResult:
         package_version: Caller supplied package version after
             stripping whitespace, or an empty string when the input was
             empty.
-        matches: Definite exact-version or ALL-sentinel matches.
-        unevaluated_ranges: Range rows for this package that were not
-            evaluated against the supplied version.
+        matches: Definite exact-version, ALL-sentinel, or range
+            matches.
+        unevaluated_ranges: Range rows for this package that could not
+            be evaluated against the supplied version.
         warnings: Non-fatal lookup warnings.
         attribution: Attribution line for the vulnerability data
             source. Reporters should surface this when vulnerability
@@ -226,8 +250,9 @@ def lookup_package_in_db(
         package_name: Package name to query. The lookup normalizes this
             for comparison, but the original stripped value is preserved
             in the result.
-        version: Package version to query. Version strings are matched
-            exactly in this generation.
+        version: Package version to query. Exact affected_versions rows
+            are matched literally. affected_ranges rows are evaluated
+            with the private stdlib-only PEP 440 helper.
 
     Returns:
         LookupResult with definite matches, unevaluated range hints,
@@ -264,8 +289,10 @@ def lookup_package(
     This function is the testable core of lookup.py. It validates the
     supplied identity, verifies schema compatibility, installs a small
     SQLite normalization function on the connection, then queries exact
-    affected_versions rows, ALL-sentinel rows, and unevaluated
-    affected_ranges rows.
+    affected_versions rows, ALL-sentinel rows, and affected_ranges rows.
+    ECOSYSTEM range rows that can be evaluated safely become definite
+    matches; unsupported or unparseable rows become unevaluated range
+    hints.
 
     Args:
         conn: Open sqlite3.Connection to a cvedb database.
@@ -318,6 +345,10 @@ def lookup_package(
             package_name=clean_name,
             normalized_package_name=normalized_name,
         )
+        matched_range_rows, unevaluated_range_rows = _split_range_rows(
+            range_rows,
+            clean_version,
+        )
         aliases = _fetch_aliases(
             conn,
             _canonical_ids(match_rows, range_rows),
@@ -328,12 +359,15 @@ def lookup_package(
     except sqlite3.Error as exc:
         raise CveLookupError(f"cvedb lookup failed: {exc}") from exc
 
-    ranges = tuple(_range_from_row(row) for row in range_rows)
+    ranges = tuple(
+        _range_from_row(row, reason=reason) for row, reason in unevaluated_range_rows
+    )
     if ranges:
         warnings.append(WARNING_RANGE_ROWS_UNEVALUATED)
 
     matches = _build_matches(
-        rows=match_rows,
+        version_rows=match_rows,
+        range_rows=matched_range_rows,
         aliases=aliases,
         queried_name=clean_name,
         normalized_queried_name=normalized_name,
@@ -441,23 +475,28 @@ def _fetch_range_rows(
     normalized_package_name: str,
 ) -> list[tuple]:
     """Fetch affected_ranges rows that belong to the queried package."""
+    select_clause = (
+        "SELECT v.canonical_id, v.summary, v.details, v.published, "
+        "v.modified, v.cvss_v3, v.cvss_v4, v.severity, "
+        "v.versions_complete, ar.package_name, ar.range_type, "
+        "ar.introduced, ar.fixed, ar.last_affected "
+        "FROM affected_ranges ar "
+        "JOIN vulnerabilities v ON v.canonical_id = ar.canonical_id "
+    )
+    order_clause = (
+        "ORDER BY v.canonical_id, ar.package_name, ar.range_type, "
+        "ar.introduced, ar.fixed, ar.last_affected"
+    )
+
     exact_rows = conn.execute(
-        "SELECT canonical_id, package_name, range_type, introduced, "
-        "fixed, last_affected "
-        "FROM affected_ranges "
-        "WHERE package_name IN (?, ?) "
-        "ORDER BY canonical_id, package_name, introduced, fixed, "
-        "last_affected",
+        select_clause + "WHERE ar.package_name IN (?, ?) " + order_clause,
         (package_name, normalized_package_name),
     ).fetchall()
 
     normalized_rows = conn.execute(
-        "SELECT canonical_id, package_name, range_type, introduced, "
-        "fixed, last_affected "
-        "FROM affected_ranges "
-        f"WHERE {_SQL_NORMALIZE_PACKAGE}(package_name) = ? "
-        "ORDER BY canonical_id, package_name, introduced, fixed, "
-        "last_affected",
+        select_clause
+        + f"WHERE {_SQL_NORMALIZE_PACKAGE}(ar.package_name) = ? "
+        + order_clause,
         (normalized_package_name,),
     ).fetchall()
 
@@ -541,75 +580,221 @@ def _read_attribution(conn: sqlite3.Connection) -> str:
 # ---------------------------------------------------------------------------
 
 
+def _split_range_rows(
+    rows: Sequence[tuple],
+    queried_version: str,
+) -> tuple[list[tuple], list[tuple[tuple, str]]]:
+    """Split affected_ranges rows into matched and unevaluated rows.
+
+    Only OSV ECOSYSTEM ranges are comparable to Python package
+    versions. GIT ranges may contain commit hashes in the fixed field,
+    so lookup preserves them as unevaluated evidence instead of passing
+    them through the PEP 440 comparator.
+    """
+    matched: list[tuple] = []
+    unevaluated: list[tuple[tuple, str]] = []
+
+    for row in rows:
+        range_type = str(row[10] or "")
+        if range_type.upper() != RANGE_TYPE_ECOSYSTEM:
+            unevaluated.append((row, UNEVALUATED_REASON_UNSUPPORTED_RANGE_TYPE))
+            continue
+
+        applies = _pepver.version_in_range(
+            queried_version,
+            introduced=row[11],
+            fixed=row[12],
+            last_affected=row[13],
+        )
+        if applies is True:
+            matched.append(row)
+        elif applies is None:
+            unevaluated.append((row, UNEVALUATED_REASON_UNPARSEABLE_VERSION_RANGE))
+
+    return matched, unevaluated
+
+
 def _build_matches(
     *,
-    rows: Sequence[tuple],
+    version_rows: Sequence[tuple],
+    range_rows: Sequence[tuple],
     aliases: dict[str, tuple[str, ...]],
     queried_name: str,
     normalized_queried_name: str,
     queried_version: str,
 ) -> tuple[VulnerabilityMatch, ...]:
-    """Convert affected_versions rows into one match per canonical ID."""
-    selected: dict[str, tuple[int, tuple]] = {}
-    for row in rows:
+    """Convert DB rows into one definite match per canonical ID."""
+    selected: dict[str, tuple[int, tuple, str]] = {}
+
+    for row in version_rows:
         canonical_id = row[0]
-        match_rank = _match_rank(row[10], queried_version)
-        current = selected.get(canonical_id)
-        if current is None or match_rank > current[0]:
-            selected[canonical_id] = (match_rank, row)
-        elif current is not None and match_rank == current[0]:
-            if tuple(row) < tuple(current[1]):
-                selected[canonical_id] = (match_rank, row)
+        match_rank = _version_match_rank(row[10], queried_version)
+        _select_best_row(
+            selected,
+            canonical_id=canonical_id,
+            rank=match_rank,
+            row=row,
+            row_kind="version",
+        )
+
+    for row in range_rows:
+        canonical_id = row[0]
+        _select_best_row(
+            selected,
+            canonical_id=canonical_id,
+            rank=20,
+            row=row,
+            row_kind="range",
+        )
 
     out = []
     for canonical_id in sorted(selected):
-        row = selected[canonical_id][1]
-        out.append(
-            VulnerabilityMatch(
-                canonical_id=canonical_id,
-                aliases=aliases.get(canonical_id, (canonical_id,)),
-                queried_name=queried_name,
-                normalized_queried_name=normalized_queried_name,
-                queried_version=queried_version,
-                database_package_name=row[9],
-                database_version=row[10],
-                match_type=_match_type(row[10], queried_version),
-                summary=row[1],
-                details=row[2],
-                published=row[3],
-                modified=row[4],
-                cvss_v3=row[5],
-                cvss_v4=row[6],
-                severity=row[7],
-                versions_complete=bool(row[8]),
+        _rank, row, row_kind = selected[canonical_id]
+        if row_kind == "range":
+            out.append(
+                _range_match_from_row(
+                    row,
+                    aliases=aliases,
+                    queried_name=queried_name,
+                    normalized_queried_name=normalized_queried_name,
+                    queried_version=queried_version,
+                )
             )
-        )
+        else:
+            out.append(
+                _version_match_from_row(
+                    row,
+                    aliases=aliases,
+                    queried_name=queried_name,
+                    normalized_queried_name=normalized_queried_name,
+                    queried_version=queried_version,
+                )
+            )
     return tuple(out)
 
 
-def _match_rank(database_version: str, queried_version: str) -> int:
-    """Rank duplicate rows for the same canonical vulnerability."""
+def _select_best_row(
+    selected: dict[str, tuple[int, tuple, str]],
+    *,
+    canonical_id: str,
+    rank: int,
+    row: tuple,
+    row_kind: str,
+) -> None:
+    """Keep the most precise deterministic row for a canonical ID."""
+    current = selected.get(canonical_id)
+    candidate = (rank, tuple(row), row_kind)
+    if current is None:
+        selected[canonical_id] = (rank, row, row_kind)
+        return
+
+    current_rank, current_row, current_kind = current
+    current_candidate = (current_rank, tuple(current_row), current_kind)
+    if candidate[0] > current_candidate[0]:
+        selected[canonical_id] = (rank, row, row_kind)
+    elif candidate[0] == current_candidate[0] and candidate[1:] < current_candidate[1:]:
+        selected[canonical_id] = (rank, row, row_kind)
+
+
+def _version_match_from_row(
+    row: tuple,
+    *,
+    aliases: dict[str, tuple[str, ...]],
+    queried_name: str,
+    normalized_queried_name: str,
+    queried_version: str,
+) -> VulnerabilityMatch:
+    """Convert one affected_versions row into a VulnerabilityMatch."""
+    canonical_id = row[0]
+    return VulnerabilityMatch(
+        canonical_id=canonical_id,
+        aliases=aliases.get(canonical_id, (canonical_id,)),
+        queried_name=queried_name,
+        normalized_queried_name=normalized_queried_name,
+        queried_version=queried_version,
+        database_package_name=row[9],
+        database_version=row[10],
+        match_type=_version_match_type(row[10], queried_version),
+        summary=row[1],
+        details=row[2],
+        published=row[3],
+        modified=row[4],
+        cvss_v3=row[5],
+        cvss_v4=row[6],
+        severity=row[7],
+        versions_complete=bool(row[8]),
+    )
+
+
+def _range_match_from_row(
+    row: tuple,
+    *,
+    aliases: dict[str, tuple[str, ...]],
+    queried_name: str,
+    normalized_queried_name: str,
+    queried_version: str,
+) -> VulnerabilityMatch:
+    """Convert one matched affected_ranges row into a VulnerabilityMatch."""
+    canonical_id = row[0]
+    return VulnerabilityMatch(
+        canonical_id=canonical_id,
+        aliases=aliases.get(canonical_id, (canonical_id,)),
+        queried_name=queried_name,
+        normalized_queried_name=normalized_queried_name,
+        queried_version=queried_version,
+        database_package_name=row[9],
+        database_version="",
+        match_type=_range_match_type(row),
+        summary=row[1],
+        details=row[2],
+        published=row[3],
+        modified=row[4],
+        cvss_v3=row[5],
+        cvss_v4=row[6],
+        severity=row[7],
+        versions_complete=bool(row[8]),
+        range_type=row[10],
+        introduced=row[11],
+        fixed=row[12],
+        last_affected=row[13],
+    )
+
+
+def _version_match_rank(database_version: str, queried_version: str) -> int:
+    """Rank affected_versions rows for the same vulnerability."""
     if database_version == queried_version:
-        return 2
+        return 30
     if database_version == importer.ALL_VERSIONS_SENTINEL:
-        return 1
+        return 10
     return 0
 
 
-def _match_type(database_version: str, queried_version: str) -> str:
-    """Return a stable match-type string for a database version."""
+def _version_match_type(database_version: str, queried_version: str) -> str:
+    """Return a stable match-type string for affected_versions rows."""
     if database_version == queried_version:
         return MATCH_TYPE_EXACT_VERSION
     return MATCH_TYPE_ALL_VERSIONS
 
 
-def _range_from_row(row: tuple) -> UnevaluatedRange:
+def _range_match_type(row: tuple) -> str:
+    """Return a stable match-type string for an affected_ranges row."""
+    fixed = row[12]
+    last_affected = row[13]
+    if fixed:
+        return MATCH_TYPE_RANGE_FIXED
+    if last_affected:
+        return MATCH_TYPE_RANGE_LAST_AFFECTED
+    return MATCH_TYPE_RANGE_OPEN
+
+
+def _range_from_row(row: tuple, *, reason: str) -> UnevaluatedRange:
     """Convert an affected_ranges row into UnevaluatedRange."""
     return UnevaluatedRange(
         canonical_id=row[0],
-        package_name=row[1],
-        range_type=row[2],
-        introduced=row[3],
-        fixed=row[4],
-        last_affected=row[5],
+        package_name=row[9],
+        range_type=row[10],
+        introduced=row[11],
+        fixed=row[12],
+        last_affected=row[13],
+        reason=reason,
     )
