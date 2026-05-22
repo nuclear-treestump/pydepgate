@@ -5,19 +5,28 @@ vulnerability data.
 
 Public modules:
 
-  fetcher    HTTP layer. HEAD check and streaming download of the
+  constants  OSV URLs, cache filenames, schema version, and
+             attribution strings.
+
+  fetcher    HTTP layer. HEAD checks and streaming downloads of the
              OSV PyPI all.zip and modified_id.csv resources.
-             Stdlib-only. Picklable result types.
+             Stdlib-only. Pickle-safe result types.
 
-Future modules (not in this delivery):
+  schema     SQLite DDL, connection helpers, metadata helpers, and
+             schema-version verification.
 
-  schema     SQLite DDL and migration logic for the CVE cache DB.
-  importer   Zip extraction, JSON parsing, dedup, and DB load.
-  lookup     Query API used by the depscan CVE pass.
-  constants  OSV URLs and resource naming conventions.
+  importer   OSV PyPI snapshot ingestion. Reads a downloaded snapshot,
+             parses records, deduplicates aliases, and writes the
+             local cvedb SQLite cache.
+
+  lookup     Query API used by the future cvescan pass. Looks up a
+             package name and version against affected_versions rows,
+             surfaces ALL-sentinel matches, and reports affected_ranges
+             rows as unevaluated hints.
 
 The attribution requirement for OSV data (CC-BY 4.0) is handled at
-two layers: the importer writes a db_metadata table with source
-URL, license, and attribution string; the depscan reporter prints
-an attribution footer when CVE findings are present in the output.
+two layers: the importer and cvedb CLI write db_metadata rows with
+source URL, license, and attribution context; consumers print an
+attribution footer when CVE findings are present in user-visible
+output.
 """
