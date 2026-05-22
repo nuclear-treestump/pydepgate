@@ -8,13 +8,18 @@ dependencies, published vulnerabilities).
 
 Currently houses:
 
+  metadata.py
+            Artifact-level package identity and metadata extraction.
+            Provides the reusable name/version source for future
+            package_tools consumers.
+
   cvedb/    OSV PyPI vulnerability database import, storage, and
             lookup. Backs the depscan CVE pass that lands in
             v0.6.0.
 
-A shared base class for package_tools lands when the second
-subsystem exists; until then the surface is too small to abstract
-without guessing at requirements.
+A shared base class for package_tools lands when multiple
+package-level tools need a common lifecycle; until then the surface
+is too small to abstract without guessing at requirements.
 
 Base expectation would be a PackageTool class that intakes a
 Metadata or PackageInfo object and produces a Finding object.
