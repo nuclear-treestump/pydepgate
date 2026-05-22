@@ -23,6 +23,7 @@ from pydepgate.cli.subcommands import (
     version,
     explain,
     cvedb,
+    cvescan,
 )
 from pydepgate.cli.subcommands.version import get_version
 
@@ -486,6 +487,7 @@ def build_parser() -> argparse.ArgumentParser:
     version.register(subparsers)
     explain.register(subparsers)
     cvedb.register(subparsers)
+    cvescan.register(subparsers)
     # Help subcommand.
     help_parser = subparsers.add_parser(
         "help",
