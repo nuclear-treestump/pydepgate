@@ -53,6 +53,7 @@ from __future__ import annotations
 import json
 import posixpath
 import re
+import sys
 import zipfile
 from dataclasses import dataclass
 from email import policy
@@ -179,6 +180,7 @@ class PackageMetadata:
 
     artifact_type: str
     artifact_path: Path
+    artifact_filename: str
     name: str | None
     normalized_name: str | None
     version: str | None
@@ -482,9 +484,10 @@ def read_wheel_metadata(path: Path) -> PackageMetadata:
     )
     normalized_name = normalize_package_name(name) if name else None
 
-    return PackageMetadata(
+    p_data = PackageMetadata(
         artifact_type=_ARTIFACT_TYPE_WHEEL,
         artifact_path=wheel_path,
+        artifact_filename=wheel_path.name,
         name=name,
         normalized_name=normalized_name,
         version=version,
@@ -508,6 +511,8 @@ def read_wheel_metadata(path: Path) -> PackageMetadata:
         direct_url=direct_url,
         warnings=tuple(warnings),
     )
+
+    return p_data
 
 
 # ---------------------------------------------------------------------------
