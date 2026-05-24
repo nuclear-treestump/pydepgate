@@ -24,8 +24,8 @@ import unittest
 
 from pydepgate import run_context
 
-_UUID4_REGEX = re.compile(
-    r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+_UUID7_REGEX = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
 )
 
 
@@ -36,10 +36,10 @@ class TestRunUuidLifecycle(unittest.TestCase):
         # harnesses.
         run_context.reset_for_new_run()
 
-    def test_first_call_returns_uuid4_string(self):
+    def test_first_call_returns_uuid7_string(self):
         uid = run_context.get_current_run_uuid()
         self.assertIsInstance(uid, str)
-        self.assertRegex(uid, _UUID4_REGEX)
+        self.assertRegex(uid, _UUID7_REGEX)
 
     def test_subsequent_calls_return_same_value(self):
         first = run_context.get_current_run_uuid()
@@ -68,7 +68,7 @@ class TestReset(unittest.TestCase):
         first = run_context.get_current_run_uuid()
         new_uid = run_context.reset_for_new_run()
         self.assertNotEqual(first, new_uid)
-        self.assertRegex(new_uid, _UUID4_REGEX)
+        self.assertRegex(new_uid, _UUID7_REGEX)
 
     def test_reset_changes_subsequent_get(self):
         run_context.reset_for_new_run()
@@ -82,7 +82,7 @@ class TestReset(unittest.TestCase):
         run_context.reset_for_new_run()
         new_uid = run_context.reset_for_new_run()
         # Both calls produce valid UUIDs
-        self.assertRegex(new_uid, _UUID4_REGEX)
+        self.assertRegex(new_uid, _UUID7_REGEX)
 
 
 class TestThreadSafety(unittest.TestCase):
@@ -111,7 +111,7 @@ class TestThreadSafety(unittest.TestCase):
         self.assertEqual(len(results), 20)
         # All threads observed the same UUID
         self.assertEqual(len(set(results)), 1)
-        self.assertRegex(results[0], _UUID4_REGEX)
+        self.assertRegex(results[0], _UUID7_REGEX)
 
 
 class TestUniqueness(unittest.TestCase):
