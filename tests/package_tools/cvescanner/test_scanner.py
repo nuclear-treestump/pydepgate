@@ -373,6 +373,7 @@ def _metadata(
     return package_metadata.PackageMetadata(
         artifact_type="wheel",
         artifact_path=Path("fixture.whl"),
+        artifact_filename="fixture.whl",
         name=name,
         normalized_name=normalized,
         version=version,
