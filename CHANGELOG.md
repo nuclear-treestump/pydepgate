@@ -14,6 +14,24 @@ become binding stability promises with formal deprecation cycles.
 
 (no changes yet)
 
+## [0.4.7] - 2026-05-24
+
+### Added
+
+- Added dependency resolution support for package artifacts.
+- Added first-level dependency discovery.
+- Added transitive dependency discovery, enabling pydepgate to reason over dependency closure rather than only the directly inspected package.
+
+### Changed
+
+- Migrated internal run/correlation identifiers from UUID4 to a stdlib UUID7 implementation, improving temporal ordering and traceability of generated identifiers.
+
+### Security
+
+No security advisories in this release.
+
+This release lays groundwork for future SBOM emission and CVE scanner prestaging. With dependency resolution now available, pydepgate can begin mapping artifacts to their broader dependency graph before deeper vulnerability and policy analysis.
+
 ## [0.4.6] - 2026-05-22
 
 ### Added
@@ -775,7 +793,8 @@ issues will land in [ROADMAP.md](ROADMAP.md):
   meaningful speedups on multi-megabyte wheels with thousands
   of files.
 
-[Unreleased]: https://github.com/nuclear-treestump/pydepgate/compare/v0.4.6...HEAD
+[Unreleased]: https://github.com/nuclear-treestump/pydepgate/compare/v0.4.7...HEAD
+[0.4.7]: https://github.com/nuclear-treestump/pydepgate/compare/v0.4.6...v0.4.7
 [0.4.6]: https://github.com/nuclear-treestump/pydepgate/compare/v0.4.5...v0.4.6
 [0.4.5]: https://github.com/nuclear-treestump/pydepgate/compare/v0.4.2...v0.4.5
 [0.4.2]: https://github.com/nuclear-treestump/pydepgate/compare/v0.4.1...v0.4.2
