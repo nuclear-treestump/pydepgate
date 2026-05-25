@@ -3,207 +3,533 @@
 This document describes the forward trajectory of pydepgate. For what has
 already shipped, see [CHANGELOG.md](CHANGELOG.md).
 
-The version numbers in this document are targets, not commitments.
-Pre-1.0 versions reserve the right to make breaking changes to the public
-API surface (CLI flags, JSON schema, SARIF schema, exit codes, rule
-schema) within minor version bumps. After 1.0, breaking changes go
-through a formal deprecation cycle.
+The version numbers below are targets, not commitments. Some items
+depend on others being completed first. Beyond that, the project has a
+demonstrated pattern of shipping work earlier than planned. Treat this
+roadmap as the general shape of where the project is going, not as a
+schedule.
 
-## Where this document came from
+## About this rewrite
 
-The previous version of this file was written before any code existed. It
-described a five-version build plan with neat phase boundaries, intended
-features per version, and acceptance criteria. Reality outpaced the plan
-within weeks.
+This is the third major revision of the roadmap.
 
-The original plan said v0.4.0 would deliver runtime mode (PEP 578 audit
-hooks, build-time manifests, policy enforcement). v0.4.0 is shipping
-SARIF 2.1.0 instead. The original plan said SARIF was a v1.0.0 feature.
-The original plan said the density layer (32 rules across DENS001-051)
-did not exist; it does. The original plan did not anticipate recursive
-payload decoding, encrypted-archive output, pre-commit hooks, the rules
-engine with TOML/JSON loading and predicate operators, or the
-content-blind SARIF emission. All of those shipped.
+The first version was written before any code existed. It described a
+five-version build plan with phase boundaries and acceptance criteria.
+Execution outpaced it within weeks.
 
-This rewrite reflects where the project actually is, what is queued, and
-what slipped. It is meant to be coherent against today's source rather
-than a clean projection from a starting point that no longer applies.
+The second version caught up to reality on scope but used patch-level
+bumps for several core capability releases, which produced a versioning
+calibration problem that compounded over a stretch of releases.
 
-## Current state: v0.4.0
+A third internal draft sequenced the work as foundation-first: evidence
+database, then citation and validation, then policy, then comparison,
+then Burn Notice, then dependency resolution and the visible products
+that depend on it. That draft was also outpaced before being committed
+to the repository. Dependency resolution shipped at v0.4.7, which was
+the v0.10.0 slot in the third draft. The API surface refactor surfaced
+as a near-term priority through real prototyping work and was committed
+to publicly before this revision was written.
 
-The static analysis pipeline is functional end-to-end against wheels,
-sdists, installed packages, and loose files. The output formats are
-human-readable terminal, JSON v3, and SARIF 2.1.0. The recursive payload
-decoder reconstructs multi-layer attack chains. The rules engine
-supports user-supplied TOML or JSON rule files with predicate operators
-and typo suggestions. Five production analyzers cover encoding abuse,
-dynamic execution, string obfuscation, suspicious stdlib usage, and the
-density layer. The default rule set ships 32 rules dedicated to density
-signals.
+This version of the roadmap reflects what has actually shipped and the
+current planning order, including the doctor and preflight release that
+ships before the daemon, the reframed SIEM story as a generic emit
+mechanism on the daemon, and the explicit MUST SHIP pins on three
+items that are not deferrable beyond their slot.
 
-For the full feature list see the README "What works today" section. For
-the chronological account of how things landed see CHANGELOG.
+The pattern of roadmaps being outpaced by execution is likely to
+continue. Future revisions of this document should be expected.
 
-## Versioning
+## Current state at v0.4.7
 
-- **0.4.x** patches and minor performance work. No breaking changes.
-- **0.5.0 onward** new feature surfaces. Pre-1.0 still reserves
-  breaking-change rights but in practice these have been confined to
-  schema field additions and CLI flag additions, both backwards-
-  compatible for sane consumers.
-- **1.0.0** the API-stability inflection point. CLI flags, JSON schema,
-  SARIF schema, exit codes, and the rule-engine schema all become
-  formally stable with deprecation-cycle requirements before any
-  breaking change.
+The static analysis pipeline handles wheels, sdists, installed packages,
+loose source files, and package-like trees. It performs recursive
+payload decoding, payload peek, deep mode, JSON output, human output,
+SARIF 2.1.0, and process-pool parallelism.
 
-## v0.4.x: stabilization and parallelism
+The analyzer stack covers density signals, dynamic execution detection,
+encoding-abuse detection, suspicious stdlib usage, string and
+obfuscation analysis, enrichment, and a safe partial resolver.
 
-- [x] Engine parallelism. No later than v0.4.5. The picklability
-      contract for `FileScanInput`/`FileScanOutput` has been preserved
-      since v0.1, so the per-file scan phase can move to a process pool
-      without engine refactoring. Target is meaningful speedup on
-      multi-megabyte wheels with thousands of internal files. No CLI
-      changes; opt-in via a flag with conservative default worker
-      count.
-- Routine bug fixes, documentation refinements, dependency-free minor
-  performance work.
+The reporting stack includes human output, JSON, SARIF, decoded tree
+reports, IOC material, and explanatory output.
 
-## v0.5.0: SIEM emission
+The CVE database subsystem downloads and imports OSV PyPI vulnerability
+data into a local SQLite database. The `cvescan` command scans a
+wheel's package identity against that database using metadata
+extraction, PEP 440 range evaluation, and unevaluated-range evidence.
 
-- [ ] SIEM emission layer. First-class HEC integration for Splunk with
-      CIM-compliant data models so findings populate Enterprise Security
-      correctly rather than appearing as raw JSON. Elastic, Datadog, and
-      Sentinel emission planned alongside.
+Dependency resolution is available as infrastructure, exposing direct,
+first-level, and transitive dependencies. The resolver is not yet wired
+into the scan command surface. Wiring it is part of the work block
+described below.
 
-The SIEM work is bounded; once shipped it should not need significant
-expansion until customers ask for additional vendor backends.
+## Versioning policy
 
-## v0.6.0: analyzer expansion and dependency-graph awareness
+Patch releases are for bug fixes, doc polish, rule tuning, and narrow
+compatibility changes. Minor releases are for new scanner subsystems,
+new commands, new schemas, new storage layers, new policy surfaces, or
+new engine-level behavior.
 
-The exact contents of this version are not yet pinned. The candidate
-pool, drawn from items currently flagged "in active development" in the
-README:
+Pre-1.0 versions reserve the right to make breaking changes to the
+public API surface (CLI flags, JSON schema, SARIF schema, exit codes,
+rule schema) within minor version bumps. After 1.0, breaking changes
+go through a formal deprecation cycle.
 
-- [ ] `comment_analysis` analyzer. Detection of payloads hidden in
-      comments and docstrings beyond what DENS050/DENS051 already cover.
-- [ ] Aliased import resolution. Catches `from subprocess import Popen
-      as P` and similar evasions that currently slip past the dynamic-
-      execution analyzer.
-- [ ] Preflight mode. Environment-walking variant of the static engine
-      that scans every importable package in a Python install. Different
-      engine path from the artifact-scanning entry points; reuses the
-      analyzer set unchanged.
-- [ ] Transitive-dependency audit subcommand. Pip-wrapper or standalone
-      `audit` subcommand that resolves a dependency graph and scans each
-      reachable package.
+Released tags from v0.4.1 onward are immutable. When released behavior
+needs to change, the change ships as a new version with a changelog
+explaining what happened.
 
-These items do not all need to land in 0.6.0. Some may slip to 0.6.x
-patches or to 0.7.x once runtime mode lands. The slot is a candidate
-pool, not a commitment.
+## Already shipped
 
-## v0.7.0: runtime mode
+This section catalogs what has landed, with parentheticals on items
+that shipped at a version different from any prior planned slot.
 
-The marquee feature originally targeted for v0.4.0. The slip from v0.4
-to v0.7 was deliberate: getting the output formats, rules engine, and
-analyzer set right matters more than getting runtime interdiction
-shipped fast, because runtime mode depends on a stable data-shape and
-pluggability story to be useful. May land earlier than v0.7.0 if the
-intermediate work falls into place faster than expected.
+### v0.3.0 and earlier
 
-- [ ] Self-integrity subsystem. Critical stdlib references captured into
-      locals before any untrusted code runs.
-- [ ] Build-time manifest generation. SHA256 of every file in the
-      package, signed, embedded.
-- [ ] Bootstrap chain. Re-exec with `-S -I`, verify self, freeze
-      critical refs, install hooks, run instrumented `site.main()`,
-      then user script.
-- [ ] PEP 578 audit hook manager.
-- [ ] `site.addpackage` shim with policy enforcement.
-- [ ] Policy modes: `--enforce` (block), `--warn` (log), `--audit`
-      (SARIF emission of would-block events).
-- [ ] `pydepgate exec <script>` CLI subcommand.
-- [ ] Subprocess propagation. Child Python processes inherit
-      instrumentation.
-- [ ] Performance budget. Happy-path overhead under 100ms;
-      benchmarked before merge.
+- [x] Static analysis pipeline for wheels, sdists, installed packages,
+      and loose source files
+- [x] Four production analyzers: `encoding_abuse`, `dynamic_execution`,
+      `string_ops`, `suspicious_stdlib`
+- [x] Rules engine with TOML and JSON support, predicate operators,
+      typo suggestions, severity rewriting, suppression behavior
+- [x] Safe partial evaluator for string and expression resolution
+      without executing user code
+- [x] Three output formats: human-readable terminal, JSON, SARIF
+      (initial stub)
+- [x] Recursive payload decoder with multi-layer chain reconstruction
+      (not in any prior roadmap)
+- [x] Density analyzer with 32 rules covering DENS001-051 (not in any
+      prior roadmap)
+- [x] Encrypted archive output for decoded payloads
+- [x] Pre-commit hook configuration
+- [x] IOC sidecar format
+- [x] Artifact-level and file-level provenance hashes (SHA256, SHA512)
+- [x] Tristate `--decode-iocs` flag
+- [x] PEM and DER classification (shipped v0.3.2, not in any prior
+      roadmap)
 
-Runtime mode requires the picklability contract that v0.4.x parallelism
-will validate, the SARIF emission that v0.4.0 ships (for `--audit`
-output), and the rules engine that v0.3.0 shipped. The dependency chain
-is why runtime mode lives at v0.7 rather than v0.4.
+### v0.4.0
 
-## v1.0.0: API stability
+- [x] SARIF 2.1.0 output with full rules catalog (planned v1.0.0 in
+      first roadmap, shipped v0.4.0)
+- [x] Decoded-payload codeFlows in SARIF
+- [x] `--sarif-srcroot` flag and `PYDEPGATE_SARIF_SRCROOT` environment
+      variable
+- [x] Content-blind SARIF emission
+- [x] SARIF validation CI workflow against the Microsoft SARIF
+      Multitool
 
-The transition from "moves fast and breaks things on minor version
-bumps" to "deprecation-cycle-bound stability."
+### v0.4.2
 
-- [ ] Stability promises for CLI flags, JSON schema, SARIF schema,
-      exit codes, rule-engine schema. Breaking changes only via
-      deprecation cycle.
-- [ ] Comprehensive documentation: architecture document, formal threat
-      model, complete rule catalog with rationale and MITRE mapping,
-      consumer guide for downstream tooling.
-- [ ] Public sample corpus script demonstrating catches against real
-      malicious packages in a disposable VM.
-- [ ] Announcement post.
-- [ ] License finalized (currently Apache 2.0; no anticipated change).
+- [x] OSV PyPI CVE database subsystem with download, streaming parse,
+      atomic SQLite writes (not in any prior roadmap)
+- [x] `pydepgate cvedb` command surface (`update`, `status`, `path`)
+- [x] OSV ranges as first-class data with state machine parsing
+- [x] Structural ALL-versions detection with sentinel fast-path
+- [x] Run UUID tracking in cvedb metadata
+- [x] Three-phase import progress bars (read, parse, write)
 
-Acceptance criterion: a downstream tool consuming pydepgate's JSON or
-SARIF output can rely on the schema for the duration of the 1.x line.
+### v0.4.5
 
-## Beyond v1.0
+- [x] Engine parallelism with process-pool execution
+- [x] `--workers` and `--force-parallel` CLI flags
+- [x] `ScanResult.scan_id` field with cross-report correlation
+- [x] Picklability contract tests
+- [x] DENS051 emission gated by docstring content classification
+- [x] Density analyzer signal weight calibration against 137-package
+      real-world corpus
 
-Not committed. PyDepGuard integration remains a long-term direction.
-Other directions will surface as the project matures and as user demand
-makes priorities clearer.
+### v0.4.6
+
+- [x] Package metadata extraction module for wheels (not in any prior
+      roadmap)
+- [x] CVE database lookup layer with normalized package-name matching
+- [x] Private PEP 440 version helper (stdlib-only, conservative
+      comparison)
+- [x] Package-level CVE scanner package
+- [x] `pydepgate cvescan` CLI command
+- [x] OSV `ECOSYSTEM` range evaluation for CVE scanning
+
+### v0.4.7
+
+- [x] Dependency resolution including first-level and transitive
+      discovery (planned v0.10.0 in third roadmap draft, shipped
+      v0.4.7)
+- [x] UUIDv7 migration from UUID4 for run and correlation identifiers
+      (stdlib-only implementation)
+- [x] `pydepgate.run_context` module with thread-safe lazy generation
+      and daemon-mode reset support
+
+# Current work block
+
+The thirteen items below describe the visible planning horizon. The
+order reflects dependency relationships and priority commitments.
+Three items are marked MUST SHIP, meaning they are priority pins
+within the work block and should land as early as the dependency
+order allows.
+
+### v0.5.0: Local evidence database
+
+Memory layer for findings, scans, decoded trees, and CVE results.
+Foundation for citation, validation, false-positive memory, daemon,
+and runtime miss reports.
+
+- [ ] Local pydepgate SQLite database, separate from the OSV CVE DB
+- [ ] Schema versioning with migration framework
+- [ ] Storage tables for scan runs, scanned artifacts, file identities
+      and internal paths, static findings, decoded tree nodes, and CVE
+      scan runs and findings
+- [ ] Stable finding fingerprint v1 specification document
+- [ ] `pydepgate scan --save-to-db` and `pydepgate cvescan --save-to-db`
+- [ ] `pydepgate db path`, `db status`, `db list-runs`,
+      `db query --package`, `db query --artifact-sha512`,
+      `db explain --run-id`
+- [ ] Producer ID field on every stored finding (for daemon
+      forensics later)
+- [ ] Tests covering schema creation, schema mismatch, stored findings,
+      stored CVE findings, decoded nodes, and DB explain behavior
+
+### v0.6.0: Policy engine
+
+Internal policy layer that severity-rewrites findings, applies rule
+precedence, detects conflicts with the builtin baseline, and surfaces
+`AppliedPolicyResult` to consumers. This is the engine. The repo-side
+policy file (`PYDEPPOLICY.md`) ships separately at v0.16.0.
+
+- [ ] `AppliedPolicyResult` data model
+- [ ] Severity rewriting pipeline with rule precedence
+- [ ] Builtin baseline conflict detection
+- [ ] Wiring into static scan and CVE scan result paths
+- [ ] Tests for policy parsing, invalid policy, baseline conflict, and
+      policy-result serialization
+
+### v0.7.0: Cite and validate-finding
+
+Citation generation and finding validation against the evidence
+database. Findings become portable artifacts that can be filed in
+issues, security advisories, and CI failures.
+
+- [ ] `pydepgate validate-finding ARTIFACT FINDING` supporting static
+      finding fingerprints, CVE finding fingerprints, and decoded node
+      fingerprints
+- [ ] `pydepgate cite` with modes for maintainer issues, false-positive
+      submissions, security advisory evidence, and CI failures
+- [ ] Tests that validation remains stable across renderer changes
+
+### v0.8.0: pydepgate doctor
+
+Diagnostic command for pydepgate installation, configuration, CVE
+database state, and any other tool-state surface that operators need
+to verify before relying on scan output. Doctor answers the question
+"is pydepgate set up to do its job correctly." It does not scan
+packages or inspect the running interpreter.
+
+- [ ] `pydepgate doctor` command with checks for installation
+      integrity, configuration validity, CVE database status, schema
+      version, and rule-set consistency
+- [ ] Structured output suitable for support bundles and CI gates
+- [ ] Tests for each diagnostic check
+
+### v0.9.0: pydepgate preflight
+
+Live-system scanner for the running Python environment. Preflight
+inspects the active interpreter, installed packages, `sitecustomize`,
+`usercustomize`, `.pth` files in `site-packages`, and the other
+startup-vector surfaces present on the system to confirm the
+environment has not been compromised. Where `pydepgate scan` operates
+on artifacts before they enter the environment, preflight operates on
+the environment after entry. Both share the analyzer set; the entry
+point and target enumeration differ.
+
+- [ ] `pydepgate preflight` command for environment-walking scan
+- [ ] Enumeration of the active interpreter's site-packages,
+      sitecustomize, usercustomize, and `.pth` files
+- [ ] Read-only handling of system surfaces with explicit
+      non-modification guarantees
+- [ ] Output formats matching `pydepgate scan` (human, JSON, SARIF)
+- [ ] Exit-code semantics matching `pydepgate scan`
+- [ ] Tests for clean and compromised fixture environments
+
+### v0.10.0: Daemon (pydepgate-d) with --emit
+
+Mirror and intake gate, with a generic emission mechanism for
+forwarding events to external consumers. The emit mechanism replaces
+the original vendor-specific SIEM integration plan. Vendor-specific
+integrations can be added later if demand warrants them; in the
+meantime, ndjson or json over a configured endpoint is sufficient for
+any SIEM-shaped consumer to ingest pydepgate output.
+
+- [ ] Intake directory watcher or configurable artifact source
+- [ ] Scan, CVE scan, policy application, and evidence write for
+      every new artifact
+- [ ] `--emit ndjson|json` flag with configurable endpoint target
+- [ ] Allow, warn, quarantine, and reject actions
+- [ ] Health and status output
+- [ ] Worker parallelism
+- [ ] Container image
+- [ ] Tests for intake, quarantine, event output, and policy behavior
+
+### v0.11.0: API scoping and core system exposures
+
+Identification of what surface needs to be exposed to other programs,
+with selected core systems surfaced as a stable internal API to
+unblock upstream work. The full API refactor lands later at v0.18.0;
+this release is the prerequisite scoping plus the exposures needed
+for in-flight features.
+
+- [ ] API surface specification document
+- [ ] Exposure of selected core systems via stable internal module
+      boundaries (specifically the systems needed by the daemon, the
+      preflight scanner, and the credential-exfil work)
+- [ ] Compatibility tests for the exposed surfaces
+
+### v0.12.0: Shape skeleton **MUST SHIP**
+
+Structural skeleton analyzer for adversarial-shape detection. Lives
+in `pydepgate/analyzers/closet/`. Detects behavioral skeletons
+(call-and-constant patterns, AST-shape fingerprints) that match
+across surface-different malware samples.
+
+- [ ] Skeleton extraction primitive
+- [ ] Comparison primitive for matching candidate skeletons against
+      known-bad shapes
+- [ ] Tests against curated malware corpus
+
+### v0.13.0: Credential-exfil detection **MUST SHIP**
+
+Detection of credential-harvesting attack patterns. Covers sensitive
+directory enumeration, credential-format regex compilation, SSL
+verification disabled, external config fetch, and value truncation
+before exfiltration. Cluster-pattern correlation across the new
+signals so individually-low-confidence signals stack into
+high-confidence findings.
+
+- [ ] Sensitive-directory enumeration detection
+- [ ] Credential-pattern regex detection (label-based and
+      content-based)
+- [ ] SSL verification disabled detection
+- [ ] External config-fetch pattern detection
+- [ ] Value-truncation-before-network-send detection
+- [ ] Cluster correlation across credential-exfil signals
+- [ ] Tests against TrapDoor campaign samples and similar shapes
+
+### v0.14.0: False positive detection and downgrade
+
+Known false-positive table with hash-bound records, distributed as a
+signed artifact. Reviewed findings are downgraded to LOW with
+provenance rather than suppressed.
+
+- [ ] False-positive table schema and storage
+- [ ] Immutable, hash-bound FP records with sequence numbers and
+      sortable IDs
+- [ ] Strong-match (artifact plus file) downgrade to LOW
+- [ ] Weak-match (file plus name plus version) annotation without
+      severity change
+- [ ] FP intake process documentation
+- [ ] Tests for FP application, weak-match annotation, and signature
+      validation
+
+### v0.15.0: Install gate and SBOM emission **MUST SHIP**
+
+Inspect-before-install command that uses the dependency resolver from
+v0.4.7 to download artifacts, scan them, apply policy, and only hand
+off to pip when policy permits. SBOM emission lands here as a
+byproduct of the resolution graph. Both CycloneDX and SPDX formats.
+
+- [ ] Wire dependency resolver into scan pipeline
+- [ ] Guarded install command
+- [ ] Artifact download into a controlled wheelhouse
+- [ ] Resolution, then scan of every resolved artifact, then CVE scan
+      of every resolved artifact
+- [ ] Policy application across the resolved set
+- [ ] CycloneDX SBOM emission
+- [ ] SPDX SBOM emission
+- [ ] Stop condition on blocking findings
+- [ ] Hand-off to pip only after policy permits it
+- [ ] Tests for block, warn, report-only, and clean install paths
+
+### v0.16.0: Repo policy layer (PYDEPPOLICY.md)
+
+Repository-side policy declaration file. Human-readable Markdown with
+an armored machine-readable section. Consumed by the policy engine
+from v0.6.0.
+
+- [ ] `PYDEPPOLICY.md` parser
+- [ ] `pydepgate.findings-policy.v1` schema definition
+- [ ] Support for package identity expectations, canonical repository
+      expectations, startup-vector expectations, SBOM expectations,
+      and known false-positive references
+- [ ] `pydepgate policy inspect PYDEPPOLICY.md`
+- [ ] Tests for policy parsing, invalid policy, and baseline conflict
+
+### v0.17.0: Repo comparison
+
+Artifact-versus-repository claim comparison. Detects contradiction
+clusters where multiple low-confidence signals (name similarity,
+owner similarity, non-fork status, metadata disagreement, startup
+vector presence) stack into a clear typosquat or impersonation
+signal.
+
+- [ ] `pydepgate compare ARTIFACT --github URL`
+- [ ] Wheel metadata to repository metadata comparison
+- [ ] License expression versus LICENSE file comparison
+- [ ] Source layout versus artifact layout comparison
+- [ ] Requirements files versus build metadata comparison
+- [ ] Critical-path package registry with visual-similarity and
+      edit-distance checks
+- [ ] Fork-status checks via GitHub metadata
+- [ ] Cluster correlation findings that escalate severity when
+      multiple signals point the same direction
+- [ ] Tests for benign mismatch, typosquat-style mismatch, and
+      critical-path impersonation
+
+### v0.18.0: API refactor
+
+Full refactor of the library and CLI boundary. The library serves the
+CLI, not the other way around. Downstream consumers can integrate
+against a stable API surface without reaching into CLI modules. This
+is the commitment surfaced through the prototyping work that produced
+the dependency resolver and made the entanglement visible.
+
+- [ ] Library and CLI module boundary clarified
+- [ ] Public API surface documented and versioned
+- [ ] Deprecation path for any pre-refactor consumers
+- [ ] Tests for API stability across the refactor
+
+### After v0.18.0: Roadmap refresh
+
+The current work block is reassessed. Items that shipped early or
+slipped, items that emerged from real usage and were not anticipated,
+and items from the next work block (below) get reconciled into the
+plan that follows.
+
+## Next work block
+
+These items are planned but not dated. They sit past the current
+visible planning horizon and will be slotted into versions during the
+roadmap refresh that follows v0.18.0.
+
+- **Burn Notice.** Signed dead-data emergency intelligence feed for
+  burning known malicious artifacts, files, decoded payloads,
+  structural skeletons, transform chains, or package-and-version
+  pairs while a permanent detector is being prepared in code. Canonical
+  command `pydepgate burnnotice update` with `lightning` and `maldex`
+  as accepted aliases. Burn Notices expire by next minor version
+  unless explicitly extended, and become incorporated as code-level
+  detections in the release that succeeds them.
+- **Runtime tripwire.** Behavior monitoring with isolated execution,
+  audit hooks, policy interdiction, and runtime miss reporting. Every
+  miss feeds back into the static layer as a future detection.
+- **Explorer.** Bulk observation layer for turning many local scan
+  runs into threat intelligence. NDJSON and SQLite snapshot exports.
+  No telemetry by default.
+- **npm and other ecosystems.** Cross-ecosystem expansion. Python
+  stays primary until the current work block lands solidly, after
+  which the stdlib-only principle gets a per-ecosystem interpretation
+  and the rule taxonomy gets a cross-ecosystem mapping.
+- **pyc triage layer.** Compiled-bytecode inspection using `dis` and
+  `marshal` from stdlib. Header parsing, magic and version
+  identification, code object traversal, constant string extraction,
+  import and name extraction, suspicious opcode families, and nested
+  code object traversal. Full decompilation back to source is not
+  in scope; structural triage is.
+
+## Deferred or reframed
+
+- **Vendor-specific SIEM integrations.** The original plan included
+  first-class Splunk, Elastic, Datadog, and Sentinel emission with
+  vendor-specific data models. This is replaced by the generic
+  `--emit ndjson|json` mechanism on the daemon. The generic emit
+  mechanism covers the same functional ground without per-vendor
+  integration work and is sufficient for any SIEM-shaped consumer to
+  ingest pydepgate output. Vendor-specific integrations can be added
+  later if demand warrants the scope.
+- **Full pyc decompilation.** A multi-month time sink. The pyc triage
+  layer in the next work block covers the high-value subset using
+  stdlib primitives. Decompilation back to source is not on the
+  near-term roadmap.
+
+## v1.0.0: Stable contracts
+
+1.0.0 is the point where the core public contracts become stable
+enough for other tools, repositories, maintainers, and users to depend
+on them. The version is reserved for that inflection point. The
+specific minor version that precedes 1.0.0 is determined by the
+roadmap refresh that follows v0.18.0, not by this document.
+
+What has to be true before 1.0:
+
+- Stable CLI contract for core commands
+- Stable JSON schema for static scan output
+- Stable JSON schema for CVE scan output
+- Stable finding fingerprint schema
+- Stable DB schema migration policy
+- Stable Burn Notice schema if Burn Notice has landed
+- Stable `PYDEPPOLICY.md` schema
+- Stable false-positive record format
+- Stable exit-code policy
+- Stable SARIF behavior for the 1.x line
+- Complete rule catalog and signal ID documentation
+- Threat model and architecture documentation
+- Consumer guide for downstream tools
+
+Acceptance criterion: a downstream tool or maintainer process can
+consume pydepgate output, cite findings, validate findings, and apply
+policy without chasing schema drift release to release.
 
 ## Principles
 
-Decisions about scope, features, and tradeoffs are evaluated against
-these criteria. They are derived from the constraints that have shaped
-the project to date, rewritten to match where it is rather than where
-the original plan thought it would be.
+These are the constraints decisions get measured against.
 
-1. **Zero runtime dependencies for users.** The standard library only.
-   This is a load-bearing constraint, not a stylistic preference: every
-   additional dependency is a supply-chain attack surface for a tool
-   whose job is to defend against supply-chain attacks. CI, build, and
-   test dependencies are not constrained; runtime is.
+**Standard library only at runtime.** Every runtime dependency would
+become part of pydepgate's own supply chain, which is the thing
+pydepgate exists to defend against. Build, test, and CI tooling are
+free to use whatever fits. Runtime is not.
 
-2. **Safe by construction.** Parsers, the partial evaluator, and the
-   payload-peek and decode loops never execute, compile, or import
-   input content. Every operation modeled by the resolver is
-   reimplemented from scratch using only Python builtins on values the
-   resolver itself produced. Pickle data is detected, never
-   deserialized.
+**Never execute, import, compile, or deserialize untrusted content.**
+The parsers, the partial evaluator, the payload-peek loop, and the
+decoder all read content, they do not run it. Pickle is detected,
+never loaded. The bounded resolver models a small fixed set of
+operations using only Python builtins on values it produced itself.
+Anything outside that set is unresolved, never run.
 
-3. **Content-blind output.** SARIF and JSON output describe what was
-   detected behaviorally, not what content was matched. Argument
-   values, URLs, command lines, and literal payload bytes never appear
-   in output that flows into CI logs or public artifact uploads. A
-   defender can publish output without re-leaking the underlying
-   attack content.
+**Content-blind public output.** Reports describe behavior without
+re-leaking secrets, URLs, command lines, payload bytes, or decoded
+malware into CI logs and public issue trackers. Detailed evidence is
+hash-bound, so a defender can publish a report without publishing the
+attack content.
 
-4. **Performance budgets are per-mode and benchmarked.** Static
-   analysis runs in roughly twenty seconds for the full test suite on a
-   2 core 8 GB Github Codespace. SARIF validation against the Microsoft Multitool
-   adds CI cost but not user-facing cost. Runtime mode (v0.7.0
-   target) carries a happy-path overhead budget under 100ms;
-   benchmarks land before any feature that touches that hot path.
+**Evidence over claims.** Findings carry enough evidence to be
+validated independent of the report's prose: artifact hash, file
+hash, signal ID, decoded payload hash when relevant, finding
+fingerprint, and a validation path. If a finding cannot be cited,
+disputed, or independently checked, the design is incomplete.
 
-5. **Independently testable.** Features that require elaborate
-   end-to-end orchestration to verify tend to rot. Capabilities
-   expressible as pure-function rules over parsed representations are
-   strongly preferred over those that require integration setup.
+**Reviewed false positives are downgraded, not erased.** A finding
+that was looked at and accepted is qualitatively different from a
+finding nobody has seen. Erasure removes useful memory and creates
+blind spots. LOW with a known-FP annotation preserves the history.
 
-6. **Structural robustness over feature breadth.** A feature that
-   catches more attacks at the cost of being easier to evade is a net
-   loss. The "harder they hide it the stronger the signal" model
-   stays load-bearing.
+**Remote intelligence is dead data.** Burn Notices and imported feeds
+add known-bad evidence, never executable behavior. They can make
+pydepgate stricter. They cannot suppress, downgrade, or allowlist
+builtin detections. No remote Python, no remote plugins, no remote
+suppression rules, ever.
 
-7. **Match the product story.** pydepgate is a static and (in v0.7+) a
-   runtime analyzer for the Python startup-vector attack surface.
-   Features that don't serve that story belong in PyDepGuard, not
-   here. PyDepGuard's broader runtime-sandboxing and dependency-
-   management scope is a deliberate separation, not a tracking
-   inadequacy.
+**Local first.** Normal scanning works without a service account, a
+SaaS backend, or any network dependency. Network features are
+explicit: CVE DB update, Burn Notice update, custom feed import,
+guarded install downloads, or future contribution paths.
+
+**Performance is measured, not asserted.** Large packages and CI
+budgets are real constraints. Parallelism, caching, bounded decoding,
+and per-mode performance budgets are part of the design, not
+afterthoughts. Performance claims need benchmarks behind them.
+
+**Structural detection over rule count.** A feature that catches more
+attacks at the cost of being easier to evade is a net loss. The
+preferred direction is structural: startup vectors, transform chains,
+decoded payload trees, call and constant skeletons, metadata
+contradictions, and policy conflicts. The harder an attacker has to
+work to hide a pattern, the stronger the signal when the pattern is
+visible.
