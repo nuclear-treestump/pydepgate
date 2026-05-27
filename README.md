@@ -515,10 +515,45 @@ catch. Documented gaps include:
   rather than `CRITICAL` outside startup vectors so users with
   intentional non-Latin naming can suppress with a single user rule.
 
+## Promise
+
+Supply-chain security is too important to be a function of corporate
+goodwill. This project exists because the current state of Python
+supply-chain defense is not acceptable, and it will continue to exist
+on those terms.
+
+This project will not be sold, transferred to a corporation, or made
+part of any employment or work agreement that could capture or stifle
+it. If a time comes when development by the current maintainer is no
+longer possible, the maintainer commits to finding a successor who
+will be held to the same conditions. If no such successor can be
+found, the project will be archived rather than placed under corporate
+control.
+
+## Funding
+
+pydepgate is built by a single individual whose day job is assembling
+industrial machines. If this tool saved you time or added legitimate
+security to your CI/CD pipeline, sponsorship makes continued
+development sustainable.
+
+This project is also available on Tidelift. See the Sponsors button
+for all available options.
+
+Development continues regardless of funding level.
+
+Funds are used for:
+
+1. Living expenses (rent, food, internet).
+2. Infrastructure costs for planned tools and services, including the
+   Threat Feed and Burn Notice subsystems on the roadmap.
+3. Compensation for any additional maintainers brought onto the
+   project in the future.
+
 ## Author
 
 Built by Ikari ([@0xIkari](https://github.com/0xIkari)) - Python and 
-security engineering. Available for security engineering roles.
+security engineering. Available for security engineering roles; pydepgate remains independent under the terms of the Promise above.
 
 - LinkedIn: [zmillersecengineer](https://www.linkedin.com/in/zmillersecengineer/)
 - Email: ikari@nuclear-treestump.com
