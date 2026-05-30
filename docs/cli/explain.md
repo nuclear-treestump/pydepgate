@@ -1,7 +1,7 @@
 ---
 title: Explain
 parent: CLI
-nav_order: 4
+nav_order: 5
 ---
 # pydepgate explain
 
