@@ -9,7 +9,8 @@ import unittest
 import zipfile
 from pathlib import Path
 
-from pydepgate.package_tools.cvedb import importer, schema
+from pydepgate.dbs.cvedb import importer
+from pydepgate.dbs.cvedb import schema
 from pydepgate import run_context
 
 # ---------------------------------------------------------------------------

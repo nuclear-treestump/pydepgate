@@ -1,4 +1,4 @@
-"""pydepgate.package_tools.cvedb.schema
+"""pydepgate.dbs.cvedb.schema
 
 SQLite schema for the cvedb subsystem, plus connection helpers
 and schema-version verification.
@@ -89,7 +89,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-from pydepgate.package_tools.cvedb.constants import CVE_DB_SCHEMA_VERSION
+from pydepgate.dbs.cvedb.constants import CVE_DB_SCHEMA_VERSION
 
 # ---------------------------------------------------------------------------
 # Module constants

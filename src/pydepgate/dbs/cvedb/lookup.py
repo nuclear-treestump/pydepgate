@@ -1,4 +1,4 @@
-"""pydepgate.package_tools.cvedb.lookup
+"""pydepgate.dbs.cvedb.lookup
 
 SQLite query layer for the local PyPI CVE database.
 
@@ -47,10 +47,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Sequence
 
-from pydepgate.package_tools.cvedb import _pepver
-from pydepgate.package_tools.cvedb import constants
-from pydepgate.package_tools.cvedb import importer
-from pydepgate.package_tools.cvedb import schema
+from pydepgate.dbs.cvedb import _pepver
+from pydepgate.dbs.cvedb import constants
+from pydepgate.dbs.cvedb import importer
+from pydepgate.dbs.cvedb import schema
 
 # ---------------------------------------------------------------------------
 # Constants

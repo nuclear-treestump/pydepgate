@@ -14,6 +14,152 @@ become binding stability promises with formal deprecation cycles.
 
 (no changes yet)
 
+## [0.5.0] - 2026-05-30
+
+### Added
+
+- **Local evidence database (`pdgdb` subsystem).** New persistent
+  memory layer for pydepgate scan history. The evidence database
+  stores scan runs, scanned artifacts, file identities, static
+  findings, decoded payload tree nodes, and CVE findings in a
+  local SQLite database under `$XDG_DATA_HOME/pydepgate/pdgdb/evidence.db`.
+  The database is distinct from the CVE database managed by
+  `pydepgate cvedb`: the CVE database is a derived cache that can
+  be rebuilt from upstream OSV data at any time; the evidence
+  database contains user-generated scan history and lives under
+  the XDG data directory rather than the cache directory to
+  reflect that difference in semantics.
+
+- **`pydepgate db` subcommand.** Seven actions for creating,
+  inspecting, and querying the evidence database. `db init`
+  creates the database at the default XDG path, or reports its
+  path and last-modified timestamp if it already exists. `db path`
+  prints the database path without requiring the database to
+  exist, matching the `cvedb path` convention and enabling
+  scripting patterns like `sqlite3 "$(pydepgate db path)"
+  ".tables"`. `db status` shows record counts (scan runs,
+  scanned artifacts, static findings, decoded nodes, CVE
+  findings), schema version, creating pydepgate version, creation
+  timestamp, and last-modified timestamp. `db list-runs` lists
+  scan runs newest-first with separate static and CVE finding
+  counts per run so `scan` and `cvescan` runs are immediately
+  distinguishable. `db query --package NAME` queries artifact
+  records by package name with optional `--version` filtering;
+  name matching is case-insensitive and normalizes hyphens to
+  underscores. `db query --artifact-sha512 SHA512` queries by
+  artifact content hash. `db explain --run-id UUID` reconstructs
+  the full record for a single run including all static findings
+  sorted by path and line, decoded nodes with their child findings,
+  and CVE findings; `--format json` emits the same data as a
+  structured JSON document.
+
+- **`pydepgate scan --save-to-db` flag.** Persists the result of
+  a static scan to the evidence database. Writes a scan run
+  record, a scanned artifact record with SHA-256, SHA-512, and
+  resolved package name and version, a file identity record for
+  each distinct file that produced a finding, and a static
+  finding record for each active finding. Suppressed findings are
+  not stored. When `--decode-payload-depth` is also active,
+  decoded payload tree nodes and their child findings are written
+  in a second independent transaction after static findings commit;
+  a failure writing decoded nodes does not roll back the static
+  findings record. DB write failures emit a warning to stderr and
+  do not affect the scan exit code, output format, or report
+  content.
+
+- **`pydepgate cvescan --save-to-db` flag.** Persists the result
+  of a CVE scan to the evidence database. Writes a scan run
+  record, a scanned artifact record, a CVE scan run record, and
+  a CVE finding record for each matched vulnerability. Artifact
+  hashes are computed from the wheel file at write time. Zero-
+  finding runs still write the scan run and CVE scan run records
+  so the absence of findings is itself a recorded fact. DB write
+  failures are non-fatal on the same terms as the static scan
+  path.
+
+- **`pydepgate.dbs.pdgdb` package.** Three modules forming the
+  pdgdb subsystem. `schema.py` defines the full DDL for ten
+  tables (`db_metadata`, `schema_migrations`, `scan_runs`,
+  `scanned_artifacts`, `file_identities`, `static_findings`,
+  `decoded_nodes`, `decoded_child_findings`, `cve_scan_runs`,
+  `cve_findings`) with appropriate indexes and foreign keys,
+  plus a connection helper that configures WAL journal mode,
+  foreign key enforcement, busy timeout, and the pdgdb
+  application ID (`0x70646764`, distinct from the cvedb
+  application ID `0x70646763`). `writer.py` provides
+  `write_scan_result`, `write_decoded_tree`, and
+  `write_cve_scan_result` as the public write API. `reader.py`
+  provides `get_db_status`, `list_runs`, `query_by_package`,
+  `query_by_artifact_sha512`, and `explain_run` as the public
+  read API, with typed row dataclasses for all query results.
+
+- **Schema migration framework.** The evidence database uses an
+  in-place migration framework rather than the hard-reject-and-
+  rebuild pattern used by the CVE database, because the evidence
+  database contains user-generated history that cannot be
+  reproduced from upstream data. A `schema_migrations` table
+  records applied migration IDs and timestamps. The MIGRATIONS
+  registry in `schema.py` is an ordered tuple of
+  `(migration_id, sql)` pairs applied inside individual
+  transactions on the first write after an upgrade. For schema
+  version 1 (this release) the migrations tuple is empty; the
+  framework is present so databases created under v0.5.0 can be
+  upgraded in place when future versions introduce schema changes.
+
+- **`METADATA_KEY_LAST_MODIFIED` in pdgdb metadata.** The evidence
+  database records a `last_modified` ISO 8601 UTC timestamp in
+  `db_metadata` that is updated after every successful write.
+  `db status` and `db init` both surface this timestamp so
+  operators can tell at a glance when the database was last
+  touched without querying individual run records.
+
+- **`db` CLI documentation.** New `docs/cli/db.md` covering all
+  seven actions, output formats, the evidence database location
+  and XDG override, schema versioning and migration behavior,
+  and the relationship between `db`, `scan --save-to-db`, and
+  `cvescan --save-to-db`.
+
+- **`--save-to-db` documentation additions.** The `scan` and
+  `cvescan` CLI reference pages each gain a `--save-to-db` flag
+  section describing what is stored, the non-fatal failure
+  behavior, and how to inspect stored results with `pydepgate db`.
+
+### Changed
+
+- **`pydepgate db list-runs` shows separate STATIC and CVE
+  finding columns.** Rather than a single FINDINGS column that
+  would show 0 for `cvescan` runs and 0 CVE findings for `scan`
+  runs, the table distinguishes the two finding types. This makes
+  runs immediately readable without needing to correlate the CMD
+  column against the count.
+
+- **`pydepgate db query` output shows separate static and CVE
+  finding counts per artifact row.** Same motivation as the
+  `list-runs` change: a cvescan artifact row would otherwise
+  appear to have zero findings.
+
+- **`pydepgate db explain` output gains a CVE findings section.**
+  For `cvescan` runs, the explain output now shows a CVE findings
+  block with severity, canonical ID, match kind, and summary for
+  each stored finding. The JSON format includes a `cve_findings`
+  array alongside the existing `findings` and `decoded_nodes`
+  arrays.
+
+- Moved `src/pydepgate/package_tools/cvedb/*` to `src/pydepgate/dbs/cvedb/*`.
+
+- Deleted no longer relevant information from changelog regarding features from old roadmap.
+
+### Security
+
+No security advisories in this release. The evidence database
+processes only pydepgate's own scan output and never executes or
+evaluates user-provided content. Payload bytes from decoded trees
+are explicitly not written to the database; only structural
+metadata (chain, indicators, hashes, stop reason) is stored.
+The `METADATA_KEY_LAST_MODIFIED` timestamp and schema migration
+framework do not affect the static analysis threat model or the
+CVE lookup behavior.
+
 ## [0.4.7] - 2026-05-24
 
 ### Added
@@ -774,26 +920,9 @@ issues will land in [ROADMAP.md](ROADMAP.md):
 documented under "Fixed" above represent enhanced coverage of
 existing attack patterns, not vulnerabilities in pydepgate itself.)
 
-### Coming in 0.4.0
 
-The following are planned for the next minor release. Tracking
-issues will land in [ROADMAP.md](ROADMAP.md):
-
-- **SIEM emission layer.** First-class HEC integration for
-  Splunk, with CIM-compliant data models so findings populate
-  Enterprise Security correctly rather than appearing as raw
-  JSON. Elastic, Datadog and Sentinel emission planned alongside.
-- **SARIF 2.1.0 output.** GitHub code scanning, GitLab
-  vulnerability reports, and other SARIF consumers. Currently
-  stubbed in the CLI with an under-development message;
-  `--format sarif` will produce real output in 0.4.0.
-- **Engine parallelism.** The picklability contract documented
-  in CONTRIBUTING.md is preserved through 0.3.0; 0.4.0 will
-  enable a process pool for the per-file scan phase, targeting
-  meaningful speedups on multi-megabyte wheels with thousands
-  of files.
-
-[Unreleased]: https://github.com/nuclear-treestump/pydepgate/compare/v0.4.7...HEAD
+[Unreleased]: https://github.com/nuclear-treestump/pydepgate/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/nuclear-treestump/pydepgate/compare/v0.4.7...v0.5.0
 [0.4.7]: https://github.com/nuclear-treestump/pydepgate/compare/v0.4.6...v0.4.7
 [0.4.6]: https://github.com/nuclear-treestump/pydepgate/compare/v0.4.5...v0.4.6
 [0.4.5]: https://github.com/nuclear-treestump/pydepgate/compare/v0.4.2...v0.4.5
