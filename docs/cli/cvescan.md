@@ -323,6 +323,41 @@ filter.
 pydepgate cvescan package.whl --min-severity high --strict-exit
 ```
 
+### `--save-to-db`
+
+Persist the CVE scan result to the pydepgate evidence database.
+
+```bash
+pydepgate cvescan package.whl --save-to-db
+```
+
+When `--save-to-db` is set, pydepgate writes the following to the evidence
+database after the scan completes:
+
+- A scan run record with the run UUID, pydepgate version, and timestamp.
+- A scanned artifact record with the artifact identity, kind, and resolved
+  package name and version. Artifact hashes are computed from the wheel file
+  if available.
+- A CVE scan run record linking the scan run to the scanned artifact.
+- A CVE finding record for each matched vulnerability.
+
+The database is created automatically if it does not exist. You can also
+create it explicitly with `pydepgate db init` before the first scan.
+
+DB write failures emit a warning to stderr but do not affect the scan exit
+code or output:
+
+```
+warning: could not save CVE scan result to DB: OperationalError: database is locked
+```
+
+Running both `scan --save-to-db` and `cvescan --save-to-db` against the same
+artifact produces two separate scan run records in the database. They share
+the same artifact SHA-512 and can be correlated by artifact hash using
+`pydepgate db query --artifact-sha512`.
+
+See [`pydepgate db`](db.md) for how to inspect stored results.
+
 ## Exit codes
 
 `cvescan` uses the same exit-code model as other pydepgate commands:
