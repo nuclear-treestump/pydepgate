@@ -1,7 +1,7 @@
 ---
 title: NYI - Exec
 parent: CLI
-nav_order: 7
+nav_order: 8
 ---
 # pydepgate exec
 
