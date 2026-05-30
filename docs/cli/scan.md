@@ -78,6 +78,45 @@ automatically suppressed when stderr is not a TTY (piped output, CI runs,
 redirected logs), so this flag is mainly for interactive terminals where
 you want clean output. No effect in `--single` mode.
 
+### `--save-to-db`
+
+Persist the scan result to the pydepgate evidence database.
+
+```bash
+pydepgate scan package.whl --save-to-db
+pydepgate scan --single suspicious.py --save-to-db
+pydepgate scan litellm --save-to-db
+```
+
+When `--save-to-db` is set, pydepgate writes the following to the evidence
+database after the scan completes:
+
+- A scan run record with the run UUID, pydepgate version, and timestamp.
+- A scanned artifact record with the artifact identity, kind, SHA-256,
+  SHA-512, and resolved package name and version where available.
+- A file identity record for each distinct file that produced a finding.
+- A static finding record for each active finding. Suppressed findings are
+  not stored.
+
+When `--decode-payload-depth` is also set, decoded payload tree nodes and
+their child findings are stored in a second transaction after static findings
+are committed. A failure writing decoded nodes does not roll back the static
+findings record.
+
+The database is created automatically if it does not exist. You can also
+create it explicitly with `pydepgate db init` before the first scan.
+
+DB write failures emit a warning to stderr but do not affect the scan exit
+code or output:
+
+```
+warning: could not save scan result to DB: OperationalError: database is locked
+```
+
+The scan result, report output, and exit code are unaffected.
+
+See [`pydepgate db`](db.md) for how to inspect stored results.
+
 ## Single file mode
 
 `--single` bypasses dispatch and runs the analyzer directly on one file.
