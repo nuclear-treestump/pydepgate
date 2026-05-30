@@ -30,7 +30,7 @@ from pathlib import Path
 from typing import Callable
 from unittest import mock
 
-from pydepgate.package_tools.cvedb.fetcher import (
+from pydepgate.dbs.cvedb.fetcher import (
     DEFAULT_MAX_CONTENT_LENGTH,
     DEFAULT_MIN_CONTENT_LENGTH,
     DownloadError,
@@ -500,9 +500,7 @@ class TestDownloadRetries(unittest.TestCase):
         ]
         with tempfile.TemporaryDirectory() as tmp:
             dest = Path(tmp) / "out.bin"
-            with mock.patch(
-                "pydepgate.package_tools.cvedb.fetcher.time.sleep"
-            ) as sleep_mock:
+            with mock.patch("pydepgate.dbs.cvedb.fetcher.time.sleep") as sleep_mock:
                 result = download(
                     "https://example.invalid/resource",
                     dest,
@@ -528,7 +526,7 @@ class TestDownloadRetries(unittest.TestCase):
         ]
         with tempfile.TemporaryDirectory() as tmp:
             dest = Path(tmp) / "out.bin"
-            with mock.patch("pydepgate.package_tools.cvedb.fetcher.time.sleep"):
+            with mock.patch("pydepgate.dbs.cvedb.fetcher.time.sleep"):
                 result = download(
                     "https://example.invalid/resource",
                     dest,
@@ -547,7 +545,7 @@ class TestDownloadRetries(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             dest = Path(tmp) / "out.bin"
             tmp_path = dest.with_name(dest.name + ".tmp")
-            with mock.patch("pydepgate.package_tools.cvedb.fetcher.time.sleep"):
+            with mock.patch("pydepgate.dbs.cvedb.fetcher.time.sleep"):
                 with self.assertRaises(DownloadError):
                     download(
                         "https://example.invalid/resource",

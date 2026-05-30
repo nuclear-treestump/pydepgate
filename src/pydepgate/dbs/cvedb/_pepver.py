@@ -1,4 +1,4 @@
-"""pydepgate.package_tools.cvedb._pepver
+"""pydepgate.dbs.cvedb._pepver
 
 Small PEP 440 version parser and comparator for cvedb range checks.
 

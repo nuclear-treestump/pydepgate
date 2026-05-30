@@ -55,9 +55,9 @@ from pathlib import Path
 from typing import Any
 
 from pydepgate.package_tools import metadata as metadata_module
-from pydepgate.package_tools.cvedb import constants
-from pydepgate.package_tools.cvedb import lookup
-from pydepgate.package_tools.cvedb import schema
+from pydepgate.dbs.cvedb import constants
+from pydepgate.dbs.cvedb import lookup
+from pydepgate.dbs.cvedb import schema
 from pydepgate.pdgplatform import paths
 
 # ---------------------------------------------------------------------------

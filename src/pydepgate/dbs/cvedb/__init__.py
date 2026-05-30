@@ -1,4 +1,4 @@
-"""pydepgate.package_tools.cvedb.__init__
+"""pydepgate.dbs.cvedb.__init__
 
 CVE database subsystem: import, storage, and lookup of OSV PyPI
 vulnerability data.
@@ -53,7 +53,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from pydepgate.package_tools.cvedb.lookup import LookupResult
+    from pydepgate.dbs.cvedb.lookup import LookupResult
 
 
 __all__ = (
@@ -73,7 +73,7 @@ def lookup_package(
     Keeping the shim here gives callers one stable cvedb entrypoint
     without moving storage logic into __init__.py.
     """
-    from pydepgate.package_tools.cvedb import lookup
+    from pydepgate.dbs.cvedb import lookup
 
     return lookup.lookup_package(conn, package_name, version)
 
@@ -90,6 +90,6 @@ def lookup_package_in_db(
     callers can continue importing the detailed exception hierarchy from
     pydepgate.package_tools.cvedb.lookup when they need it.
     """
-    from pydepgate.package_tools.cvedb import lookup
+    from pydepgate.dbs.cvedb import lookup
 
     return lookup.lookup_package_in_db(db_path, package_name, version)

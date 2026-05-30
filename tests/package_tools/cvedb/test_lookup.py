@@ -28,11 +28,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from pydepgate.package_tools import cvedb
-from pydepgate.package_tools.cvedb import constants
-from pydepgate.package_tools.cvedb import importer
-from pydepgate.package_tools.cvedb import lookup
-from pydepgate.package_tools.cvedb import schema
+from pydepgate.dbs import cvedb
+from pydepgate.dbs.cvedb import constants
+from pydepgate.dbs.cvedb import importer
+from pydepgate.dbs.cvedb import lookup
+from pydepgate.dbs.cvedb import schema
 
 # ---------------------------------------------------------------------------
 # Test helpers

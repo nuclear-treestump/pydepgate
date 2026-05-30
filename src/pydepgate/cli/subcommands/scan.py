@@ -184,7 +184,62 @@ def register(subparsers) -> None:
             "an interactive terminal. No effect in --single mode."
         ),
     )
+    parser.add_argument(
+        "--save-to-db",
+        action="store_true",
+        default=False,
+        help=(
+            "Persist scan results to the pydepgate evidence database. "
+            "The database is created if it does not exist. "
+            "DB write failures emit a warning but do not affect the "
+            "scan exit code."
+        ),
+    )
     parser.set_defaults(func=run)
+
+
+def _save_to_db(result: ScanResult, decoded_tree) -> None:
+    """Persist scan result and optional decoded tree to the evidence DB.
+
+    Non-fatal: any failure emits a warning to stderr and returns.
+    The scan exit code is never affected by DB write failures.
+    """
+    from pydepgate.dbs.pdgdb import schema
+    from pydepgate.dbs.pdgdb.writer import write_decoded_tree, write_scan_result
+    from pydepgate.pdgplatform.paths import ensure_directory, pydepgate_data_dir
+
+    db_path = pydepgate_data_dir() / "pdgdb" / "evidence.db"
+    try:
+        ensure_directory(db_path.parent)
+        conn = schema.connect(db_path)
+        try:
+            schema.initialize_schema(conn)
+            scan_run_id, artifact_id = write_scan_result(
+                conn,
+                result,
+                command="scan",
+                producer_id="cli0",
+            )
+            if decoded_tree is not None and decoded_tree.nodes:
+                try:
+                    write_decoded_tree(
+                        conn,
+                        decoded_tree,
+                        scan_run_id=scan_run_id,
+                        artifact_id=artifact_id,
+                    )
+                except Exception as exc:
+                    sys.stderr.write(
+                        f"warning: could not write decoded tree to DB: "
+                        f"{type(exc).__name__}: {exc}\n"
+                    )
+        finally:
+            conn.close()
+    except Exception as exc:
+        sys.stderr.write(
+            f"warning: could not save scan result to DB: "
+            f"{type(exc).__name__}: {exc}\n"
+        )
 
 
 def run(args: argparse.Namespace) -> int:
@@ -310,6 +365,9 @@ def run(args: argparse.Namespace) -> int:
     # determines exactly which files are written.
     if decoded_tree is not None:
         _run_decode_pass(result, engine, args, tree=decoded_tree)
+
+    if getattr(args, "save_to_db", False):
+        _save_to_db(result, decoded_tree)
 
     return exit_code
 
