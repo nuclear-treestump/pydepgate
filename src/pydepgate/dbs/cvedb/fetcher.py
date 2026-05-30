@@ -1,4 +1,4 @@
-"""pydepgate.package_tools.cvedb.fetcher
+"""pydepgate.dbs.cvedb.fetcher
 
 HTTP fetcher for the OSV PyPI vulnerability dataset.
 

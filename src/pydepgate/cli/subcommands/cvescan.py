@@ -39,8 +39,8 @@ from pathlib import Path
 from typing import Any
 
 from pydepgate.cli import exit_codes
-from pydepgate.package_tools.cvedb import lookup
-from pydepgate.package_tools.cvedb import schema
+from pydepgate.dbs.cvedb import lookup
+from pydepgate.dbs.cvedb import schema
 from pydepgate.package_tools.cvescanner import scanner
 
 _SEVERITY_ORDER = {
@@ -101,6 +101,17 @@ def register(subparsers) -> None:
             "and no CVE findings."
         ),
     )
+    parser.add_argument(
+        "--save-to-db",
+        action="store_true",
+        default=False,
+        help=(
+            "Persist CVE scan results to the pydepgate evidence database. "
+            "The database is created if it does not exist. "
+            "DB write failures emit a warning but do not affect the "
+            "scan exit code."
+        ),
+    )
     parser.set_defaults(func=run)
 
 
@@ -148,7 +159,39 @@ def run(args: argparse.Namespace) -> int:
         _render_human(display_result, result, sys.stdout)
 
     findings_for_exit = result.findings if args.strict_exit else display_findings
+    if getattr(args, "save_to_db", False):
+        _save_to_db(result)
     return _compute_exit_code(findings_for_exit)
+
+
+def _save_to_db(result) -> None:
+    """Persist CVE scan result to the evidence DB.
+
+    Non-fatal: any failure emits a warning to stderr and returns.
+    The scan exit code is never affected by DB write failures.
+    """
+    from pydepgate.dbs.pdgdb import schema
+    from pydepgate.dbs.pdgdb.writer import write_cve_scan_result
+    from pydepgate.pdgplatform.paths import ensure_directory, pydepgate_data_dir
+
+    db_path = pydepgate_data_dir() / "pdgdb" / "evidence.db"
+    try:
+        ensure_directory(db_path.parent)
+        conn = schema.connect(db_path)
+        try:
+            schema.initialize_schema(conn)
+            write_cve_scan_result(
+                conn,
+                result,
+                producer_id="cli0",
+            )
+        finally:
+            conn.close()
+    except Exception as exc:
+        sys.stderr.write(
+            f"warning: could not save CVE scan result to DB: "
+            f"{type(exc).__name__}: {exc}\n"
+        )
 
 
 def _filter_findings(

@@ -29,8 +29,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from pydepgate.package_tools.cvedb import schema
-from pydepgate.package_tools.cvedb.constants import CVE_DB_SCHEMA_VERSION
+from pydepgate.dbs.cvedb import schema
+from pydepgate.dbs.cvedb.constants import CVE_DB_SCHEMA_VERSION
 
 # ---------------------------------------------------------------------------
 # connect()

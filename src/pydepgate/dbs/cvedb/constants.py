@@ -1,4 +1,4 @@
-"""pydepgate.package_tools.cvedb.constants
+"""pydepgate.dbs.cvedb.constants
 
 URLs, filenames, and attribution strings for the OSV PyPI
 vulnerability dataset.

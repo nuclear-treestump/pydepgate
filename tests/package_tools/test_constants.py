@@ -13,7 +13,7 @@ from __future__ import annotations
 import unittest
 from urllib.parse import urlparse
 
-from pydepgate.package_tools.cvedb import constants
+from pydepgate.dbs.cvedb import constants
 
 
 class TestOsvUrls(unittest.TestCase):

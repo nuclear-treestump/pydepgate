@@ -15,7 +15,8 @@ from unittest import mock
 
 from pydepgate.cli.subcommands import cvedb
 from pydepgate.cli import exit_codes
-from pydepgate.package_tools.cvedb import constants, fetcher, importer, schema
+from pydepgate.dbs.cvedb import constants, fetcher, importer
+from pydepgate.dbs.cvedb import schema
 
 
 def _setuptools_record() -> dict:

@@ -17,10 +17,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from pydepgate.package_tools import metadata as package_metadata
-from pydepgate.package_tools.cvedb import constants
-from pydepgate.package_tools.cvedb import importer
-from pydepgate.package_tools.cvedb import lookup
-from pydepgate.package_tools.cvedb import schema
+from pydepgate.dbs.cvedb import constants
+from pydepgate.dbs.cvedb import importer
+from pydepgate.dbs.cvedb import lookup
+from pydepgate.dbs.cvedb import schema
 from pydepgate.package_tools.cvescanner import scanner
 
 
