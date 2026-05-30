@@ -174,19 +174,19 @@ Memory layer for findings, scans, decoded trees, and CVE results.
 Foundation for citation, validation, false-positive memory, daemon,
 and runtime miss reports.
 
-- [ ] Local pydepgate SQLite database, separate from the OSV CVE DB
-- [ ] Schema versioning with migration framework
-- [ ] Storage tables for scan runs, scanned artifacts, file identities
+- [x] Local pydepgate SQLite database, separate from the OSV CVE DB
+- [x] Schema versioning with migration framework
+- [x] Storage tables for scan runs, scanned artifacts, file identities
       and internal paths, static findings, decoded tree nodes, and CVE
       scan runs and findings
-- [ ] Stable finding fingerprint v1 specification document
-- [ ] `pydepgate scan --save-to-db` and `pydepgate cvescan --save-to-db`
-- [ ] `pydepgate db path`, `db status`, `db list-runs`,
+- ~~[ ] Stable finding fingerprint v1 specification document~~ - Moved to v0.7.0
+- [x] `pydepgate scan --save-to-db` and `pydepgate cvescan --save-to-db`
+- [x] `pydepgate db path`, `db status`, `db list-runs`,
       `db query --package`, `db query --artifact-sha512`,
       `db explain --run-id`
-- [ ] Producer ID field on every stored finding (for daemon
+- [x] Producer ID field on every stored finding (for daemon
       forensics later)
-- [ ] Tests covering schema creation, schema mismatch, stored findings,
+- [x] Tests covering schema creation, schema mismatch, stored findings,
       stored CVE findings, decoded nodes, and DB explain behavior
 
 ### v0.6.0: Policy engine
@@ -209,6 +209,7 @@ Citation generation and finding validation against the evidence
 database. Findings become portable artifacts that can be filed in
 issues, security advisories, and CI failures.
 
+- [ ] Stable finding fingerprint v1 specification document
 - [ ] `pydepgate validate-finding ARTIFACT FINDING` supporting static
       finding fingerprints, CVE finding fingerprints, and decoded node
       fingerprints

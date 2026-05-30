@@ -5,7 +5,7 @@ from __future__ import annotations
 import pickle
 import unittest
 
-from pydepgate.package_tools.cvedb import _pepver
+from pydepgate.dbs.cvedb import _pepver
 
 
 class ParseVersionTests(unittest.TestCase):

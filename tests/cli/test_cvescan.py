@@ -15,8 +15,8 @@ from unittest import mock
 from pydepgate.cli import exit_codes
 from pydepgate.cli import main as cli_main
 from pydepgate.cli.subcommands import cvescan
-from pydepgate.package_tools.cvedb import constants
-from pydepgate.package_tools.cvedb import schema
+from pydepgate.dbs.cvedb import constants
+from pydepgate.dbs.cvedb import schema
 
 
 class CveScanCliTests(unittest.TestCase):

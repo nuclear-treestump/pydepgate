@@ -17,10 +17,10 @@ from pathlib import Path
 
 from pydepgate.cli import exit_codes
 from pydepgate.cli import progress
-from pydepgate.package_tools.cvedb import constants
-from pydepgate.package_tools.cvedb import fetcher
-from pydepgate.package_tools.cvedb import importer
-from pydepgate.package_tools.cvedb import schema
+from pydepgate.dbs.cvedb import constants
+from pydepgate.dbs.cvedb import fetcher
+from pydepgate.dbs.cvedb import importer
+from pydepgate.dbs.cvedb import schema
 from pydepgate.pdgplatform import paths
 from pydepgate.cli.subcommands.version import get_version
 from pydepgate.run_context import get_current_run_uuid

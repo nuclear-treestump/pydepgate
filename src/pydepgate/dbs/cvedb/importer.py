@@ -1,4 +1,4 @@
-"""pydepgate.package_tools.cvedb.importer
+"""pydepgate.dbs.cvedb.importer
 
 OSV PyPI snapshot importer.
 
@@ -32,7 +32,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Iterable
 
-from pydepgate.package_tools.cvedb import schema
+from pydepgate.dbs.cvedb import schema
 from pydepgate import run_context
 
 ProgressCallback = Callable[[int, int], None]
