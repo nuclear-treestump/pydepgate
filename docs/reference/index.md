@@ -16,3 +16,4 @@ how to use it. For task-oriented walkthroughs, see the [Guides](../guides/index.
 | [Environment Variables](environment-variables.md) | Every `PYDEPGATE_*` variable, accepted values, and precedence |
 | [Rules File](rules-file.md) | `pydepgate.gate` TOML/JSON format, field reference, and precedence model |
 | [Signals](signals.md) | All signal IDs across all analyzer namespaces with default severities |
+| [PDG Fingerprint v1](fingerprint-v1.md) | Fingerprint specification for future `validate` and `cite` commands |
