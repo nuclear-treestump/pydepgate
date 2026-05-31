@@ -15,9 +15,18 @@
 #   - builds twice without cache
 #   - compares one platform at a time
 #
-# This starts with per-platform reproducibility for linux/amd64 and
-# linux/arm64. Multiarch index digest reproducibility can be added
-# later after per-platform layers are stable.
+# Manual dispatch deliberately separates:
+#
+#   - version:
+#       The pydepgate version to install from PyPI.
+#
+#   - checkout_ref:
+#       The repository ref containing the Dockerfile/build context to test.
+#
+# This lets us test the current deterministic Dockerfile on main while
+# still installing an already-published PyPI wheel such as 0.5.0.
+#
+# For pushed release tags, the workflow tests the pushed tag ref.
 
 name: docker-repro-check
 
@@ -28,12 +37,16 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "pydepgate version to reproducibility-check (must already be on PyPI)"
+        description: "pydepgate version to install from PyPI"
         required: true
         default: "0.5.0"
+      checkout_ref:
+        description: "Repository ref containing Dockerfile/build context to test"
+        required: true
+        default: "main"
 
 concurrency:
-  group: docker-repro-check-${{ github.ref }}
+  group: docker-repro-check-${{ github.ref }}-${{ github.event.inputs.checkout_ref || 'tag' }}
   cancel-in-progress: true
 
 jobs:
@@ -58,7 +71,7 @@ jobs:
         id: checkout_ref
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "value=v${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+            echo "value=${{ github.event.inputs.checkout_ref }}" >> "$GITHUB_OUTPUT"
           else
             echo "value=${GITHUB_REF}" >> "$GITHUB_OUTPUT"
           fi
@@ -69,6 +82,13 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
           ref: ${{ steps.checkout_ref.outputs.value }}
+
+      - name: Determine checked-out commit
+        id: commit
+        run: |
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "Checked out ref: ${{ steps.checkout_ref.outputs.value }}"
+          echo "Checked out commit: $(git rev-parse HEAD)"
 
       - name: Determine pydepgate version
         id: version
@@ -81,6 +101,13 @@ jobs:
             echo "unexpected event: ${{ github.event_name }}" >&2
             exit 1
           fi
+
+      - name: Show repro inputs
+        run: |
+          echo "pydepgate version: ${{ steps.version.outputs.value }}"
+          echo "checkout ref: ${{ steps.checkout_ref.outputs.value }}"
+          echo "checkout commit: ${{ steps.commit.outputs.sha }}"
+          echo "platform: ${{ matrix.platform }}"
 
       - name: Compute source date epoch
         id: source_date_epoch
@@ -174,10 +201,6 @@ jobs:
 
           docker image inspect "pydepgate-repro:${{ matrix.suffix }}-a" --format '{{.Id}}' | tee /tmp/repro-a.id
 
-      - name: Remove image A
-        run: |
-          docker image rm "pydepgate-repro:${{ matrix.suffix }}-a"
-
       - name: Build image B without cache
         run: |
           docker buildx build \
@@ -207,9 +230,45 @@ jobs:
           echo "Image B:"
           cat /tmp/repro-b.id
 
-          if ! cmp -s /tmp/repro-a.id /tmp/repro-b.id; then
-            echo "reproducibility check failed: image IDs differ for ${{ matrix.platform }}" >&2
-            exit 1
+          if cmp -s /tmp/repro-a.id /tmp/repro-b.id; then
+            echo "reproducibility check passed for ${{ matrix.platform }}: image IDs match"
+            exit 0
           fi
 
-          echo "reproducibility check passed for ${{ matrix.platform }}: image IDs match"
+          echo "reproducibility check failed: image IDs differ for ${{ matrix.platform }}" >&2
+          echo "" >&2
+          echo "Dumping debug information before failing..." >&2
+
+          python - <<'PY'
+          import json
+          import subprocess
+
+          images = [
+              ("A", "pydepgate-repro:${{ matrix.suffix }}-a"),
+              ("B", "pydepgate-repro:${{ matrix.suffix }}-b"),
+          ]
+
+          for label, image in images:
+              print(f"--- image {label}: {image} ---")
+              raw = subprocess.check_output(["docker", "image", "inspect", image], text=True)
+              data = json.loads(raw)[0]
+
+              print("Id:", data.get("Id"))
+              print("Created:", data.get("Created"))
+              print("Architecture:", data.get("Architecture"))
+              print("Os:", data.get("Os"))
+              print("Config.User:", data.get("Config", {}).get("User"))
+              print("Config.WorkingDir:", data.get("Config", {}).get("WorkingDir"))
+              print("RootFS layers:")
+              for layer in data.get("RootFS", {}).get("Layers", []):
+                  print(" ", layer)
+
+              print("History:")
+              history = subprocess.check_output(
+                  ["docker", "history", "--no-trunc", image],
+                  text=True,
+              )
+              print(history)
+          PY
+
+          exit 1
