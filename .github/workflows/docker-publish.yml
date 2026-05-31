@@ -1,21 +1,31 @@
-# Build and publish the pydepgate Docker image to GitHub Container
-# Registry (ghcr.io). Triggered on:
+# Build, sign, attest, and publish the pydepgate Docker image to
+# GitHub Container Registry (ghcr.io).
 #
-#   - Push of a tag matching v*.*.*  (e.g. v0.2.0, v0.2.1)
+# Triggered on:
+#
+#   - Push of a tag matching v*.*.*  (e.g. v0.5.0)
 #       -> publishes :MAJOR.MINOR.PATCH, :MAJOR.MINOR, :latest
+#
 #   - Manual workflow_dispatch
 #       -> publishes the version specified in the input
-#
-# Pull requests build but do not push, so PRs that touch the
-# Dockerfile get validated without polluting the registry.
+#       -> checks out the matching vX.Y.Z tag before building
 #
 # The image is built for both linux/amd64 and linux/arm64 so it
 # works on Intel CI runners and Apple Silicon developer machines.
 #
+# Supply-chain properties:
+#
+#   - Image is pushed by immutable digest.
+#   - Image digest is signed with keyless cosign using GitHub OIDC.
+#   - GitHub artifact attestation is generated for the pushed digest.
+#   - BuildKit provenance and SBOM attestations are emitted.
+#   - The exact pushed digest is smoke-tested before the workflow exits.
+#   - The cosign signature and GitHub attestation are verified in CI.
+#
 # Required repository configuration:
 #
 #   - The default GITHUB_TOKEN already has write access to ghcr.io
-#     for the repo's owner; no extra secret needed.
+#     for the repo's owner; no extra registry secret is needed.
 #   - The package visibility (public vs private) is set on first
 #     push via the package settings on github.com.
 
@@ -30,33 +40,53 @@ on:
       version:
         description: "pydepgate version to package (must already be on PyPI)"
         required: true
-        default: "0.2.2"
+        default: "0.5.0"
 
-# Single concurrency group per ref so a rapid double-push doesn't
+# Single concurrency group per ref so a rapid double-push does not
 # end up with two builds racing to publish overlapping tags.
 concurrency:
   group: docker-publish-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build-and-push:
+  build-sign-attest-and-push:
     runs-on: ubuntu-latest
 
     permissions:
       contents: read
       packages: write
-      # id-token write is here for future cosign signing; harmless to
-      # request even if no signing step uses it yet.
       id-token: write
+      attestations: write
 
     steps:
+      # For tag pushes, build from the pushed tag ref.
+      # For manual dispatch, explicitly check out v<VERSION> so the
+      # Dockerfile/workflow context corresponds to the released version.
+      - name: Determine checkout ref
+        id: checkout_ref
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "value=v${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=${GITHUB_REF}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Check out repo
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ steps.checkout_ref.outputs.value }}
 
-      # Resolve the pydepgate version we're packaging. For tag
-      # pushes, strip the leading "v" off the tag. For manual
-      # dispatches, take the input. For PRs, default to 0.2.1 so
-      # the validation build has something to install.
+      - name: Determine checked-out commit
+        id: commit
+        run: |
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      # Resolve the pydepgate version being packaged.
+      #
+      # For tag pushes, strip the leading "v" from the tag.
+      # For manual dispatches, use the supplied input.
       - name: Determine pydepgate version
         id: version
         run: |
@@ -65,8 +95,69 @@ jobs:
           elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "value=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
           else
-            echo "value=0.2.2" >> "$GITHUB_OUTPUT"
+            echo "unexpected event: ${{ github.event_name }}" >&2
+            exit 1
           fi
+
+      # Gives the Dockerfile/build a deterministic timestamp anchor.
+      # This does not, by itself, prove full reproducibility, but it is
+      # one of the required inputs for reproducibility-oriented builds.
+      - name: Compute source date epoch
+        id: source_date_epoch
+        run: |
+          echo "value=$(git log -1 --pretty=%ct)" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve PyPI wheel metadata
+        id: wheel
+        env:
+          PYDEPGATE_VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          import os
+          import sys
+          import urllib.request
+
+          version = os.environ["PYDEPGATE_VERSION"]
+          url = f"https://pypi.org/pypi/pydepgate/{version}/json"
+
+          with urllib.request.urlopen(url, timeout=30) as response:
+              data = json.load(response)
+
+          wheels = [
+              item for item in data.get("urls", ())
+              if item.get("packagetype") == "bdist_wheel"
+          ]
+
+          # pydepgate should publish one universal wheel. Prefer the
+          # py3-none-any wheel if multiple wheels ever appear.
+          preferred = [
+              item for item in wheels
+              if item.get("filename", "").endswith("py3-none-any.whl")
+          ]
+
+          candidates = preferred or wheels
+          if not candidates:
+              print(f"no wheel found on PyPI for pydepgate {version}", file=sys.stderr)
+              raise SystemExit(1)
+
+          if len(candidates) != 1:
+              print("multiple wheel candidates found:", file=sys.stderr)
+              for item in candidates:
+                  print(f"  - {item.get('filename')}", file=sys.stderr)
+              raise SystemExit(1)
+
+          wheel = candidates[0]
+          filename = wheel["filename"]
+          sha256 = wheel.get("digests", {}).get("sha256")
+
+          if not sha256:
+              print(f"wheel {filename} did not include a sha256 digest", file=sys.stderr)
+              raise SystemExit(1)
+
+          print(f"filename={filename}")
+          print(f"sha256={sha256}")
+          PY
 
       - name: Set up QEMU for cross-arch builds
         uses: docker/setup-qemu-action@v3
@@ -74,22 +165,26 @@ jobs:
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v3
 
-      # Skip the registry login on PR runs since we're not pushing.
       - name: Log in to GitHub Container Registry
-        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Compute image tags. For a tag push of v0.2.1, this produces:
-      #   ghcr.io/<owner>/pydepgate:0.2.1
-      #   ghcr.io/<owner>/pydepgate:0.2
+      # Compute image tags. For a tag push of v0.5.0, this produces:
+      #
+      #   ghcr.io/<owner>/pydepgate:0.5.0
+      #   ghcr.io/<owner>/pydepgate:0.5
       #   ghcr.io/<owner>/pydepgate:latest
       #
-      # For workflow_dispatch with version=0.2.1, same tags. For PRs,
-      # produces a pr-NNN tag that we don't actually push.
+      # For workflow_dispatch with version=0.5.0, this produces:
+      #
+      #   ghcr.io/<owner>/pydepgate:0.5.0
+      #   ghcr.io/<owner>/pydepgate:0.5
+      #
+      # Manual dispatch does not update :latest. :latest only moves on
+      # a real pushed release tag.
       - name: Compute image tags
         id: meta
         uses: docker/metadata-action@v5
@@ -99,37 +194,83 @@ jobs:
             type=semver,pattern={{version}},value=v${{ steps.version.outputs.value }}
             type=semver,pattern={{major}}.{{minor}},value=v${{ steps.version.outputs.value }}
             type=raw,value=latest,enable=${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
-            type=ref,event=pr
           labels: |
             org.opencontainers.image.title=pydepgate
             org.opencontainers.image.description=Static analyzer for Python supply-chain malware patterns
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ steps.commit.outputs.sha }}
             org.opencontainers.image.licenses=Apache-2.0
             org.opencontainers.image.version=${{ steps.version.outputs.value }}
 
       - name: Build and push image
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: ./docker
           file: ./docker/Dockerfile
           platforms: linux/amd64,linux/arm64
-          push: ${{ github.event_name != 'pull_request' }}
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             PYDEPGATE_VERSION=${{ steps.version.outputs.value }}
+            PYDEPGATE_WHEEL_FILENAME=${{ steps.wheel.outputs.filename }}
+            PYDEPGATE_WHEEL_SHA256=${{ steps.wheel.outputs.sha256 }}
+            SOURCE_DATE_EPOCH=${{ steps.source_date_epoch.outputs.value }}
+          # BuildKit attestations. These complement, but do not replace,
+          # cosign signing and GitHub artifact attestations.
+          provenance: mode=max
+          sbom: true
           # Cache layers across runs to keep build times short.
-          # GitHub Actions cache backend is the standard choice
-          # for ephemeral runners.
+          # This is fine for publishing; use a separate no-cache
+          # reproducibility job when validating bit-for-bit rebuilds.
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # Smoke-test the image we just built (or would have built, on
-      # PRs) by running --version. Catches busted images before
-      # anyone pulls them.
-      - name: Smoke-test the image
-        if: github.event_name != 'pull_request'
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      # Sign the immutable digest, not a mutable tag.
+      - name: Sign image digest with cosign
+        env:
+          IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/pydepgate
+          DIGEST: ${{ steps.build.outputs.digest }}
         run: |
-          docker run --rm \
-            ghcr.io/${{ github.repository_owner }}/pydepgate:${{ steps.version.outputs.value }} \
-            --version
+          cosign sign --yes "${IMAGE_NAME}@${DIGEST}"
+
+      # Attach a GitHub-native artifact attestation to the pushed image
+      # digest and store it with the registry artifact.
+      - name: Generate GitHub artifact attestation
+        uses: actions/attest@v4
+        with:
+          subject-name: ghcr.io/${{ github.repository_owner }}/pydepgate
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+      # Smoke-test the exact digest that was pushed, signed, and attested.
+      # This is stronger than testing the mutable version tag.
+      - name: Smoke-test the image by digest
+        env:
+          IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/pydepgate
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          docker run --rm "${IMAGE_NAME}@${DIGEST}" --version
+
+      - name: Verify cosign signature
+        env:
+          IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/pydepgate
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          cosign verify \
+            --certificate-identity-regexp "https://github.com/${{ github.repository }}/.github/workflows/docker-publish.yml@refs/(tags/v.*|heads/.*)" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            "${IMAGE_NAME}@${DIGEST}"
+
+      - name: Verify GitHub artifact attestation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/pydepgate
+        run: |
+          gh attestation verify \
+            "oci://${IMAGE_NAME}:${{ steps.version.outputs.value }}" \
+            -R "${{ github.repository }}"
