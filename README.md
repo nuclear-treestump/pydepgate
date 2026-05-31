@@ -1,6 +1,21 @@
 # pydepgate
 
-[![PyPI](https://img.shields.io/pypi/v/pydepgate.svg)](https://pypi.org/project/pydepgate/)[![Downloads](https://pepy.tech/badge/pydepgate)](https://pepy.tech/project/pydepgate)[![Unit tests](https://github.com/nuclear-treestump/pydepgate/actions/workflows/do_unittests.yml/badge.svg)](https://github.com/nuclear-treestump/pydepgate/actions/workflows/do_unittests.yml)[![SARIF validation](https://github.com/nuclear-treestump/pydepgate/actions/workflows/do_sarif_validation.yml/badge.svg)](https://github.com/nuclear-treestump/pydepgate/actions/workflows/do_sarif_validation.yml)[![CodeQL Advanced](https://github.com/nuclear-treestump/pydepgate/actions/workflows/codeql.yml/badge.svg)](https://github.com/nuclear-treestump/pydepgate/actions/workflows/codeql.yml)[![docker-publish](https://github.com/nuclear-treestump/pydepgate/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/nuclear-treestump/pydepgate/actions/workflows/docker-publish.yml)[![CodeQL](https://github.com/nuclear-treestump/pydepgate/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/nuclear-treestump/pydepgate/actions/workflows/github-code-scanning/codeql)
+#### Stats
+> Statistics provided by pypi and pepy.tech
+
+[![PyPI](https://img.shields.io/pypi/v/pydepgate.svg)](https://pypi.org/project/pydepgate/)[![Downloads](https://pepy.tech/badge/pydepgate)](https://pepy.tech/project/pydepgate)
+#### Tests
+> Tests are performed against Python 3.11, 3.12, and 3.13
+
+[![Unit tests](https://github.com/nuclear-treestump/pydepgate/actions/workflows/do_unittests.yml/badge.svg)](https://github.com/nuclear-treestump/pydepgate/actions/workflows/do_unittests.yml)
+[![SARIF validation](https://github.com/nuclear-treestump/pydepgate/actions/workflows/do_sarif_validation.yml/badge.svg)](https://github.com/nuclear-treestump/pydepgate/actions/workflows/do_sarif_validation.yml)
+[![CodeQL Advanced](https://github.com/nuclear-treestump/pydepgate/actions/workflows/codeql.yml/badge.svg)](https://github.com/nuclear-treestump/pydepgate/actions/workflows/codeql.yml)
+[![CodeQL](https://github.com/nuclear-treestump/pydepgate/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/nuclear-treestump/pydepgate/actions/workflows/github-code-scanning/codeql)
+#### Docker
+> Container builds from 0.5.0 onward are multi-arch, digest-addressable, signed, attested, and reproducible for supported platforms.
+
+[![docker-publish](https://github.com/nuclear-treestump/pydepgate/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/nuclear-treestump/pydepgate/actions/workflows/docker-publish.yml)
+[![docker-repro-check](https://github.com/nuclear-treestump/pydepgate/actions/workflows/docker-repro.yml/badge.svg)](https://github.com/nuclear-treestump/pydepgate/actions/workflows/docker-repro.yml)
 
 **A zero dependency lightweight static analyzer designed for adversarial-shape code in python to detect supply chain attacks before they reach your interpreter.**
 
@@ -41,13 +56,29 @@ pip install pydepgate
 
 Requires Python 3.11 or later. No third-party runtime dependencies.
 
-## Docker Usage
+## Docker usage
 
 ```bash
+docker pull ghcr.io/nuclear-treestump/pydepgate:latest
 docker pull ghcr.io/nuclear-treestump/pydepgate:0.X.Y
-```
+docker pull ghcr.io/nuclear-treestump/pydepgate:0.X
+`````
 
-[See Docker README.md for usage details and suggested workflows](docker/README.md)
+The official image is published for `linux/amd64` and `linux/arm64`.
+For CI and production package-intake workflows, prefer pinning by digest
+rather than relying on a mutable tag.
+
+From 0.5.0 onward, container releases are signed by digest,
+GitHub-attested, emitted with BuildKit provenance and SBOM attestations,
+built from verified PyPI wheel inputs, and reproducible for supported
+platforms.
+
+Container tags, digests, verification commands, runtime properties, and
+local invocation patterns are documented in the
+[Docker image guide](https://nuclear-treestump.github.io/pydepgate/guides/docker-image).
+
+CI-specific examples are in the
+[CI integration guide](https://nuclear-treestump.github.io/pydepgate/guides/ci-integration).
 
 ## Quickstart
 
@@ -346,9 +377,14 @@ Stable today:
   Validated in CI against the Microsoft SARIF Multitool.
 - Pre-commit hook integration via `pydepgate` and `pydepgate-pth` hook
   IDs.
-- Official Docker image at `ghcr.io/nuclear-treestump/pydepgate`.
-  Multi-stage Alpine build under 50 MB, runs as non-root (uid 1000),
-  published for `linux/amd64` and `linux/arm64`.
+- Official Docker image at `ghcr.io/nuclear-treestump/pydepgate`. Published
+ for `linux/amd64` and `linux/arm64`, runs as non-root (`uid 1000`), and is
+ designed for containerized local scans, CI pipelines, and package-intake
+workflows. From 0.5.0 onward, image releases are signed by digest,
+GitHub-attested, emitted with BuildKit provenance and SBOM attestations,
+built from verified PyPI wheel inputs, pinned to a resolved Python base-image
+digest, smoke-tested by digest before publication, and reproducible for supported
+ platforms.
 - Shell tab completion for bash, zsh, and fish.
 
 In active development:
@@ -369,7 +405,8 @@ In active development:
 | [Rules File](https://nuclear-treestump.github.io/pydepgate/reference/rules-file) | `pydepgate.gate` format specification |
 | [Exit Codes](https://nuclear-treestump.github.io/pydepgate/reference/exit-codes) | Exit code contract and CI implications |
 | [Output Formats](https://nuclear-treestump.github.io/pydepgate/reference/output-formats) | Human, JSON, SARIF schemas |
-| [Guide: CI Integration](https://nuclear-treestump.github.io/pydepgate/guides/ci-integration) | GitHub Actions, GitLab CI, pre-commit, Docker |
+| [Guide: CI Integration](https://nuclear-treestump.github.io/pydepgate/guides/ci-integration) | GitHub Actions, GitLab CI, pre-commit, Docker-in-CI |
+| [Guide: Docker Image](https://nuclear-treestump.github.io/pydepgate/guides/docker-image) | Container tags, digests, verification, runtime properties |
 | [Guide: Custom Rules](https://nuclear-treestump.github.io/pydepgate/guides/custom-rules) | Suppressing false positives, scoping rules |
 | [Guide: Decode Payloads](https://nuclear-treestump.github.io/pydepgate/guides/decode-payloads) | Recursive decode, IOC sidecars, encrypted archives |
 | [Guide: SARIF Integration](https://nuclear-treestump.github.io/pydepgate/guides/sarif-integration) | GitHub Code Scanning ingestion |
@@ -390,44 +427,15 @@ In active development:
 - **Lightweight.** The full test suite runs in roughly twenty seconds
   on the lowest available options in Codespaces, including
   subprocess-based CLI tests against installed packages.
-
-## Relationship to PyDepGuard
-
-pydepgate is a narrow, single-purpose tool focused on startup-vector
-interdiction.
-[PyDepGuard](https://github.com/nuclear-treestump/pydepguard) is a
-broader Python security framework covering runtime sandboxing and
-dependency management. The startup-vector engine developed in
-pydepgate is intended to eventually integrate with PyDepGuard as a
-subsystem; until then, the two projects are developed independently.
-
-Users who need only startup-vector protection should use pydepgate.
-Users who need the full runtime security model should use PyDepGuard
-directly.
+- **Verifiable release artifacts.** Container releases are built around
+  digest identity rather than tag trust. From 0.5.0 onward, supported
+  platform images are signed, attested, emitted with provenance/SBOM
+  metadata, smoke-tested by digest, built from verified package inputs,
+  and checked for reproducibility.
 
 ## Architecture
 
-The codebase is organized as a layered pipeline:
-
-```
-parsers/           bytes -> structured representations (pth, pysource, wheel, sdist)
-introspection/     installed package enumeration via importlib.metadata
-traffic_control/   path-based triage; decides what to analyze
-analyzers/         structured representations -> raw signals
-  _resolver.py        safe partial evaluator (shared infrastructure)
-  _visitor.py         scope tracking and AST utilities (shared)
-  encoding_abuse      ENC001
-  dynamic_execution   DYN001-007
-  string_ops          STR001-004
-  suspicious_stdlib   STDLIB001-003
-  density_analyzer    DENS001-051
-enrichers/         signal hints -> enriched signal context
-  payload_peek        ENC002 emission and decoded context block
-rules/             signals + context -> severity-rated findings
-engines/           orchestration (currently: static)
-visualizers/       inline rendering helpers for the human reporter
-cli/               argparse, dispatch, reporters, explain subcommand
-```
+The codebase is organized as a layered pipeline.
 
 Analyzers do not see raw bytes. They walk parsed representations and
 emit `Signal` objects. The rules engine wraps signals with severity to
@@ -457,7 +465,7 @@ pip install -e .
 python -m unittest discover tests -v
 ```
 
-The test suite has grown to approximately 500 tests as the analyzer
+The test suite has grown to over 1600 tests as the analyzer
 set has expanded. Tests are organized by module and include happy-path
 coverage, evasion batteries, false-positive batteries, robustness
 checks against adversarial inputs, integration tests against synthetic
