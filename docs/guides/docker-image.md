@@ -1,10 +1,9 @@
 ---
-
 title: Docker Image
 parent: Guides
 nav_order: 5
 render_with_liquid: false
--------------------------
+---
 
 # Docker Image
 
