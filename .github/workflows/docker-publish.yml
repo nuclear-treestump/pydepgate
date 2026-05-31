@@ -57,6 +57,7 @@ jobs:
       packages: write
       id-token: write
       attestations: write
+      artifact-metadata: write
 
     steps:
       # For tag pushes, build from the pushed tag ref.
