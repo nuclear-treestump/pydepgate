@@ -227,6 +227,15 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          annotations: |
+            index:org.opencontainers.image.title=pydepgate
+            index:org.opencontainers.image.description=Static analyzer for Python supply-chain malware patterns
+            index:org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            index:org.opencontainers.image.revision=${{ steps.commit.outputs.sha }}
+            index:org.opencontainers.image.licenses=Apache-2.0
+            index:org.opencontainers.image.version=${{ steps.version.outputs.value }}
+            index:org.opencontainers.image.base.name=${{ steps.base_image.outputs.image }}
+            index:org.opencontainers.image.base.digest=${{ steps.base_image.outputs.digest }}
           build-args: |
             PYTHON_BASE_IMAGE=${{ steps.base_image.outputs.image }}
             PYDEPGATE_VERSION=${{ steps.version.outputs.value }}
