@@ -154,13 +154,19 @@ jobs:
 
           wheel = candidates[0]
           filename = wheel["filename"]
+          wheel_url = wheel.get("url")
           sha256 = wheel.get("digests", {}).get("sha256")
+
+          if not wheel_url:
+              print(f"wheel {filename} did not include a download URL", file=sys.stderr)
+              raise SystemExit(1)
 
           if not sha256:
               print(f"wheel {filename} did not include a sha256 digest", file=sys.stderr)
               raise SystemExit(1)
 
           print(f"filename={filename}")
+          print(f"url={wheel_url}")
           print(f"sha256={sha256}")
           PY
 
@@ -192,6 +198,7 @@ jobs:
             --sbom=false \
             --build-arg "PYTHON_BASE_IMAGE=${{ steps.base_image.outputs.image }}" \
             --build-arg "PYDEPGATE_VERSION=${{ steps.version.outputs.value }}" \
+            --build-arg "PYDEPGATE_WHEEL_URL=${{ steps.wheel.outputs.url }}" \
             --build-arg "PYDEPGATE_WHEEL_FILENAME=${{ steps.wheel.outputs.filename }}" \
             --build-arg "PYDEPGATE_WHEEL_SHA256=${{ steps.wheel.outputs.sha256 }}" \
             --build-arg "SOURCE_DATE_EPOCH=${{ steps.source_date_epoch.outputs.value }}" \
@@ -211,6 +218,7 @@ jobs:
             --sbom=false \
             --build-arg "PYTHON_BASE_IMAGE=${{ steps.base_image.outputs.image }}" \
             --build-arg "PYDEPGATE_VERSION=${{ steps.version.outputs.value }}" \
+            --build-arg "PYDEPGATE_WHEEL_URL=${{ steps.wheel.outputs.url }}" \
             --build-arg "PYDEPGATE_WHEEL_FILENAME=${{ steps.wheel.outputs.filename }}" \
             --build-arg "PYDEPGATE_WHEEL_SHA256=${{ steps.wheel.outputs.sha256 }}" \
             --build-arg "SOURCE_DATE_EPOCH=${{ steps.source_date_epoch.outputs.value }}" \
