@@ -165,6 +165,18 @@ jobs:
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Resolve Python base image digest
+        id: base_image
+        run: |
+          digest="$(docker buildx imagetools inspect python:3.12-alpine | awk '/^Digest:/ {print $2; exit}')"
+          if [ -z "$digest" ]; then
+            echo "failed to resolve digest for python:3.12-alpine" >&2
+            exit 1
+          fi
+
+          echo "image=python:3.12-alpine@${digest}" >> "$GITHUB_OUTPUT"
+          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -201,6 +213,8 @@ jobs:
             org.opencontainers.image.revision=${{ steps.commit.outputs.sha }}
             org.opencontainers.image.licenses=Apache-2.0
             org.opencontainers.image.version=${{ steps.version.outputs.value }}
+            org.opencontainers.image.base.name=${{ steps.base_image.outputs.image }}
+            org.opencontainers.image.base.digest=${{ steps.base_image.outputs.digest }}
 
       - name: Build and push image
         id: build
