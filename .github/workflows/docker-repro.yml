@@ -1,0 +1,215 @@
+# Rebuild the pydepgate Docker image twice from the same declared inputs
+# with cache disabled and compare the resulting image IDs.
+#
+# This is intentionally separate from docker-publish.yml.
+#
+# docker-publish.yml:
+#   - builds
+#   - pushes
+#   - signs
+#   - attests
+#   - emits provenance/SBOM
+#
+# docker-repro-check.yml:
+#   - resolves the same release inputs
+#   - builds twice without cache
+#   - compares one platform at a time
+#
+# This starts with per-platform reproducibility for linux/amd64 and
+# linux/arm64. Multiarch index digest reproducibility can be added
+# later after per-platform layers are stable.
+
+name: docker-repro-check
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "pydepgate version to reproducibility-check (must already be on PyPI)"
+        required: true
+        default: "0.5.0"
+
+concurrency:
+  group: docker-repro-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  repro-check:
+    name: Repro check ${{ matrix.platform }}
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            suffix: amd64
+          - platform: linux/arm64
+            suffix: arm64
+
+    steps:
+      - name: Determine checkout ref
+        id: checkout_ref
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "value=v${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=${GITHUB_REF}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check out repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ steps.checkout_ref.outputs.value }}
+
+      - name: Determine pydepgate version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "push" ] && [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            echo "value=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "value=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "unexpected event: ${{ github.event_name }}" >&2
+            exit 1
+          fi
+
+      - name: Compute source date epoch
+        id: source_date_epoch
+        run: |
+          echo "value=$(git log -1 --pretty=%ct)" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve PyPI wheel metadata
+        id: wheel
+        env:
+          PYDEPGATE_VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          import os
+          import sys
+          import urllib.request
+
+          version = os.environ["PYDEPGATE_VERSION"]
+          url = f"https://pypi.org/pypi/pydepgate/{version}/json"
+
+          with urllib.request.urlopen(url, timeout=30) as response:
+              data = json.load(response)
+
+          wheels = [
+              item for item in data.get("urls", ())
+              if item.get("packagetype") == "bdist_wheel"
+          ]
+
+          preferred = [
+              item for item in wheels
+              if item.get("filename", "").endswith("py3-none-any.whl")
+          ]
+
+          candidates = preferred or wheels
+          if not candidates:
+              print(f"no wheel found on PyPI for pydepgate {version}", file=sys.stderr)
+              raise SystemExit(1)
+
+          if len(candidates) != 1:
+              print("multiple wheel candidates found:", file=sys.stderr)
+              for item in candidates:
+                  print(f"  - {item.get('filename')}", file=sys.stderr)
+              raise SystemExit(1)
+
+          wheel = candidates[0]
+          filename = wheel["filename"]
+          sha256 = wheel.get("digests", {}).get("sha256")
+
+          if not sha256:
+              print(f"wheel {filename} did not include a sha256 digest", file=sys.stderr)
+              raise SystemExit(1)
+
+          print(f"filename={filename}")
+          print(f"sha256={sha256}")
+          PY
+
+      - name: Set up QEMU for cross-arch builds
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Resolve Python base image digest
+        id: base_image
+        run: |
+          digest="$(docker buildx imagetools inspect python:3.12-alpine | awk '/^Digest:/ {print $2; exit}')"
+          if [ -z "$digest" ]; then
+            echo "failed to resolve digest for python:3.12-alpine" >&2
+            exit 1
+          fi
+
+          echo "image=python:3.12-alpine@${digest}" >> "$GITHUB_OUTPUT"
+          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+
+      - name: Build image A without cache
+        run: |
+          docker buildx build \
+            --no-cache \
+            --load \
+            --platform "${{ matrix.platform }}" \
+            --provenance=false \
+            --sbom=false \
+            --build-arg "PYTHON_BASE_IMAGE=${{ steps.base_image.outputs.image }}" \
+            --build-arg "PYDEPGATE_VERSION=${{ steps.version.outputs.value }}" \
+            --build-arg "PYDEPGATE_WHEEL_FILENAME=${{ steps.wheel.outputs.filename }}" \
+            --build-arg "PYDEPGATE_WHEEL_SHA256=${{ steps.wheel.outputs.sha256 }}" \
+            --build-arg "SOURCE_DATE_EPOCH=${{ steps.source_date_epoch.outputs.value }}" \
+            -f ./docker/Dockerfile \
+            -t "pydepgate-repro:${{ matrix.suffix }}-a" \
+            ./docker
+
+          docker image inspect "pydepgate-repro:${{ matrix.suffix }}-a" --format '{{.Id}}' | tee /tmp/repro-a.id
+
+      - name: Remove image A
+        run: |
+          docker image rm "pydepgate-repro:${{ matrix.suffix }}-a"
+
+      - name: Build image B without cache
+        run: |
+          docker buildx build \
+            --no-cache \
+            --load \
+            --platform "${{ matrix.platform }}" \
+            --provenance=false \
+            --sbom=false \
+            --build-arg "PYTHON_BASE_IMAGE=${{ steps.base_image.outputs.image }}" \
+            --build-arg "PYDEPGATE_VERSION=${{ steps.version.outputs.value }}" \
+            --build-arg "PYDEPGATE_WHEEL_FILENAME=${{ steps.wheel.outputs.filename }}" \
+            --build-arg "PYDEPGATE_WHEEL_SHA256=${{ steps.wheel.outputs.sha256 }}" \
+            --build-arg "SOURCE_DATE_EPOCH=${{ steps.source_date_epoch.outputs.value }}" \
+            -f ./docker/Dockerfile \
+            -t "pydepgate-repro:${{ matrix.suffix }}-b" \
+            ./docker
+
+          docker image inspect "pydepgate-repro:${{ matrix.suffix }}-b" --format '{{.Id}}' | tee /tmp/repro-b.id
+
+      - name: Compare image IDs
+        run: |
+          echo "Platform: ${{ matrix.platform }}"
+
+          echo "Image A:"
+          cat /tmp/repro-a.id
+
+          echo "Image B:"
+          cat /tmp/repro-b.id
+
+          if ! cmp -s /tmp/repro-a.id /tmp/repro-b.id; then
+            echo "reproducibility check failed: image IDs differ for ${{ matrix.platform }}" >&2
+            exit 1
+          fi
+
+          echo "reproducibility check passed for ${{ matrix.platform }}: image IDs match"
