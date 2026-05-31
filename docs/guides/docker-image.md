@@ -138,22 +138,36 @@ gh attestation verify \
 For strict workflows, verify the digest-addressed image rather than
 only the version tag.
 
-## Reproducibility status
+## Reproducibility
 
-pydepgate tracks container reproducibility separately from signing and
-attestation.
+From 0.5.0 onward, pydepgate container images are checked for
+reproducibility on supported platforms.
 
-* **Signing** proves that the trusted release workflow signed a specific
+The reproducibility workflow rebuilds the image from the same declared
+inputs and compares the resulting image IDs for:
+
+- `linux/amd64`
+- `linux/arm64`
+
+The declared inputs include:
+
+- the checked-out source ref;
+- the resolved Python base image digest;
+- the pydepgate PyPI wheel URL;
+- the pydepgate PyPI wheel filename;
+- the pydepgate PyPI wheel SHA256;
+- `SOURCE_DATE_EPOCH`.
+
+This is separate from signing and attestation:
+
+- **Signing** proves that the trusted release workflow signed a specific
   image digest.
-* **Attestation** records where and how the image was built.
-* **Reproducibility** checks whether the same declared inputs rebuild to
-  the same image result.
+- **Attestation** records where and how the image was built.
+- **Reproducibility** proves that the same declared inputs rebuild to
+  the same image result for the checked platform.
 
-The reproducibility workflow performs per-platform rebuild checks for
-`linux/amd64` and `linux/arm64`. Until those checks are consistently
-green for a release, treat pydepgate images as signed and attested, not
-as fully reproducible.
-
+For CI and production package-intake workflows, prefer digest-pinned
+image references even when using version tags for readability.
 ## Custom rules file
 
 Mount a rules file read-only and pass its in-container path:
