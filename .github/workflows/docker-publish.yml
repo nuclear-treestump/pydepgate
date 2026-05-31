@@ -227,6 +227,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
+            PYTHON_BASE_IMAGE=${{ steps.base_image.outputs.image }}
             PYDEPGATE_VERSION=${{ steps.version.outputs.value }}
             PYDEPGATE_WHEEL_FILENAME=${{ steps.wheel.outputs.filename }}
             PYDEPGATE_WHEEL_SHA256=${{ steps.wheel.outputs.sha256 }}
