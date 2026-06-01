@@ -62,7 +62,7 @@ Requires Python 3.11 or later. No third-party runtime dependencies.
 docker pull ghcr.io/nuclear-treestump/pydepgate:latest
 docker pull ghcr.io/nuclear-treestump/pydepgate:0.X.Y
 docker pull ghcr.io/nuclear-treestump/pydepgate:0.X
-`````
+```
 
 The official image is published for `linux/amd64` and `linux/arm64`.
 For CI and production package-intake workflows, prefer pinning by digest
@@ -101,6 +101,19 @@ The full exit code contract is in
 [docs/reference/exit-codes.md](https://nuclear-treestump.github.io/pydepgate/reference/exit-codes).
 
 ## Usage
+
+### Scan for known vulnerable package versions
+
+```bash
+pydepgate cvedb update
+pydepgate cvescan some-package.whl
+pydepgate cvescan --save-to-db some-package.whl
+```
+
+`pydepgate scan` looks for suspicious startup-vector behavior.
+`pydepgate cvescan` checks package identity against the local OSV-backed
+CVE database. Use both when you want behavioral and known-vulnerability
+coverage.
 
 ### Scan an artifact
 
@@ -202,6 +215,19 @@ Auto-discovery checks `./pydepgate.gate` then `<venv>/pydepgate.gate`
 when the flag is not set. The rule file format is TOML or JSON,
 auto-detected. Full format spec:
 [docs/reference/rules-file.md](https://nuclear-treestump.github.io/pydepgate/reference/rules-file).
+
+### Preserve scan evidence
+
+```bash
+pydepgate scan --save-to-db some-package.whl
+pydepgate db list-runs
+pydepgate db explain --run-id <run-id>
+```
+
+pydepgate can store scan runs in a local SQLite evidence database,
+including artifact hashes, active findings, finding locations, decoded
+payload trees, and CVE matches. This makes findings reproducible after
+the terminal session is gone.
 
 ### Look up a signal or rule
 
@@ -401,6 +427,10 @@ In active development:
 |---|---|
 | [Getting Started](https://nuclear-treestump.github.io/pydepgate/index) | First scan, reading output, using `explain` |
 | [CLI Reference](https://nuclear-treestump.github.io/pydepgate/cli/index) | All subcommands, all flags, environment variables |
+| [CLI Reference: db](https://nuclear-treestump.github.io/pydepgate/cli/db) | Store, query, and explain local scan evidence |
+| [CLI Reference: cvedb](https://nuclear-treestump.github.io/pydepgate/cli/cvedb) | Build and inspect the local CVE database |
+| [CLI Reference: cvescan](https://nuclear-treestump.github.io/pydepgate/cli/cvescan) | Match artifacts against known vulnerable versions |
+| [Finding Fingerprint v1](https://nuclear-treestump.github.io/pydepgate/reference/fingerprint-v1) | Deterministic finding fingerprint specification |
 | [Signals Reference](https://nuclear-treestump.github.io/pydepgate/reference/signals) | Every signal ID with severity tables per file kind |
 | [Rules File](https://nuclear-treestump.github.io/pydepgate/reference/rules-file) | `pydepgate.gate` format specification |
 | [Exit Codes](https://nuclear-treestump.github.io/pydepgate/reference/exit-codes) | Exit code contract and CI implications |
