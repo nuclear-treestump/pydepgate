@@ -1,8 +1,10 @@
 # CLAUDE.md
 
+> **Purpose:** This file provides guidance for LLM-assisted development. It is not an enforcement mechanism — tests, CI, and code review remain authoritative.
+
 ## Project overview
 
-pydepgate is a zero-dependency static analyzer that detects supply-chain attacks in Python packages by inspecting startup vectors (.pth files, setup.py, sitecustomize.py, usercustomize.py, __init__.py, console-script entry points). It analyzes wheels, sdists, installed packages, and loose files without ever executing user input. Current version: 0.5.0. Python 3.11+ required.
+pydepgate is a zero-dependency static analyzer that detects supply-chain attacks in Python packages by inspecting startup vectors (.pth files, setup.py, sitecustomize.py, usercustomize.py, __init__.py, console-script entry points). It analyzes wheels, sdists, installed packages, and loose files without ever executing user input. Current version as of 2026-06-02: 0.5.0. Python 3.11+ required.
 
 ## Build and run
 
@@ -28,7 +30,7 @@ src/pydepgate/
   enrichers/            # Payload peek, decode, passthrough
   engines/              # StaticEngine (static.py), preflight, runtime stubs
   parsers/              # Wheel, sdist, .pth, Python source parsers
-  reporters/            # Human, JSON (schema v2), SARIF 2.1.0, decoded tree
+  reporters/            # Human, JSON (schema v4), SARIF 2.1.0, decoded tree (schema v2)
   rules/                # Rule engine, defaults, loader, explanations, per-analyzer groups
   traffic_control/      # Triage: decides which files get analyzed and their file kind
   dbs/                  # cvedb (OSV SQLite), pdgdb (local evidence database)
@@ -50,7 +52,7 @@ CLI -> argparse -> StaticEngine(analyzers, enrichers, rules) -> triage (which fi
   5. Reporter: Findings -> human/JSON/SARIF output
   6. Exit code from findings
 
-Each layer has a single responsibility. Put work in the right layer. DO NOT GUESS. Ask User if unclear.
+Each layer has a single responsibility. Put work in the right layer. DO NOT GUESS. Ask the maintainer or open a PR discussion if unclear.
 
 Where new work goes:
 - New attack detection → analyzers + rules, possibly with a new enrichment hint
@@ -72,7 +74,7 @@ The discipline when extending the resolver: model the operation from scratch usi
 
 ### Picklability contract
 
-`_scan_one_file(FileScanInput) -> FileScanOutput` in `engines/static.py` is a pure function structured for future `ProcessPoolExecutor` parallelism. Three requirements, enforced by `tests/engines/test_deploy_the_pickle.py`:
+`_scan_one_file(FileScanInput) -> FileScanOutput` in `engines/static.py` is a pure function used for active `ProcessPoolExecutor` parallelism. Any changes around the scan engine must be careful not to break this. Three requirements, enforced by `tests/engines/test_deploy_the_pickle.py`:
 
 1. **Inputs and outputs must be picklable.** `FileScanInput`, `FileScanOutput`, every analyzer, enricher, and rule must survive a pickle round-trip without losing information.
 2. **No module-level mutable state.** Analyzers, enrichers, and the engine must not rely on global variables, lazy singletons, or class-level mutable attributes.
@@ -82,7 +84,7 @@ If something is hard to pickle (compiled regex, file handle), construct it at us
 
 ### Zero runtime dependencies
 
-No third-party runtime dependencies. This is a load-bearing security constraint, not a preference. Build/test/CI tooling can use whatever fits; runtime cannot.
+No third-party runtime dependencies. This is a load-bearing security constraint, not a preference. Build/test/CI tooling can use whatever fits; runtime cannot. Tests must use `unittest` (stdlib only).
 
 ### Signal ID stability
 
@@ -107,7 +109,7 @@ Do not refactor this for clarity or performance without explicit discussion.
 
 ### JSON schema_version contract
 
-JSON output emits `schema_version: 2`. Any shape change (new keys, renames, type changes, removals) requires a version bump. Additive = minor bump; breaking = major bump.
+Primary scan JSON output emits `schema_version: 4`. Decoded-tree JSON output emits `schema_version: 2`. Any shape change (new keys, renames, type changes, removals) requires a version bump. Additive = minor bump; breaking = major bump.
 
 ### CLI argument-position invariant
 
@@ -151,11 +153,13 @@ Tests are organized by module under `tests/` and include:
 
 New analyzers must include at minimum: happy-path detection, at least 3 evasion variants the analyzer should still catch, and at least 3 benign-pattern fixtures the analyzer should ignore. An analyzer that catches the obvious case but fires on every benign use of similar syntax is worse than no analyzer.
 
+Additional test fixtures and fixture-generation scripts should be stored in `test_files/`.
+
 All tests must pass before any change ships. Run: `python -m unittest discover tests -v`
 
 ## AI-generated code
 
-AI assistance is fine; AI-as-author is not. Every line of a diff must be defensible as the contributor's own understanding. NEVER commit automatically, confirm with user that they have reviewed the code. 
+AI assistance is fine; AI-as-author is not. Every line of a diff must be defensible as the contributor's own understanding. NEVER commit automatically, confirm with the contributor that they have reviewed the code before commiting. 
 AI-generated tests that don't actually exercise the code path they claim to are the most common failure mode — verify tests fail when the code is wrong, not just pass when the code is right.
 
 ## Deny list
@@ -171,6 +175,6 @@ AI-generated tests that don't actually exercise the code path they claim to are 
 - Do not store unpicklable state on analyzers/enrichers/rules
 - Do not add global CLI flags without the dual-registration pattern
 - Do not change triage coverage without explicit documentation and tests
-- Do not change the `_scan_one_file` signature or I/O shapes without discussion with 0xIkari
+- Do not change the `_scan_one_file` signature or I/O shapes without discussion with the maintainer.
 - Do not submit AI-generated tests without verifying they fail when the code is wrong. 
 - Do not change the rules precedence model without a major-version bump. 
