@@ -372,55 +372,6 @@ with descriptions. Complete rules file specification:
 walkthroughs of common rule-writing tasks:
 [docs/guides/custom-rules.md](https://nuclear-treestump.github.io/pydepgate/guides/custom-rules).
 
-## Status
-
-**Static analysis is functional end-to-end.** pydepgate can statically
-analyze wheels, sdists, installed packages, and single loose files for
-the patterns used in real-world Python supply-chain attacks.
-
-Stable today:
-
-- Static analysis of `.whl` files, sdists, installed packages by name,
-  and individual loose files via `--single`.
-- Five production analyzers (`encoding_abuse`, `dynamic_execution`,
-  `string_ops`, `suspicious_stdlib`, `code_density`).
-- A rules engine with file-kind-aware severity promotion, fully
-  data-driven via TOML or JSON `pydepgate.gate` files. The default
-  rule set includes 32 rules dedicated to density-layer signals alone.
-- A safe partial evaluator that resolves obfuscated string expressions
-  without executing user code.
-- An optional payload-peek enricher (`--peek`) with bounded multi-layer
-  decode, content classification, decompression-bomb budgets, and
-  pickle detection without deserialization.
-- A recursive decode pipeline (`--decode-payload-depth=N`) that
-  re-scans decoded payloads and produces a tree-shaped attack-chain
-  report, with optional encrypted-archive IOC output.
-- An SSH-randomart-style finding-distribution map rendered inline with
-  human-readable scan output.
-- Three output formats: human-readable terminal, JSON (schema v2), and
-  SARIF 2.1.0 with codeFlow encoding, GitHub-compatible severity
-  mapping, partial fingerprints, and content-blind message text.
-  Validated in CI against the Microsoft SARIF Multitool.
-- Pre-commit hook integration via `pydepgate` and `pydepgate-pth` hook
-  IDs.
-- Official Docker image at `ghcr.io/nuclear-treestump/pydepgate`. Published
- for `linux/amd64` and `linux/arm64`, runs as non-root (`uid 1000`), and is
- designed for containerized local scans, CI pipelines, and package-intake
-workflows. From 0.5.0 onward, image releases are signed by digest,
-GitHub-attested, emitted with BuildKit provenance and SBOM attestations,
-built from verified PyPI wheel inputs, pinned to a resolved Python base-image
-digest, smoke-tested by digest before publication, and reproducible for supported
- platforms.
-- Shell tab completion for bash, zsh, and fish.
-
-In active development:
-
-- The `comment_analysis` analyzer.
-- Runtime interdiction (`exec` mode).
-- Environment auditing (`preflight` mode).
-- Aliased import resolution (`from subprocess import Popen as P`).
-- A pip-wrapper / transitive-dependency `audit` subcommand.
-
 ## Documentation
 
 | Section | Contents |
@@ -567,26 +518,6 @@ longer possible, the maintainer commits to finding a successor who
 will be held to the same conditions. If no such successor can be
 found, the project will be archived rather than placed under corporate
 control.
-
-## Funding
-
-pydepgate is built by a single individual whose day job is assembling
-industrial machines. If this tool saved you time or added legitimate
-security to your CI/CD pipeline, sponsorship makes continued
-development sustainable.
-
-This project is also available on Tidelift. See the Sponsors button
-for all available options.
-
-Development continues regardless of funding level.
-
-Funds are used for:
-
-1. Living expenses (rent, food, internet).
-2. Infrastructure costs for planned tools and services, including the
-   Threat Feed and Burn Notice subsystems on the roadmap.
-3. Compensation for any additional maintainers brought onto the
-   project in the future.
 
 ## Author
 
