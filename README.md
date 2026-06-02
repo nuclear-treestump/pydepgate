@@ -28,6 +28,8 @@ March 2026 LiteLLM supply-chain compromise and catalogued as
 
 [Available on PyPI as pydepgate](https://pypi.org/project/pydepgate/).
 
+For sponsorship of this project, see the Sponsors button, or [FUNDING.md](FUNDING.md)
+
 ## The problem
 
 Python's interpreter runs several kinds of code automatically at startup,
