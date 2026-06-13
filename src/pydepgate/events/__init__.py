@@ -48,3 +48,41 @@ Workplan [future]: A configuration or plan for executing tasks or processes. Thi
 
 
 """
+
+from pydepgate.events.emitter import EventEmitter, EventEmitterError
+from pydepgate.events.envelope import EventEnvelope, EventEnvelopeError
+from pydepgate.events.freeze import DeepFreezeError, FrozenMapping, deep_freeze
+from pydepgate.events.sinks import (
+    EventSink,
+    EventSinkError,
+    JsonlEventSink,
+    MemoryEventSink,
+    NullEventSink,
+    TeeEventSink,
+)
+from pydepgate.events.tickets import (
+    LocalInvocationError,
+    ScanGrantingTicket,
+    ScanGrantingTicketError,
+    mintsgt,
+)
+
+__all__ = [
+    "EventEnvelope",
+    "EventEnvelopeError",
+    "EventEmitter",
+    "EventEmitterError",
+    "EventSink",
+    "EventSinkError",
+    "JsonlEventSink",
+    "MemoryEventSink",
+    "NullEventSink",
+    "TeeEventSink",
+    "DeepFreezeError",
+    "FrozenMapping",
+    "deep_freeze",
+    "LocalInvocationError",
+    "ScanGrantingTicket",
+    "ScanGrantingTicketError",
+    "mintsgt",
+]
