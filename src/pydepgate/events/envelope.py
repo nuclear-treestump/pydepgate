@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from typing import Any
 from collections.abc import Mapping
 
-from pydepgate.events.freeze import DeepFreezeError, FrozenMapping, deep_freeze
+from pydepgate.events.freeze import DeepFreezeError, deep_freeze
 from pydepgate.events.serialization import (
     EventSerializationError,
     stable_sha256_json,
@@ -43,8 +43,8 @@ class EventEnvelope:
     correlation_id: str | None = None
     parent_event_id: str | None = None
     ticket_id: str | None = None
-    occurred_at: str = field(default_factory=lambda: _utc_now())
-    emitted_at: str = field(default_factory=lambda: _utc_now())
+    occurred_at: str = field(default_factory=_utc_now)
+    emitted_at: str = field(default_factory=_utc_now)
     severity: str = "info"
     payload_schema: str | None = None
     payload_digest: str = field(init=False)

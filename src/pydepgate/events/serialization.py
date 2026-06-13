@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from collections.abc import Mapping, Sequence, Set
 from typing import Any
 
@@ -24,7 +25,7 @@ def to_jsonable(value: Any) -> Any:
         return value
 
     if isinstance(value, float):
-        if value != value or value in (float("inf"), float("-inf")):
+        if math.isnan(value) or math.isinf(value):
             raise EventSerializationError("non-finite floats are not JSON-safe")
         return value
 

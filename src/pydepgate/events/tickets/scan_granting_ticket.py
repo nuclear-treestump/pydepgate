@@ -18,7 +18,7 @@ import secrets
 import sys
 from typing import Any
 
-from pydepgate.events.freeze import DeepFreezeError, FrozenMapping, deep_freeze
+from pydepgate.events.freeze import DeepFreezeError, deep_freeze
 from pydepgate.events.serialization import (
     EventSerializationError,
     stable_json_dumps,
@@ -55,7 +55,7 @@ class ScanGrantingTicket:
     allowed_actions: Iterable[str] = field(
         default_factory=lambda: _DEFAULT_ALLOWED_ACTIONS
     )
-    issued_at: str = field(default_factory=lambda: _utc_now())
+    issued_at: str = field(default_factory=_utc_now)
     expires_at: str | None = None
     policy_fingerprint: str | None = None
     ruleset_fingerprint: str | None = None
