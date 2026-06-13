@@ -1,4 +1,4 @@
-"""pydepgate.scannerd.__init__
+"""pydepgate.daemons.scannerd.__init__
 
 Scanner daemon for pydepgate.
 
