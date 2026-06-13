@@ -31,6 +31,7 @@ import argparse
 import sys
 import os
 import datetime
+import hashlib
 from pathlib import Path
 
 from pydepgate.analyzers.encoding_abuse import EncodingAbuseAnalyzer
@@ -75,6 +76,12 @@ from pydepgate.reporters.decoded_tree import sources as tree_sources
 from pydepgate.reporters.decoded_tree import text as tree_text
 from pydepgate.cli._archive import write_encrypted_zip
 from pydepgate.cli.command_handlers.sarif_args import sarif_srcroot
+from pydepgate.events import (
+    EventEmitter,
+    EventSinkError,
+    JsonlEventSink,
+    mintsgt,
+)
 
 _SDIST_SUFFIXES = (".tar.gz", ".tgz", ".tar.bz2", ".tar.xz", ".tar")
 
@@ -195,6 +202,14 @@ def register(subparsers) -> None:
             "scan exit code."
         ),
     )
+    parser.add_argument(
+        "--event-log",
+        metavar="PATH",
+        default=os.environ.get("PYDEPGATE_EVENT_LOG"),
+        help=(
+            "Write scan lifecycle events to a JSONL file. " "Env: PYDEPGATE_EVENT_LOG"
+        ),
+    )
     parser.set_defaults(func=run)
 
 
@@ -242,12 +257,167 @@ def _save_to_db(result: ScanResult, decoded_tree) -> None:
         )
 
 
+def _build_scan_event_emitter(
+    args: argparse.Namespace,
+    *,
+    run_id: str,
+    correlation_id: str,
+) -> EventEmitter:
+    """Build the event emitter used by scan.run."""
+    injected = getattr(args, "_event_emitter", None)
+    if injected is not None:
+        return injected
+
+    sinks = list(getattr(args, "_event_sinks", ()) or ())
+    event_log = getattr(args, "event_log", None)
+    if event_log:
+        sinks.append(JsonlEventSink(event_log))
+
+    return EventEmitter(
+        producer="pydepgate.cli.scan",
+        sinks=tuple(sinks),
+        run_id=run_id,
+        correlation_id=correlation_id,
+    )
+
+
+def _emit_scan_event(
+    emitter: EventEmitter,
+    event_type: str,
+    payload: dict | None = None,
+    *,
+    ticket_id: str | None = None,
+    parent_event_id: str | None = None,
+    severity: str = "info",
+):
+    """Emit a scan event without letting sink failures hide results."""
+    try:
+        return emitter.emit(
+            event_type,
+            payload or {},
+            ticket_id=ticket_id,
+            parent_event_id=parent_event_id,
+            severity=severity,
+        )
+    except EventSinkError as exc:
+        sys.stderr.write(
+            f"warning: could not emit {event_type}: " f"{type(exc).__name__}: {exc}\n"
+        )
+        return None
+
+
+def _ticket_event_payload(ticket) -> dict:
+    """Return ticket fields safe for event logs."""
+    payload = ticket.to_dict()
+    payload.pop("ticket_nonce", None)
+    return payload
+
+
+def _requested_target_identity(args: argparse.Namespace) -> str | None:
+    """Return the target value requested by the user."""
+    if getattr(args, "single", None):
+        return str(args.single)
+    target = getattr(args, "target", None)
+    return None if target is None else str(target)
+
+
+def _requested_target_kind(args: argparse.Namespace) -> str:
+    """Return the requested scan target kind."""
+    if getattr(args, "single", None):
+        return "loose_file"
+    target = str(getattr(args, "target", "") or "")
+    if target.endswith(".whl"):
+        return "wheel"
+    for suffix in _SDIST_SUFFIXES:
+        if target.endswith(suffix):
+            return "sdist"
+    return "installed_package"
+
+
+def _requested_scan_mode(args: argparse.Namespace) -> str:
+    """Return the scan mode requested by CLI flags."""
+    if getattr(args, "single", None):
+        return "static.single"
+    if getattr(args, "deep", False):
+        return "static.deep"
+    return "static.artifact"
+
+
+def _allowed_actions_for_args(args: argparse.Namespace) -> tuple[str, ...]:
+    """Return actions needed to satisfy the requested scan."""
+    actions = ["scan"]
+    if decode_enabled(args):
+        actions.append("decode")
+    if getattr(args, "save_to_db", False):
+        actions.append("evidence.write")
+    return tuple(actions)
+
+
+def _scan_budget_for_args(args: argparse.Namespace) -> dict:
+    """Return local resource expectations for the scan grant."""
+    return {
+        "workers": getattr(args, "_workers_count", None),
+        "parallel_threshold": getattr(args, "_workers_threshold", 1000),
+        "deep": bool(getattr(args, "deep", False)),
+        "single": bool(getattr(args, "single", None)),
+        "peek": bool(getattr(args, "peek", False)),
+        "peek_chain": bool(getattr(args, "peek_chain", False)),
+        "decode_enabled": decode_enabled(args),
+        "decode_payload_depth": getattr(args, "decode_payload_depth", None),
+        "decode_iocs": getattr(args, "decode_iocs", None),
+    }
+
+
+def _ruleset_fingerprint(rules) -> str:
+    """Return a stable-enough fingerprint for the loaded rule set."""
+    digest = hashlib.sha256()
+    for rule in rules:
+        digest.update(repr(rule).encode("utf-8"))
+        digest.update(b"\n")
+    return digest.hexdigest()
+
+
+def _scan_result_event_payload(result: ScanResult) -> dict:
+    """Return a JSON-safe summary of a ScanResult."""
+    stats = result.statistics
+    return {
+        "artifact_identity": result.artifact_identity,
+        "artifact_kind": result.artifact_kind.value,
+        "artifact_sha256": result.artifact_sha256,
+        "artifact_sha512": result.artifact_sha512,
+        "scan_id": result.scan_id,
+        "finding_count": len(result.findings),
+        "suppressed_finding_count": len(result.suppressed_findings),
+        "skipped_count": len(result.skipped),
+        "diagnostic_count": len(result.diagnostics),
+        "statistics": {
+            "files_total": stats.files_total,
+            "files_scanned": stats.files_scanned,
+            "files_skipped": stats.files_skipped,
+            "files_failed_to_parse": stats.files_failed_to_parse,
+            "signals_emitted": stats.signals_emitted,
+            "analyzers_run": stats.analyzers_run,
+            "enrichers_run": stats.enrichers_run,
+            "duration_seconds": stats.duration_seconds,
+        },
+    }
+
+
+def _exception_event_payload(exc: BaseException) -> dict:
+    """Return a JSON-safe exception summary."""
+    return {
+        "exception_type": type(exc).__name__,
+        "message": str(exc),
+    }
+
+
 def run(args: argparse.Namespace) -> int:
     """Execute the scan subcommand. Returns an exit code."""
     from pydepgate.rules.defaults import DEFAULT_RULES
     from pydepgate.rules.loader import GateFileError, load_user_rules
 
-    # Argument validation.
+    # Argument validation. No ticket is minted until the requested
+    # scan shape is internally consistent.
     if args.single and args.target:
         sys.stderr.write(
             "error: cannot combine a positional target with --single. "
@@ -284,6 +454,43 @@ def run(args: argparse.Namespace) -> int:
     # Combine defaults and user rules. Default order: defaults first,
     # then user rules. Source precedence handles conflicts.
     all_rules = list(DEFAULT_RULES) + list(loaded.rules)
+    ruleset_fingerprint = _ruleset_fingerprint(all_rules)
+
+    ticket = mintsgt(
+        target_kind=_requested_target_kind(args),
+        target_identity=_requested_target_identity(args),
+        scan_mode=_requested_scan_mode(args),
+        allowed_actions=_allowed_actions_for_args(args),
+        ruleset_fingerprint=ruleset_fingerprint,
+        budget=_scan_budget_for_args(args),
+        metadata={
+            "command": "scan",
+            "format": getattr(args, "format", None),
+            "rules_file": str(rules_file) if rules_file else None,
+            "loaded_rules_path": (
+                str(loaded.source_path) if loaded.source_path else None
+            ),
+            "default_rule_count": len(DEFAULT_RULES),
+            "user_rule_count": len(loaded.rules),
+            "combined_rule_count": len(all_rules),
+        },
+        require_cli_stack=True,
+    )
+    if not ticket.allows_action("scan") or ticket.is_expired():
+        sys.stderr.write("error: scanner could not obtain a valid scan grant.\n")
+        return exit_codes.TOOL_ERROR
+
+    emitter = _build_scan_event_emitter(
+        args,
+        run_id=ticket.run_id,
+        correlation_id=ticket.correlation_id,
+    )
+    grant_event = _emit_scan_event(
+        emitter,
+        "internal.scanner.scan_grant_issued",
+        _ticket_event_payload(ticket),
+        ticket_id=ticket.ticket_id,
+    )
 
     # Surface discovery information.
     if loaded.source_path:
@@ -320,32 +527,81 @@ def run(args: argparse.Namespace) -> int:
         parallel_threshold=getattr(args, "_workers_threshold", 1000),
         initial_diagnostics=getattr(args, "_workers_diagnostics", ()),
     )
+    engine_event = _emit_scan_event(
+        emitter,
+        "internal.scanner.engine_created",
+        {
+            "analyzers": [analyzer.__class__.__name__ for analyzer in engine.analyzers],
+            "enricher_count": len(enrichers),
+            "rule_count": len(all_rules),
+            "deep_mode": bool(args.deep),
+            "workers": getattr(args, "_workers_count", None),
+            "parallel_threshold": getattr(args, "_workers_threshold", 1000),
+        },
+        ticket_id=ticket.ticket_id,
+        parent_event_id=(grant_event.event_id if grant_event else None),
+    )
 
-    if args.single:
-        result = _dispatch_single(
-            engine,
-            args.single,
-            args.as_kind,
-            initial_diagnostics=getattr(args, "_workers_diagnostics", ()),
-        )
-    else:
-        # Build the progress bar callbacks. The factory returns
-        # no-ops when --no-bar is set or stderr isn't a TTY, so
-        # callers don't need to branch on those conditions.
-        update_progress, finish_progress = make_progress_callback(
-            no_bar=args.no_bar,
-        )
-        try:
-            result = _dispatch_scan(
+    scan_started_event = _emit_scan_event(
+        emitter,
+        "internal.scanner.scan_started",
+        {
+            "target_kind": ticket.target_kind,
+            "target_identity": ticket.target_identity,
+            "scan_mode": ticket.scan_mode,
+            "allowed_actions": list(ticket.allowed_actions),
+        },
+        ticket_id=ticket.ticket_id,
+        parent_event_id=(engine_event.event_id if engine_event else None),
+    )
+
+    try:
+        if args.single:
+            result = _dispatch_single(
                 engine,
-                args.target,
-                progress_callback=update_progress,
+                args.single,
+                args.as_kind,
+                initial_diagnostics=getattr(args, "_workers_diagnostics", ()),
             )
-        finally:
-            # Always terminate the bar with a newline, even if the
-            # scan raised. Otherwise an exception traceback would
-            # render on the same line as the bar.
-            finish_progress()
+        else:
+            # Build the progress bar callbacks. The factory returns
+            # no-ops when --no-bar is set or stderr isn't a TTY, so
+            # callers don't need to branch on those conditions.
+            update_progress, finish_progress = make_progress_callback(
+                no_bar=args.no_bar,
+            )
+            try:
+                result = _dispatch_scan(
+                    engine,
+                    args.target,
+                    progress_callback=update_progress,
+                )
+            finally:
+                # Always terminate the bar with a newline, even if the
+                # scan raised. Otherwise an exception traceback would
+                # render on the same line as the bar.
+                finish_progress()
+    except Exception as exc:
+        _emit_scan_event(
+            emitter,
+            "internal.scanner.scan_failed",
+            _exception_event_payload(exc),
+            ticket_id=ticket.ticket_id,
+            parent_event_id=(
+                scan_started_event.event_id if scan_started_event else None
+            ),
+            severity="error",
+        )
+        raise
+
+    scan_completed_event = _emit_scan_event(
+        emitter,
+        "internal.scanner.scan_completed",
+        _scan_result_event_payload(result),
+        ticket_id=ticket.ticket_id,
+        parent_event_id=(scan_started_event.event_id if scan_started_event else None),
+    )
+
     # Decoded-payload tree. Computed once when decoding is enabled,
     # then passed to BOTH the format renderer (so SARIF can include
     # codeFlows for findings reached via decoded payload chains)
@@ -354,8 +610,36 @@ def run(args: argparse.Namespace) -> int:
     # once-render-twice avoids running the expensive decode driver
     # more than once while still producing all requested outputs.
     decoded_tree = None
+    decode_started_event = None
     if decode_enabled(args):
+        decode_started_event = _emit_scan_event(
+            emitter,
+            "internal.scanner.decode_started",
+            {
+                "decode_payload_depth": getattr(args, "decode_payload_depth", None),
+                "decode_iocs": getattr(args, "decode_iocs", None),
+            },
+            ticket_id=ticket.ticket_id,
+            parent_event_id=(
+                scan_completed_event.event_id if scan_completed_event else None
+            ),
+        )
         decoded_tree = _compute_decoded_tree(result, engine, args)
+        _emit_scan_event(
+            emitter,
+            "internal.scanner.decode_completed",
+            {
+                "tree_available": decoded_tree is not None,
+                "node_count": (
+                    len(decoded_tree.nodes) if decoded_tree is not None else 0
+                ),
+            },
+            ticket_id=ticket.ticket_id,
+            parent_event_id=(
+                decode_started_event.event_id if decode_started_event else None
+            ),
+            severity="info" if decoded_tree is not None else "warning",
+        )
 
     exit_code = _render_and_exit_code(result, args, decoded_tree)
 
@@ -366,8 +650,51 @@ def run(args: argparse.Namespace) -> int:
     if decoded_tree is not None:
         _run_decode_pass(result, engine, args, tree=decoded_tree)
 
+    evidence_event = None
+    evidence_completed_event = None
     if getattr(args, "save_to_db", False):
+        evidence_event = _emit_scan_event(
+            emitter,
+            "internal.evidence.write_requested",
+            {
+                "artifact_identity": result.artifact_identity,
+                "artifact_kind": result.artifact_kind.value,
+                "decoded_tree_available": decoded_tree is not None,
+            },
+            ticket_id=ticket.ticket_id,
+            parent_event_id=(
+                scan_completed_event.event_id if scan_completed_event else None
+            ),
+        )
         _save_to_db(result, decoded_tree)
+        evidence_completed_event = _emit_scan_event(
+            emitter,
+            "internal.evidence.write_completed",
+            {
+                "artifact_identity": result.artifact_identity,
+                "decoded_tree_available": decoded_tree is not None,
+            },
+            ticket_id=ticket.ticket_id,
+            parent_event_id=(evidence_event.event_id if evidence_event else None),
+        )
+
+    _emit_scan_event(
+        emitter,
+        "internal.scanner.run_completed",
+        {
+            "exit_code": exit_code,
+            "artifact_identity": result.artifact_identity,
+            "artifact_kind": result.artifact_kind.value,
+            "finding_count": len(result.findings),
+            "diagnostic_count": len(result.diagnostics),
+        },
+        ticket_id=ticket.ticket_id,
+        parent_event_id=(
+            evidence_completed_event.event_id
+            if evidence_completed_event
+            else (scan_completed_event.event_id if scan_completed_event else None)
+        ),
+    )
 
     return exit_code
 
