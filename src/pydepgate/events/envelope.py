@@ -26,6 +26,10 @@ _EVENT_PREFIXES = ("internal.", "external.")
 _ALLOWED_SEVERITIES = frozenset({"debug", "info", "warning", "error", "critical"})
 
 
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
 class EventEnvelopeError(ValueError):
     """Raised when an event envelope cannot be built safely."""
 
@@ -115,10 +119,6 @@ class EventEnvelope:
     def to_json(self) -> str:
         """Return deterministic JSON for this envelope."""
         return stable_json_dumps(self.to_dict())
-
-
-def _utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 def _require_non_empty_string(value: Any, field_name: str) -> None:

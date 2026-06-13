@@ -31,6 +31,10 @@ _DEFAULT_TTL_SECONDS = 900
 _DEFAULT_ALLOWED_ACTIONS = ("scan",)
 
 
+def _utc_now() -> str:
+    return _format_utc(datetime.now(timezone.utc))
+
+
 class ScanGrantingTicketError(ValueError):
     """Raised when a scan granting ticket cannot be created safely."""
 
@@ -256,10 +260,6 @@ def _collect_local_invocation_evidence(max_depth: int = 48) -> dict[str, Any]:
             for module in modules
         ),
     }
-
-
-def _utc_now() -> str:
-    return _format_utc(datetime.now(timezone.utc))
 
 
 def _format_utc(value: datetime) -> str:
