@@ -1,0 +1,26 @@
+{
+  "artifact_identity": "litellm-1.82.8-py3-none-any.whl",
+  "artifact_kind": "wheel",
+  "artifact_sha256": "d2a0d5f564628773b6af7b9c11f6b86531a875bd2d186d7081ab62748a800ebb",
+  "artifact_sha512": "4d3b3ea1b93b8714d9a900b9d63d965774b481117ccb44fc0dc8b3eed2a0591a3f4983b5a4697947340818baa8e68872609da965606dd14a61346b452064a362",
+  "decode_iocs": "hashes",
+  "diagnostic_count": 1,
+  "event_count": 7,
+  "finding_count": 43,
+  "ioc_count": 9,
+  "mode": "static",
+  "ruleset_fingerprint": "db31a46b4ab56cd121f0da44af45b561c676a71fbc6210055c6fab187456c508",
+  "skipped_count": 889,
+  "statistics": {
+    "analyzers_run": 5,
+    "duration_seconds": 16.090748878,
+    "enrichers_run": 0,
+    "files_failed_to_parse": 0,
+    "files_scanned": 1709,
+    "files_skipped": 889,
+    "files_total": 2598,
+    "signals_emitted": 43
+  },
+  "suppressed_finding_count": 0,
+  "target": "litellm-1.82.8-py3-none-any.whl"
+}

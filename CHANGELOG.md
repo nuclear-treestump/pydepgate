@@ -14,6 +14,238 @@ become binding stability promises with formal deprecation cycles.
 
 (no changes yet)
 
+
+## [0.6.0] - 2026-06-14
+
+### Added
+
+- **Evented scan execution.** Static scan runs now produce a structured
+  event lifecycle in addition to normal report output. The scan path
+  emits grant, engine, scan, decode, evidence, completion, and failure
+  events as immutable envelopes with run identifiers, correlation
+  identifiers, optional parent event identifiers, ticket identifiers,
+  severity, payload schema labels, and stable payload digests. This
+  turns a scan from a one-shot report into a machine-readable lifecycle
+  that downstream tools can inspect, correlate, and archive.
+
+- **`--event-log PATH` for `pydepgate scan`.** Static scans can now
+  append JSONL event envelopes to a caller-selected path. The event log
+  is separate from human, JSON, SARIF, decoded-payload, and IOC sidecar
+  output. It records scan lifecycle metadata, not payload bytes or
+  decoded malware material.
+
+- **`PYDEPGATE_EVENT_LOG` environment variable.** Provides an
+  environment-driven default event-log path for scan invocations. The
+  CLI flag takes precedence over the environment variable, matching the
+  existing configuration convention used by other scan features.
+
+- **`pydepgate.events` package.** New event infrastructure for
+  immutable event telemetry. The package includes deep-freezing helpers,
+  JSON-safe serialization helpers, `EventEnvelope`, `EventEmitter`, and
+  sink implementations for memory, JSONL files, tee fanout, and null
+  output. Event payloads are validated as JSON-safe data and rejected
+  when they contain unsafe or non-deterministic values such as raw
+  bytes, NaN, infinity, cyclic structures, or non-string mapping keys.
+
+- **Scan Granting Tickets.** New `ScanGrantingTicket` model for
+  grant-bound scan execution. Tickets carry run and correlation IDs,
+  issuer and actor metadata, target identity, target kind, scan mode,
+  allowed actions, issue and expiry timestamps, ruleset and policy
+  fingerprints, budgets, local invocation evidence, and a stable ticket
+  digest. The first implementation is local and unsigned; it exists to
+  establish the execution contract that future daemon, policy, and
+  warehouse work can harden further.
+
+- **Evented static runner.** Static scan execution now has a reusable
+  runner layer separate from CLI rendering. The runner creates the
+  engine, dispatches wheel, sdist, installed-package, loose-file, and
+  auto-detected targets, performs optional recursive decode, emits
+  lifecycle events, and returns a structured outcome to callers. The
+  CLI now acts as an adapter over this runner instead of owning the
+  scan execution path directly.
+
+- **Public Python API.** New `pydepgate.api` module with a contextless
+  `scan()` entry point for static scans. API consumers can scan wheels,
+  source distributions, installed packages, and loose files without
+  shelling out to the CLI. The API returns a safe `ScanApiResult` with
+  summary properties, safe finding records, hash-only IOC records,
+  event access, report rendering, report writing, and IOC sidecar
+  export.
+
+- **Safe API result surface.** Public API results now block direct
+  access to native scanner internals by default. `result.result`,
+  `result.outcome`, and `result.decoded_tree` raise API errors instead
+  of exposing the native `ScanResult`, runner outcome, or decoded tree
+  object graph. Advanced callers must use explicit `UNSAFE` capability
+  tokens to access native internals.
+
+- **`pydepgate.api.UNSAFE` capability tokens.** Added explicit unsafe
+  access tokens for native result access, decoded tree access, and
+  payload archive export. The API does not accept casual boolean
+  opt-ins for unsafe material. Callers must pass the exact capability
+  token for the unsafe operation they are requesting.
+
+- **Safe public finding records.** API consumers now receive sanitized
+  `ScanFinding` records instead of native finding objects. Safe finding
+  contexts preserve bounded payload peek and peek-chain preview data
+  when requested, but strip full payload values and payload-bearing
+  internals such as `_full_value`, `_full_value_truncated`,
+  `decoded_source`, raw payload fields, and full DER material.
+
+- **Hash-only IOC records in the API.** API results expose `result.iocs`
+  as structured `ScanIOC` records. These include source location,
+  signal IDs, severity, decode chain, terminal kind, terminal size,
+  indicators, containing-file hashes, original payload hashes, decoded
+  payload hashes, and extraction timestamp when available. They do not
+  expose decoded source or raw payload bytes.
+
+- **API report rendering and writing.** `ScanApiResult.render()` and
+  `ScanApiResult.write_report()` reuse the existing pydepgate reporter
+  stack for text/human, JSON, and SARIF output. `human` is accepted as
+  an alias for `text`. API output does not maintain a separate renderer
+  implementation.
+
+- **API IOC sidecar export.** `ScanApiResult.write_iocs()` writes the
+  same hash-oriented IOC sidecar format used by the CLI decode path,
+  allowing API consumers to export decoded-payload hash evidence without
+  reaching into decoded-tree internals.
+
+- **Unsafe payload archive export for API full mode.** API consumers
+  can export the encrypted decoded-payload archive only when the scan
+  was run with `decode_iocs="full"` and the caller provides
+  `UNSAFE.ALLOW_PAYLOAD_ARCHIVE_EXPORT`. Hashes mode cannot export
+  payload archives.
+
+- **API guardrails for archive targets.** The public API rejects
+  `single=True` for archive artifacts such as `.whl`, `.zip`, `.tar`,
+  `.tar.gz`, `.tgz`, `.tar.bz2`, and `.tar.xz`. Archive artifacts must
+  be scanned as artifacts, not as loose source files. The static runner
+  also enforces target/ticket consistency as defense in depth.
+
+- **API summary helper.** `ScanApiResult.to_summary()` returns a compact
+  JSON-safe summary containing scan mode, target, artifact kind,
+  artifact hashes, finding and diagnostic counts, skipped count,
+  suppressed count, IOC count, event count, ruleset fingerprint, and
+  scan statistics.
+
+- **Event and API documentation.** Added documentation for event logs,
+  event envelopes, event lifecycle semantics, event safety boundaries,
+  public API usage, safe result surfaces, IOC access, output rendering,
+  unsafe capability tokens, and API guardrails.
+
+- **Adversarial event-handling tests.** Added tests for event payload
+  safety, immutability, deterministic serialization, sink failure
+  behavior, strict versus non-strict sink modes, scan failure event
+  emission, decode failure event emission, parent-event chains, ticket
+  correlation, and JSONL integrity.
+
+- **Public API tests.** Added unittest coverage for API validation,
+  unsafe access gates, result repr safety, safe finding sanitization,
+  hash-only IOC exposure, renderer integration, report writing, archive
+  guardrails, and payload archive export restrictions.
+
+### Changed
+
+- **Static scan execution is now grant-bound and evented.** The static
+  scan path mints a local scan granting ticket, validates scan
+  authorization, builds an event emitter, executes through the static
+  runner, and emits lifecycle events while preserving existing CLI
+  output behavior.
+
+- **CLI scan execution now uses the shared static runner.** The CLI
+  remains responsible for argument parsing, rendering, decode side-file
+  writing, evidence database writes, and exit-code behavior, but scanner
+  execution itself is now reusable by the public API and future daemon
+  work.
+
+- **Recursive decode IOC modes are stricter.** `decode_iocs="hashes"`
+  computes and exposes hash IOC material without retaining decoded
+  source text in the decoded tree. Decoded source retention is reserved
+  for `decode_iocs="full"` and unsafe/full-mode export paths.
+
+- **Decode completion events include IOC metadata.** Decode completion
+  payloads now report whether a decoded tree was available, the root
+  node count, total decoded node count, IOC count, and decode IOC mode.
+  Event consumers can tell whether decoded IOC material exists without
+  parsing native result objects.
+
+- **Public API output is content-safe by default.** The API preserves
+  bounded payload peek previews when explicitly requested, but no longer
+  exposes native scanner internals, decoded source, raw payload bytes,
+  or full payload values through normal public result access.
+
+- **Result representations are compact.** `ScanApiResult` and
+  `StaticScanOutcome` use compact repr behavior so printing a result
+  does not dump the full native scan result, decoded tree, event stream,
+  or payload-bearing internals.
+
+- **Event sink failures are configurable.** API and runner callers can
+  choose strict event sink behavior, where sink errors abort the scan,
+  or non-strict behavior, where sink errors are captured as warnings
+  and scan execution continues.
+
+### Fixed
+
+- **Archive-as-loose-file API footgun.** The public API no longer allows
+  `.whl` and other archive artifacts to be scanned with `single=True`,
+  preventing artifact bytes from being misclassified as loose source
+  input and producing meaningless density findings.
+
+- **API result object bloat.** Printing API scan results no longer
+  expands the entire native result graph, decoded tree, and event list.
+
+- **Payload material leakage through API internals.** Normal public API
+  access no longer exposes decoded tree internals or decoded source
+  material. Hash IOC mode no longer retains decoded source in the
+  decoded tree.
+
+- **Parser robustness for arbitrary random bytes.** The Python source
+  parser now treats CPython tokenizer and parser `SystemError` failures
+  on malformed byte streams as parse failures rather than tool crashes.
+  This closes a rare crash path where `tokenize.tokenize()` on random
+  bytes containing NULs could surface an internal `SystemError` after a
+  `SyntaxError` had already been set. The parser now returns a
+  structured syntax-error result for that input class. Tests were
+  changed from nondeterministic `os.urandom()` fuzzing to deterministic
+  adversarial byte corpora plus targeted monkeypatch tests for
+  `tokenize.detect_encoding`, `tokenize.tokenize`, and `ast.parse`.
+
+- **Event failure path coverage.** Added adversarial tests that force
+  scan dispatch failures and verify `internal.scanner.scan_failed` is
+  emitted with the correct parent event, severity, exception type, and
+  message before the original exception is re-raised.
+
+### Security
+
+No security advisories in this release.
+
+This release hardens pydepgate's own output boundaries. Event logs,
+public API summaries, safe finding records, JSON/SARIF render paths,
+and hash IOC records are designed to avoid re-publishing payload bytes,
+decoded malware source, command lines, URLs, secrets, or native scanner
+internals by default. Payload peek continues to provide bounded previews
+when explicitly enabled, but full decoded payload material requires
+`decode_iocs="full"` and an explicit unsafe export capability.
+
+The new event system validates payloads as JSON-safe data before
+emission, rejects non-deterministic and raw-byte payload shapes, freezes
+event payloads against mutation, and computes stable payload digests.
+These properties make event logs suitable for downstream evidence
+handling without turning them into a second payload transport.
+
+The scan granting ticket model is local and unsigned in this release.
+It is an execution contract and provenance primitive, not yet a remote
+trust boundary. Future daemon, warehouse, and policy work may strengthen
+that model with signature, delegation, or remote identity semantics.
+
+The parser robustness fix is a defensive hardening change for hostile
+artifact input. It prevents malformed random byte streams from escaping
+as interpreter-internal tokenizer exceptions during source parsing and
+keeps parser behavior aligned with pydepgate's scan-safety contract:
+untrusted content can fail to parse, but it should not crash the tool.
+
+
+
 ## [0.5.0] - 2026-05-30
 
 ### Added
@@ -921,7 +1153,8 @@ documented under "Fixed" above represent enhanced coverage of
 existing attack patterns, not vulnerabilities in pydepgate itself.)
 
 
-[Unreleased]: https://github.com/nuclear-treestump/pydepgate/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/nuclear-treestump/pydepgate/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/nuclear-treestump/pydepgate/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/nuclear-treestump/pydepgate/compare/v0.4.7...v0.5.0
 [0.4.7]: https://github.com/nuclear-treestump/pydepgate/compare/v0.4.6...v0.4.7
 [0.4.6]: https://github.com/nuclear-treestump/pydepgate/compare/v0.4.5...v0.4.6

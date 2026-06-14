@@ -9,6 +9,8 @@ demonstrated pattern of shipping work earlier than planned. Treat this
 roadmap as the general shape of where the project is going, not as a
 schedule.
 
+## Current Version: 0.6.0
+
 ## About this rewrite
 
 This is the third major revision of the roadmap.
@@ -39,7 +41,7 @@ items that are not deferrable beyond their slot.
 The pattern of roadmaps being outpaced by execution is likely to
 continue. Future revisions of this document should be expected.
 
-## Current state at v0.4.7
+## State at v0.4.7 (at the time of the creation of this new ROADMAP)
 
 The static analysis pipeline handles wheels, sdists, installed packages,
 loose source files, and package-like trees. It performs recursive
@@ -160,14 +162,6 @@ that shipped at a version different from any prior planned slot.
 - [x] `pydepgate.run_context` module with thread-safe lazy generation
       and daemon-mode reset support
 
-# Current work block
-
-The thirteen items below describe the visible planning horizon. The
-order reflects dependency relationships and priority commitments.
-Three items are marked MUST SHIP, meaning they are priority pins
-within the work block and should land as early as the dependency
-order allows.
-
 ### v0.5.0: Local evidence database
 
 Memory layer for findings, scans, decoded trees, and CVE results.
@@ -189,7 +183,107 @@ and runtime miss reports.
 - [x] Tests covering schema creation, schema mismatch, stored findings,
       stored CVE findings, decoded nodes, and DB explain behavior
 
-### v0.6.0: Policy engine
+### v0.6.0
+
+Evented scan execution, public API foundation, safe result surfaces,
+and adversarial hardening discovered while preparing the next work
+block. This release changed the scan path from a CLI-owned report
+operation into an authorized, correlated, evented execution lifecycle
+that can be reused by API consumers and future daemon/policy work.
+
+- [x] `pydepgate.events` package with immutable `EventEnvelope`,
+      JSON-safe serialization, deep-freezing helpers, stable payload
+      digests, and strict event-type prefix validation
+- [x] `EventEmitter` and memory, JSONL, tee, and null event sinks
+- [x] `ScanGrantingTicket` model for local grant-bound scan execution,
+      including run/correlation IDs, ticket IDs, ticket digests,
+      target identity, allowed actions, budgets, ruleset fingerprints,
+      and local invocation evidence
+- [x] CLI `--event-log` flag and `PYDEPGATE_EVENT_LOG` environment
+      variable for scan lifecycle JSONL output
+- [x] Static scan runner split from CLI rendering so the CLI, public
+      API, and future daemon paths can execute the same scanner path
+      without shelling out or reaching into argparse internals
+- [x] Contextless public `pydepgate.api.scan()` entry point for static
+      scans over wheels, sdists, installed packages, and loose files
+- [x] Safe `ScanApiResult` surface with compact summaries, blocked
+      native internals, safe finding records, hash-only IOC records,
+      event access, reporter reuse, report writing, and IOC sidecar
+      export
+- [x] `pydepgate.api.UNSAFE` capability tokens for deliberate native
+      result access, decoded-tree access, and full payload archive
+      export
+- [x] Hashes/full IOC mode boundary: `decode_iocs="hashes"` exposes
+      hash IOC evidence without retaining decoded source, while full
+      payload material remains gated behind `decode_iocs="full"` and
+      explicit unsafe export
+- [x] Archive-as-single guardrails preventing `.whl`, `.zip`, `.tar`,
+      `.tar.gz`, `.tgz`, `.tar.bz2`, and `.tar.xz` artifacts from
+      being scanned through the loose-file API path
+- [x] API rendering through the existing human/text, JSON, and SARIF
+      reporters instead of an API-specific renderer stack
+- [x] Decode completion events with tree availability, root node
+      count, total node count, IOC count, and IOC mode
+- [x] Adversarial event tests for payload safety, immutability,
+      deterministic serialization, sink failures, parent-event chains,
+      scan failure events, decode failure events, and ticket
+      correlation
+- [x] Public API tests for validation, unsafe access gates, result repr
+      safety, safe finding sanitization, hash-only IOC exposure,
+      renderer integration, report writing, archive guardrails, and
+      payload archive restrictions
+- [x] Parser hardening for arbitrary hostile byte streams, including
+      CPython tokenizer/parser `SystemError` handling and deterministic
+      random-byte regression coverage
+
+## New Identified Work
+
+The items below were not part of the original version ladder. They were
+heavy-lift work discovered during implementation that had to land before
+the next major work group could be safely built on top of pydepgate.
+
+- Static scan execution had to be split out of the CLI before the API,
+  daemon, policy layer, and future warehouse paths could share one scan
+  implementation.
+- Scan lifecycle events had to exist before daemon emission, evidence
+  correlation, policy verdicts, and downstream consumers could reason
+  about what happened during a run.
+- Local Scan Granting Tickets had to exist before policy, daemon, and
+  future tool delegation could be expressed as authorized work instead
+  of loose function calls.
+- The public Python API had to exist before pydepgate could be treated
+  as a library by package-intake tooling and later context/workplan
+  surfaces.
+- Public API result safety had to be designed before decoded payloads,
+  IOCs, native results, and reporter output could be exposed without
+  turning pydepgate into a payload vending machine.
+- Payload IOC mode semantics had to be tightened so hash mode produces
+  hash evidence only and full decoded source stays behind explicit full
+  mode plus unsafe export.
+- Archive-as-single guardrails had to be added after API testing showed
+  that a wheel could otherwise be misclassified as a loose source file.
+- Event handling needed adversarial tests for immutability, JSON safety,
+  sink failure, failure-event emission, and parent-chain correctness
+  before it could become trusted release infrastructure.
+- API renderer reuse had to be wired through the existing reporter stack
+  so CLI and API consumers do not drift into separate output dialects.
+- Parser random-byte hardening had to be added after fuzz-style tests
+  exposed CPython tokenizer/parser `SystemError` paths on hostile byte
+  streams.
+
+# Current work block
+
+The remaining items below describe the visible planning horizon. The
+order reflects dependency relationships and priority commitments. Three
+items are marked MUST SHIP, meaning they are priority pins within the
+work block and should land as early as the dependency order allows.
+
+The v0.6.0 event/API foundation shipped earlier than the policy engine
+slot it displaced. The policy layer now starts the remaining work block
+because the evented runner and safe API surface give it a cleaner place
+to attach.
+
+### v0.7.0: Policy engine
 
 Internal policy layer that severity-rewrites findings, applies rule
 precedence, detects conflicts with the builtin baseline, and surfaces
@@ -203,7 +297,11 @@ policy file (`PYDEPPOLICY.md`) ships separately at v0.16.0.
 - [ ] Tests for policy parsing, invalid policy, baseline conflict, and
       policy-result serialization
 
-### v0.7.0: Cite and validate-finding
+This was the original v0.6.0 slot. It moves here because v0.6.0
+shipped the evented scan and public API foundation that policy depends
+on.
+
+### v0.8.0: Cite and validate-finding
 
 Citation generation and finding validation against the evidence
 database. Findings become portable artifacts that can be filed in
@@ -217,7 +315,7 @@ issues, security advisories, and CI failures.
       submissions, security advisory evidence, and CI failures
 - [ ] Tests that validation remains stable across renderer changes
 
-### v0.8.0: pydepgate doctor
+### v0.9.0: pydepgate doctor
 
 Diagnostic command for pydepgate installation, configuration, CVE
 database state, and any other tool-state surface that operators need
@@ -231,7 +329,7 @@ packages or inspect the running interpreter.
 - [ ] Structured output suitable for support bundles and CI gates
 - [ ] Tests for each diagnostic check
 
-### v0.9.0: pydepgate preflight
+### v0.10.0: pydepgate preflight
 
 Live-system scanner for the running Python environment. Preflight
 inspects the active interpreter, installed packages, `sitecustomize`,
@@ -251,7 +349,7 @@ point and target enumeration differ.
 - [ ] Exit-code semantics matching `pydepgate scan`
 - [ ] Tests for clean and compromised fixture environments
 
-### v0.10.0: Daemon (pydepgate-d) with --emit
+### v0.11.0: Daemon (pydepgate-d) with --emit
 
 Mirror and intake gate, with a generic emission mechanism for
 forwarding events to external consumers. The emit mechanism replaces
@@ -269,20 +367,6 @@ any SIEM-shaped consumer to ingest pydepgate output.
 - [ ] Worker parallelism
 - [ ] Container image
 - [ ] Tests for intake, quarantine, event output, and policy behavior
-
-### v0.11.0: API scoping and core system exposures
-
-Identification of what surface needs to be exposed to other programs,
-with selected core systems surfaced as a stable internal API to
-unblock upstream work. The full API refactor lands later at v0.18.0;
-this release is the prerequisite scoping plus the exposures needed
-for in-flight features.
-
-- [ ] API surface specification document
-- [ ] Exposure of selected core systems via stable internal module
-      boundaries (specifically the systems needed by the daemon, the
-      preflight scanner, and the credential-exfil work)
-- [ ] Compatibility tests for the exposed surfaces
 
 ### v0.12.0: Shape skeleton **MUST SHIP**
 
@@ -353,7 +437,7 @@ byproduct of the resolution graph. Both CycloneDX and SPDX formats.
 
 Repository-side policy declaration file. Human-readable Markdown with
 an armored machine-readable section. Consumed by the policy engine
-from v0.6.0.
+from v0.7.0.
 
 - [ ] `PYDEPPOLICY.md` parser
 - [ ] `pydepgate.findings-policy.v1` schema definition
@@ -384,18 +468,26 @@ signal.
 - [ ] Tests for benign mismatch, typosquat-style mismatch, and
       critical-path impersonation
 
-### v0.18.0: API refactor
+### v0.18.0: Full API refactor and stability
 
 Full refactor of the library and CLI boundary. The library serves the
 CLI, not the other way around. Downstream consumers can integrate
-against a stable API surface without reaching into CLI modules. This
-is the commitment surfaced through the prototyping work that produced
-the dependency resolver and made the entanglement visible.
+against a stable API surface without reaching into CLI modules. The
+v0.6.0 release shipped the static scan slice early; this slot completes
+that direction across the remaining scan families and long-lived
+consumer contracts.
 
-- [ ] Library and CLI module boundary clarified
-- [ ] Public API surface documented and versioned
-- [ ] Deprecation path for any pre-refactor consumers
-- [ ] Tests for API stability across the refactor
+- [x] Static scan execution boundary clarified: the CLI and public API
+      now share the static runner instead of the CLI owning scan
+      execution
+- [x] Contextless static scan public API documented and tested
+- [x] API safety contracts and unsafe capability gates documented and
+      tested for the static scan slice
+- [ ] CVE scan, evidence write, policy application, daemon, and future
+      tool execution boundaries clarified through the same API layer
+- [ ] Public API versioning and deprecation policy for pre-1.0
+      consumers
+- [ ] Full API stability tests across all exposed scan families
 
 ### After v0.18.0: Roadmap refresh
 

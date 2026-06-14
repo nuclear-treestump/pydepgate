@@ -1,8 +1,11 @@
 """Tests for pydepgate.parsers.pysource."""
 
-import os
 import pathlib
+import random
 import unittest
+from unittest.mock import patch
+
+import pydepgate.parsers.pysource as pysource
 
 from pydepgate.parsers.pysource import (
     Comment,
@@ -10,7 +13,6 @@ from pydepgate.parsers.pysource import (
     SourceLocation,
     parse_python_source,
 )
-
 
 FIXTURES_DIR = pathlib.Path(__file__).parent / "fixtures" / "pysource"
 
@@ -22,6 +24,7 @@ class ParserSafetyTests(unittest.TestCase):
         evil = b"import sys\nsys.PYDEPGATE_PYSRC_PWNED = True\n"
         parse_python_source(evil, "<test>")
         import sys
+
         self.assertFalse(
             hasattr(sys, "PYDEPGATE_PYSRC_PWNED"),
             "parser executed input. critical safety failure",
@@ -36,11 +39,69 @@ class ParserSafetyTests(unittest.TestCase):
         )
 
     def test_handles_random_bytes(self):
+        rng = random.Random(0x5AFE)
         for _ in range(100):
-            result = parse_python_source(os.urandom(256), "<fuzz>")
+            fuzz = bytes(rng.randrange(0, 256) for _ in range(256))
+            result = parse_python_source(fuzz, "<fuzz>")
             self.assertIsNotNone(result)
             # Status should reflect the failure, not propagate an exception.
             self.assertIn(result.status, list(ParseStatus))
+
+    def test_handles_adversarial_binary_corpus(self):
+        corpus = (
+            bytes(range(256)),
+            bytes(reversed(range(256))),
+            b"\x00" * 256,
+            b"\xff" * 256,
+            b"# coding: ascii\n" + bytes(range(128, 256)),
+            b"# coding: utf-8\n" + b"\x80" * 256,
+            b"# coding: unknown_codec_name\n# comment\n" + b"x = 1\n",
+            b"# comment before nul\n" + b"\x00" * 64 + b"x = 1\n",
+        )
+        for index, fuzz in enumerate(corpus):
+            with self.subTest(index=index):
+                result = parse_python_source(fuzz, "<binary-corpus>")
+                self.assertIsNotNone(result)
+                self.assertIn(result.status, list(ParseStatus))
+
+    def test_tokenizer_systemerror_falls_back_to_manual_comment_scan(self):
+        with patch.object(
+            pysource.tokenize,
+            "tokenize",
+            side_effect=SystemError("tokenizer had SyntaxError set"),
+        ):
+            result = parse_python_source(
+                b"# rescued comment\nx = 1\n", "<tokenizer-systemerror>"
+            )
+
+        self.assertEqual(result.status, ParseStatus.OK)
+        self.assertEqual(len(result.comments), 1)
+        self.assertIn("rescued comment", result.comments[0].text)
+
+    def test_detect_encoding_systemerror_is_nonfatal(self):
+        with patch.object(
+            pysource.tokenize,
+            "detect_encoding",
+            side_effect=SystemError("encoding detector failed"),
+        ):
+            result = parse_python_source(b"x = 1\n", "<detect-systemerror>")
+
+        self.assertEqual(result.status, ParseStatus.OK)
+        self.assertEqual(result.encoding_used, "utf-8")
+
+    def test_ast_parse_systemerror_is_reported_as_syntax_error(self):
+        with patch.object(
+            pysource.ast,
+            "parse",
+            side_effect=SystemError("parser had SyntaxError set"),
+        ):
+            result = parse_python_source(
+                b"# safe comment\nx = 1\n", "<ast-systemerror>"
+            )
+
+        self.assertEqual(result.status, ParseStatus.SYNTAX_ERROR)
+        self.assertIn("malformed source", result.diagnostic)
+        self.assertEqual(len(result.comments), 1)
 
     def test_handles_null_bytes(self):
         # ast.parse raises ValueError on null bytes; we should catch it.
@@ -173,6 +234,7 @@ class EncodingDeclarationTests(unittest.TestCase):
         # process the file normally.
         self.assertIsNotNone(result.encoding_declaration)
         self.assertEqual(result.encoding_declaration.encoding_name, "rot_13")
+
 
 class DocstringVsCommentTests(unittest.TestCase):
     """Docstrings are AST nodes, not comments. verify we don't confuse them."""
