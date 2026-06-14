@@ -55,6 +55,23 @@ Use this when you need reproducible findings, incident notes, maintainer reports
 
 See [CLI Reference: db](cli/db.md).
 
+## Capture scan lifecycle events
+
+pydepgate can write a JSONL event stream for each scan. The event log records
+scan authorization, engine creation, scan start and completion, decode start
+and completion, evidence writes, and final run completion.
+
+```bash
+pydepgate scan package.whl --event-log scan.events.jsonl
+```
+
+Use event logs when a scan is part of CI, package intake, incident notes, or
+local evidence capture. The event log is not the finding report. Use JSON,
+SARIF, or human output for findings, and event JSONL for lifecycle evidence.
+
+See [Guide: Event Logs](guides/event-logs.md) and
+[Event Log JSONL](reference/event-log.md).
+
 ## Check known vulnerable versions
 
 Static analysis and vulnerability matching answer different questions.
@@ -174,6 +191,8 @@ See [Finding Fingerprint v1](reference/fingerprint-v1.md).
 | [CLI Reference: explain](cli/explain.md)                    | Signal and rule lookup                                                 |
 | [Exit Codes](reference/exit-codes.md)                       | Public exit-code contract for CI                                       |
 | [Output Formats](reference/output-formats.md)               | Human, JSON, SARIF, and decoded-tree schemas                           |
+| [Event Log JSONL](reference/event-log.md)                | Event envelope schema and scan lifecycle telemetry                     |
+| [Guide: Event Logs](guides/event-logs.md)                | Capturing and consuming scan lifecycle JSONL                           |
 | [Environment Variables](reference/environment-variables.md) | All `PYDEPGATE_*` variables                                            |
 | [Rules File](reference/rules-file.md)                       | `pydepgate.gate` format and precedence                                 |
 | [Signals Reference](reference/signals.md)                   | Signal IDs, severity mapping, and detection rationale                  |

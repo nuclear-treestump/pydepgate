@@ -80,6 +80,21 @@ Any truthy value suppresses the finding-distribution map in human output.
 PYDEPGATE_NO_MAP=1 pydepgate scan package.whl
 ```
 
+
+### `PYDEPGATE_EVENT_LOG`
+
+Equivalent flag: `--event-log`
+
+Path to a JSONL event log. When set, scan lifecycle events are written to this
+path unless an explicit `--event-log` flag overrides it.
+
+```bash
+PYDEPGATE_EVENT_LOG=scan.events.jsonl pydepgate scan package.whl
+```
+
+The event log is a sidecar for scan lifecycle telemetry. It does not replace
+human, JSON, or SARIF finding output. See [Event Log JSONL](event-log.md).
+
 ---
 
 ## Severity and exit behavior
