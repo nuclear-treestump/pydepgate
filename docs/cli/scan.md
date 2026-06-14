@@ -117,6 +117,31 @@ The scan result, report output, and exit code are unaffected.
 
 See [`pydepgate db`](db.md) for how to inspect stored results.
 
+### `--event-log <path>`
+
+Write scan lifecycle events to a JSONL file.
+
+```bash
+pydepgate scan package.whl --event-log scan.events.jsonl
+```
+
+The event log records scan authorization, engine creation, scan start and
+completion, decode start and completion, optional evidence writes, and final
+run completion. It is a lifecycle/custody sidecar, not the finding report.
+Use `--format json` or `--format sarif` for findings.
+
+The same default can be supplied with `PYDEPGATE_EVENT_LOG`:
+
+```bash
+PYDEPGATE_EVENT_LOG=scan.events.jsonl pydepgate scan package.whl
+```
+
+The CLI treats event sink failures as warnings. A failure to write event
+telemetry does not hide findings and does not change the scan exit code.
+
+See [Event Logs](../guides/event-logs.md) and
+[Event Log JSONL](../reference/event-log.md).
+
 ## Single file mode
 
 `--single` bypasses dispatch and runs the analyzer directly on one file.

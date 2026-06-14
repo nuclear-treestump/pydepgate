@@ -9,12 +9,10 @@ pydepgate produces output in three formats, selected with `--format`:
 `human` (default), `json`, and `sarif`. When the decode pipeline is active,
 a fourth document type is produced: the decoded-tree JSON report.
 
-The Python API exposes the same reporter stack through `ScanApiResult.render(...)`
-and `ScanApiResult.write_report(...)`. In the API, `format="human"` aliases to
-`format="text"`; both use the human reporter. API rendering follows the same
-content rules as CLI rendering: bounded payload-peek previews may appear when
-requested, but full payload values and decoded source dumps are not part of
-normal text, JSON, or SARIF output.
+
+Event logs are separate JSONL sidecars enabled with `--event-log` or
+`PYDEPGATE_EVENT_LOG`. They describe scan lifecycle events, not findings. See
+[Event Log JSONL](event-log.md).
 
 ## Human format
 
