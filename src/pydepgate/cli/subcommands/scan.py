@@ -82,6 +82,12 @@ from pydepgate.events import (
     JsonlEventSink,
     mintsgt,
 )
+from pydepgate.scanning import (
+    ScanTargetRef,
+    StaticDecodeOptions,
+    StaticScanRequest,
+    execute_static_scan,
+)
 
 _SDIST_SUFFIXES = (".tar.gz", ".tgz", ".tar.bz2", ".tar.xz", ".tar")
 
@@ -334,6 +340,25 @@ def _requested_target_kind(args: argparse.Namespace) -> str:
     return "installed_package"
 
 
+def _target_ref_for_args(args: argparse.Namespace) -> ScanTargetRef:
+    """Return an internal target reference for a CLI scan request."""
+    if getattr(args, "single", None):
+        target = str(args.single)
+        return ScanTargetRef(
+            kind="loose_file",
+            identity=target,
+            location=target,
+            metadata={"source": "cli"},
+        )
+    target = str(getattr(args, "target", "") or "")
+    return ScanTargetRef(
+        kind="auto",
+        identity=target,
+        location=target,
+        metadata={"source": "cli"},
+    )
+
+
 def _requested_scan_mode(args: argparse.Namespace) -> str:
     """Return the scan mode requested by CLI flags."""
     if getattr(args, "single", None):
@@ -507,139 +532,55 @@ def run(args: argparse.Namespace) -> int:
     peek_enricher = build_peek_enricher(args)
     if peek_enricher is not None:
         enrichers.append(peek_enricher)
-    # Workers config comes from _resolve_workers_config in main.py,
-    # which stashes the resolved values on args before subcommand
-    # dispatch. getattr-with-default keeps this resilient against
-    # test paths that bypass main() and call run() directly with a
-    # minimal namespace.
-    engine = StaticEngine(
-        analyzers=[
-            EncodingAbuseAnalyzer(),
-            DynamicExecutionAnalyzer(),
-            StringOpsAnalyzer(),
-            SuspiciousStdlibAnalyzer(),
-            CodeDensityAnalyzer(),
-        ],
-        enrichers=enrichers,
-        rules=all_rules,
-        deep_mode=args.deep,
-        workers=getattr(args, "_workers_count", None),
-        parallel_threshold=getattr(args, "_workers_threshold", 1000),
-        initial_diagnostics=getattr(args, "_workers_diagnostics", ()),
-    )
-    engine_event = _emit_scan_event(
-        emitter,
-        "internal.scanner.engine_created",
-        {
-            "analyzers": [analyzer.__class__.__name__ for analyzer in engine.analyzers],
-            "enricher_count": len(enrichers),
-            "rule_count": len(all_rules),
-            "deep_mode": bool(args.deep),
-            "workers": getattr(args, "_workers_count", None),
-            "parallel_threshold": getattr(args, "_workers_threshold", 1000),
-        },
-        ticket_id=ticket.ticket_id,
-        parent_event_id=(grant_event.event_id if grant_event else None),
-    )
 
-    scan_started_event = _emit_scan_event(
-        emitter,
-        "internal.scanner.scan_started",
-        {
-            "target_kind": ticket.target_kind,
-            "target_identity": ticket.target_identity,
-            "scan_mode": ticket.scan_mode,
-            "allowed_actions": list(ticket.allowed_actions),
-        },
-        ticket_id=ticket.ticket_id,
-        parent_event_id=(engine_event.event_id if engine_event else None),
-    )
+    if getattr(args, "save_to_db", False) and not ticket.allows_action(
+        "evidence.write"
+    ):
+        sys.stderr.write("error: scan grant does not authorize evidence write.\n")
+        return exit_codes.TOOL_ERROR
+
+    progress_callback = None
+    finish_progress = None
+    if not args.single:
+        # Build the progress bar callbacks. The factory returns
+        # no-ops when --no-bar is set or stderr isn't a TTY, so
+        # callers don't need to branch on those conditions.
+        progress_callback, finish_progress = make_progress_callback(
+            no_bar=args.no_bar,
+        )
 
     try:
-        if args.single:
-            result = _dispatch_single(
-                engine,
-                args.single,
-                args.as_kind,
-                initial_diagnostics=getattr(args, "_workers_diagnostics", ()),
-            )
-        else:
-            # Build the progress bar callbacks. The factory returns
-            # no-ops when --no-bar is set or stderr isn't a TTY, so
-            # callers don't need to branch on those conditions.
-            update_progress, finish_progress = make_progress_callback(
-                no_bar=args.no_bar,
-            )
-            try:
-                result = _dispatch_scan(
-                    engine,
-                    args.target,
-                    progress_callback=update_progress,
-                )
-            finally:
-                # Always terminate the bar with a newline, even if the
-                # scan raised. Otherwise an exception traceback would
-                # render on the same line as the bar.
-                finish_progress()
-    except Exception as exc:
-        _emit_scan_event(
-            emitter,
-            "internal.scanner.scan_failed",
-            _exception_event_payload(exc),
-            ticket_id=ticket.ticket_id,
-            parent_event_id=(
-                scan_started_event.event_id if scan_started_event else None
+        static_request = StaticScanRequest(
+            ticket=ticket,
+            target_ref=_target_ref_for_args(args),
+            rules=tuple(all_rules),
+            emitter=emitter,
+            ruleset_fingerprint=ruleset_fingerprint,
+            enrichers=tuple(enrichers),
+            as_kind=args.as_kind,
+            initial_diagnostics=getattr(args, "_workers_diagnostics", ()),
+            progress_callback=progress_callback,
+            grant_event_id=(grant_event.event_id if grant_event else None),
+            decode_options=StaticDecodeOptions(
+                peek_min_length=getattr(args, "peek_min_length", None) or 1024,
+                peek_depth=getattr(args, "peek_depth", None) or 3,
+                peek_budget=getattr(args, "peek_budget", None) or 512 * 1024,
+                min_severity=getattr(args, "min_severity", None),
             ),
-            severity="error",
+            strict_event_sinks=False,
+            event_warning=sys.stderr.write,
         )
-        raise
+        outcome = execute_static_scan(static_request)
+    finally:
+        if finish_progress is not None:
+            # Always terminate the bar with a newline, even if the
+            # scan raised. Otherwise an exception traceback would
+            # render on the same line as the bar.
+            finish_progress()
 
-    scan_completed_event = _emit_scan_event(
-        emitter,
-        "internal.scanner.scan_completed",
-        _scan_result_event_payload(result),
-        ticket_id=ticket.ticket_id,
-        parent_event_id=(scan_started_event.event_id if scan_started_event else None),
-    )
-
-    # Decoded-payload tree. Computed once when decoding is enabled,
-    # then passed to BOTH the format renderer (so SARIF can include
-    # codeFlows for findings reached via decoded payload chains)
-    # AND the file-writing decode pass (which uses it for the text
-    # or JSON report and any IOC sidecars or archives). Compute-
-    # once-render-twice avoids running the expensive decode driver
-    # more than once while still producing all requested outputs.
-    decoded_tree = None
-    decode_started_event = None
-    if decode_enabled(args):
-        decode_started_event = _emit_scan_event(
-            emitter,
-            "internal.scanner.decode_started",
-            {
-                "decode_payload_depth": getattr(args, "decode_payload_depth", None),
-                "decode_iocs": getattr(args, "decode_iocs", None),
-            },
-            ticket_id=ticket.ticket_id,
-            parent_event_id=(
-                scan_completed_event.event_id if scan_completed_event else None
-            ),
-        )
-        decoded_tree = _compute_decoded_tree(result, engine, args)
-        _emit_scan_event(
-            emitter,
-            "internal.scanner.decode_completed",
-            {
-                "tree_available": decoded_tree is not None,
-                "node_count": (
-                    len(decoded_tree.nodes) if decoded_tree is not None else 0
-                ),
-            },
-            ticket_id=ticket.ticket_id,
-            parent_event_id=(
-                decode_started_event.event_id if decode_started_event else None
-            ),
-            severity="info" if decoded_tree is not None else "warning",
-        )
+    result = outcome.result
+    engine = outcome.engine
+    decoded_tree = outcome.decoded_tree
 
     exit_code = _render_and_exit_code(result, args, decoded_tree)
 
@@ -662,9 +603,7 @@ def run(args: argparse.Namespace) -> int:
                 "decoded_tree_available": decoded_tree is not None,
             },
             ticket_id=ticket.ticket_id,
-            parent_event_id=(
-                scan_completed_event.event_id if scan_completed_event else None
-            ),
+            parent_event_id=outcome.scan_completed_event_id,
         )
         _save_to_db(result, decoded_tree)
         evidence_completed_event = _emit_scan_event(
@@ -692,7 +631,7 @@ def run(args: argparse.Namespace) -> int:
         parent_event_id=(
             evidence_completed_event.event_id
             if evidence_completed_event
-            else (scan_completed_event.event_id if scan_completed_event else None)
+            else (outcome.decode_completed_event_id or outcome.scan_completed_event_id)
         ),
     )
 
@@ -1028,7 +967,9 @@ def _compute_decoded_tree(
     result rather than a crash; the main scan exit code already
     fired by the time this function runs.
     """
+    iocs_mode = decode_iocs_mode(args)
     extract_iocs = decode_extract_iocs(args)
+    include_decoded_source = iocs_mode == DECODE_IOCS_FULL
 
     try:
         tree = decode_payloads(
@@ -1039,6 +980,7 @@ def _compute_decoded_tree(
             peek_max_depth=args.peek_depth,
             peek_max_budget=args.peek_budget,
             extract_iocs=extract_iocs,
+            include_decoded_source=include_decoded_source,
         )
     except Exception as exc:  # noqa: BLE001 - non-fatal post-scan step
         sys.stderr.write(

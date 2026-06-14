@@ -395,7 +395,7 @@ def decode_iocs_mode(args: argparse.Namespace) -> str:
 
 
 def decode_extract_iocs(args: argparse.Namespace) -> bool:
-    """True iff IOC extraction (hashes and source) should run.
+    """True if IOC hash extraction should run.
 
     This is the right replacement for any pre-tristate code that
     did `if args.decode_iocs:`. After the swap to the tristate,

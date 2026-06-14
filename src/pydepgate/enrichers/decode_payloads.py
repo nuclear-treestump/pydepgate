@@ -18,9 +18,14 @@ orchestrator process; no new picklability constraints.
 Public surface:
 
     decode_payloads(result, *, engine, max_depth, peek_min_length,
-                    peek_max_depth, peek_max_budget,
-                    extract_iocs) -> DecodedTree
+                    peek_max_depth, peek_max_budget, extract_iocs,
+                    include_decoded_source=False) -> DecodedTree
         Run the recursion. Returns the tree (possibly empty).
+
+        When extract_iocs is true, hash IOCs are retained. Decoded
+        source is retained only when include_decoded_source is true.
+        Hash-only mode must not keep decoded source material in the
+        returned tree.
 
     filter_tree_by_severity(tree, min_severity) -> DecodedTree
         Post-decode presentation filter. Returns a new tree with
@@ -243,6 +248,7 @@ def decode_payloads(
     peek_max_depth: int,
     peek_max_budget: int,
     extract_iocs: bool = False,
+    include_decoded_source: bool = False,
 ) -> DecodedTree:
     """Run the decoded-payload recursion."""
     deduped = _dedupe_payload_findings(result.findings)
@@ -258,6 +264,7 @@ def decode_payloads(
             peek_max_depth=peek_max_depth,
             peek_max_budget=peek_max_budget,
             extract_iocs=extract_iocs,
+            include_decoded_source=include_decoded_source,
         )
         if node is not None:
             nodes.append(node)
@@ -356,6 +363,7 @@ def _decode_one(
     peek_max_depth: int,
     peek_max_budget: int,
     extract_iocs: bool,
+    include_decoded_source: bool,
 ) -> DecodedNode | None:
     """Decode one finding and (maybe) recurse."""
     full_value = finding.signal.context.get("_full_value")
@@ -372,6 +380,7 @@ def _decode_one(
             indicators=(),
             pickle_warning=False,
             extract_iocs=extract_iocs,
+            include_decoded_source=include_decoded_source,
         )
 
     if depth >= max_depth:
@@ -392,6 +401,7 @@ def _decode_one(
             indicators=unwrap_result.indicators,
             pickle_warning=unwrap_result.pickle_warning,
             extract_iocs=extract_iocs,
+            include_decoded_source=include_decoded_source,
             full_value=full_value,
             final_bytes=unwrap_result.final_bytes,
             details=unwrap_result.details,
@@ -420,6 +430,7 @@ def _decode_one(
             indicators=unwrap_result.indicators,
             pickle_warning=unwrap_result.pickle_warning,
             extract_iocs=extract_iocs,
+            include_decoded_source=include_decoded_source,
             full_value=full_value,
             final_bytes=unwrap_result.final_bytes,
             details=unwrap_result.details,
@@ -438,6 +449,7 @@ def _decode_one(
             indicators=unwrap_result.indicators,
             pickle_warning=unwrap_result.pickle_warning,
             extract_iocs=extract_iocs,
+            include_decoded_source=include_decoded_source,
             full_value=full_value,
             final_bytes=unwrap_result.final_bytes,
             details=unwrap_result.details,
@@ -478,6 +490,7 @@ def _decode_one(
             peek_max_depth=peek_max_depth,
             peek_max_budget=peek_max_budget,
             extract_iocs=extract_iocs,
+            include_decoded_source=include_decoded_source,
         )
         if child_node is not None:
             children.append(child_node)
@@ -493,6 +506,7 @@ def _decode_one(
             full_value,
             unwrap_result.final_bytes,
             unwrap_result.final_kind,
+            include_decoded_source=include_decoded_source,
         )
 
     details_summary: dict | None = None
@@ -529,6 +543,8 @@ def _extract_iocs(
     full_value: str | bytes,
     final_bytes: bytes,
     final_kind: str,
+    *,
+    include_decoded_source: bool = False,
 ) -> IOCData:
     """Extract IOC data from original and decoded payloads."""
     timestamp = datetime.now(timezone.utc).isoformat()
@@ -544,7 +560,7 @@ def _extract_iocs(
     decoded_sha512 = hashlib.sha512(final_bytes).hexdigest()
 
     decoded_source = None
-    if final_kind == "python_source":
+    if include_decoded_source and final_kind == "python_source":
         try:
             decoded_source = final_bytes.decode("utf-8", errors="replace")
         except Exception:
@@ -575,6 +591,7 @@ def _make_leaf_node(
     indicators: tuple[str, ...],
     pickle_warning: bool,
     extract_iocs: bool,
+    include_decoded_source: bool = False,
     full_value: str | bytes | None = None,
     final_bytes: bytes | None = None,
     details: object | None = None,
@@ -591,7 +608,12 @@ def _make_leaf_node(
     """
     ioc_data = None
     if extract_iocs and full_value is not None and final_bytes is not None:
-        ioc_data = _extract_iocs(full_value, final_bytes, final_kind)
+        ioc_data = _extract_iocs(
+            full_value,
+            final_bytes,
+            final_kind,
+            include_decoded_source=include_decoded_source,
+        )
 
     details_summary: dict | None = None
     details_full: dict | None = None
