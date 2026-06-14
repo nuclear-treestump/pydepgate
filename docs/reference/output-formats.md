@@ -9,6 +9,13 @@ pydepgate produces output in three formats, selected with `--format`:
 `human` (default), `json`, and `sarif`. When the decode pipeline is active,
 a fourth document type is produced: the decoded-tree JSON report.
 
+The Python API exposes the same reporter stack through `ScanApiResult.render(...)`
+and `ScanApiResult.write_report(...)`. In the API, `format="human"` aliases to
+`format="text"`; both use the human reporter. API rendering follows the same
+content rules as CLI rendering: bounded payload-peek previews may appear when
+requested, but full payload values and decoded source dumps are not part of
+normal text, JSON, or SARIF output.
+
 ## Human format
 
 The human format is the default. It renders to stdout with ANSI color when

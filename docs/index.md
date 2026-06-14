@@ -149,7 +149,7 @@ docker run --rm \
 
 The Docker image supports `linux/amd64` and `linux/arm64`, runs as a non-root user, and is designed for local scans, CI pipelines, and package-intake workflows.
 
-See [Guide: CI Integration](guides/ci-integration.md), [Guide: SARIF Integration](guides/sarif-integration.md), and [Guide: Docker Image](guides/docker-image.md).
+See [Guide: CI Integration](guides/ci-integration.md), [Guide: SARIF Integration](guides/sarif-integration.md), [Guide: Docker Image](guides/docker-image.md), and [Python API](api/index.md).
 
 ## Finding fingerprints
 
@@ -167,6 +167,7 @@ See [Finding Fingerprint v1](reference/fingerprint-v1.md).
 | ----------------------------------------------------------- | ---------------------------------------------------------------------- |
 | [Getting Started](getting-started.md)                       | First scan, reading output, using `explain`                            |
 | [CLI Reference](cli/index.md)                               | Top-level command structure and global flags                           |
+| [Python API](api/index.md)                                | Public Python API for contextless static scans                         |
 | [CLI Reference: scan](cli/scan.md)                          | Static startup-vector scanning                                         |
 | [CLI Reference: cvedb](cli/cvedb.md)                        | Build and inspect the local OSV PyPI database                          |
 | [CLI Reference: cvescan](cli/cvescan.md)                    | Match wheel identity against known CVE / malware records               |

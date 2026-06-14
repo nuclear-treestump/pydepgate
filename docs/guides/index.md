@@ -16,5 +16,5 @@ topic end-to-end with working examples.
 | [SARIF Integration](sarif-integration.md) | Generating SARIF 2.1.0 output and ingesting it into GitHub Code Scanning |
 | [Docker Image](docker-image.md) | Using the Docker image + verifying build attestation and signatures |
 
-For reference material (flag tables, JSON schema, exit code contract), see
+For the importable Python API, see [Python API](../api/index.md). For reference material (flag tables, JSON schema, exit code contract), see
 the [Reference](../reference/index.md) section.
