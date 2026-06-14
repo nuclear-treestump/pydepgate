@@ -7,7 +7,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-__version__ = "0.5.0"  # also updated in pyproject.toml --- KEEP IN SYNC ---
+from pydepgate.__init__ import __version__
 
 
 def register(subparsers) -> None:

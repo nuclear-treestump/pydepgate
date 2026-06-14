@@ -38,6 +38,7 @@ from enum import Enum
 
 class ParseStatus(Enum):
     """Outcome of attempting to parse Python source."""
+
     OK = "ok"
     SYNTAX_ERROR = "syntax_error"
     TOKENIZE_ERROR = "tokenize_error"
@@ -52,6 +53,7 @@ class SourceLocation:
     Line numbers are 1-indexed to match Python's tracebacks.
     Column numbers are 0-indexed to match the ast module's convention.
     """
+
     line: int
     column: int
 
@@ -69,6 +71,7 @@ class Comment:
         encoding_name: If is_encoding_declaration, the declared encoding
             (e.g. "utf-8"). None otherwise.
     """
+
     text: str
     location: SourceLocation
     is_shebang: bool
@@ -94,6 +97,7 @@ class ParsedPySource:
         encoding_used: Encoding used to decode source_text.
         line_count: Number of lines in the source.
     """
+
     source_path: str
     size_bytes: int
     status: ParseStatus
@@ -134,12 +138,19 @@ _ENCODING_MARKERS = ("coding:", "coding=")
 
 # Encodings we consider mundane. Anything else in an encoding declaration
 # is worth surfacing to analyzers.
-_COMMON_ENCODINGS = frozenset({
-    "utf-8", "utf8",
-    "ascii", "us-ascii",
-    "latin-1", "latin1", "iso-8859-1",
-    "cp1252", "windows-1252",
-})
+_COMMON_ENCODINGS = frozenset(
+    {
+        "utf-8",
+        "utf8",
+        "ascii",
+        "us-ascii",
+        "latin-1",
+        "latin1",
+        "iso-8859-1",
+        "cp1252",
+        "windows-1252",
+    }
+)
 
 
 def _extract_encoding_name(comment_text: str) -> str | None:
@@ -153,7 +164,7 @@ def _extract_encoding_name(comment_text: str) -> str | None:
         idx = comment_text.find(marker)
         if idx < 0:
             continue
-        rest = comment_text[idx + len(marker):].lstrip()
+        rest = comment_text[idx + len(marker) :].lstrip()
         # Encoding name is alphanumerics, hyphens, underscores, dots.
         name = []
         for ch in rest:
@@ -230,7 +241,7 @@ def _extract_comments(source_bytes: bytes) -> tuple[tuple[Comment, ...], str]:
     # is not at a clean start for tokenize().
     try:
         encoding, _ = tokenize.detect_encoding(buf.readline)
-    except (SyntaxError, UnicodeDecodeError):
+    except (SyntaxError, UnicodeDecodeError, SystemError):
         encoding = "utf-8"
     buf.seek(0)
 
@@ -252,6 +263,13 @@ def _extract_comments(source_bytes: bytes) -> tuple[tuple[Comment, ...], str]:
         # can't be decoded with the detected encoding (no PEP 263 declaration,
         # bytes aren't valid UTF-8). 3.12+ wraps this in TokenError. Fall
         # back to the manual scan, which works on raw bytes.
+        comments = list(_fallback_comment_scan(source_bytes))
+    except SystemError:
+        # Python 3.12's C tokenizer can occasionally surface a raw
+        # SystemError for malformed byte streams after setting a
+        # SyntaxError internally, especially when random data contains
+        # NUL bytes. Treat this as hostile input, not as a pydepgate
+        # failure, and fall back to the raw-byte comment scanner.
         comments = list(_fallback_comment_scan(source_bytes))
 
     return tuple(comments), encoding
@@ -305,10 +323,13 @@ def parse_python_source(
             comments=comments,
             source_text=source_text,
             encoding_used="latin-1 (fallback)",
-            line_count=source_text.count("\n") + (0 if source_text.endswith("\n") else 1 if source_text else 0),
+            line_count=source_text.count("\n")
+            + (0 if source_text.endswith("\n") else 1 if source_text else 0),
         )
 
-    line_count = source_text.count("\n") + (0 if source_text.endswith("\n") else 1 if source_text else 0)
+    line_count = source_text.count("\n") + (
+        0 if source_text.endswith("\n") else 1 if source_text else 0
+    )
 
     # Attempt to parse the AST. We suppress SyntaxWarning for the
     # duration of the parse call; see module docstring for rationale.
@@ -333,6 +354,22 @@ def parse_python_source(
         )
     except ValueError as exc:
         # ast.parse raises ValueError on source containing null bytes.
+        return ParsedPySource(
+            source_path=source_path,
+            size_bytes=size_bytes,
+            status=ParseStatus.SYNTAX_ERROR,
+            diagnostic=f"malformed source: {exc}",
+            ast_tree=None,
+            comments=comments,
+            source_text=source_text,
+            encoding_used=encoding_used,
+            line_count=line_count,
+        )
+    except SystemError as exc:
+        # CPython parser/tokenizer internals can raise SystemError for
+        # sufficiently malformed arbitrary bytes. This parser is a safety
+        # boundary over untrusted input, so do not let interpreter-internal
+        # parse failures escape to callers.
         return ParsedPySource(
             source_path=source_path,
             size_bytes=size_bytes,
