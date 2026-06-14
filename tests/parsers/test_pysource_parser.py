@@ -7,6 +7,13 @@ from unittest.mock import patch
 
 import pydepgate.parsers.pysource as pysource
 
+from pydepgate.parsers.pysource import (
+    Comment,
+    ParseStatus,
+    SourceLocation,
+    parse_python_source,
+)
+
 FIXTURES_DIR = pathlib.Path(__file__).parent / "fixtures" / "pysource"
 
 
@@ -15,7 +22,7 @@ class ParserSafetyTests(unittest.TestCase):
 
     def test_does_not_execute_import(self):
         evil = b"import sys\nsys.PYDEPGATE_PYSRC_PWNED = True\n"
-        pysource.parse_python_source(evil, "<test>")
+        parse_python_source(evil, "<test>")
         import sys
 
         self.assertFalse(
@@ -25,7 +32,7 @@ class ParserSafetyTests(unittest.TestCase):
 
     def test_does_not_execute_module_level_code(self):
         evil = b"import os\nos.system('touch /tmp/pydepgate_pysrc_pwned')\n"
-        pysource.parse_python_source(evil, "<test>")
+        parse_python_source(evil, "<test>")
         self.assertFalse(
             pathlib.Path("/tmp/pydepgate_pysrc_pwned").exists(),
             "parser had a filesystem side effect",
@@ -35,10 +42,10 @@ class ParserSafetyTests(unittest.TestCase):
         rng = random.Random(0x5AFE)
         for _ in range(100):
             fuzz = bytes(rng.randrange(0, 256) for _ in range(256))
-            result = pysource.parse_python_source(fuzz, "<fuzz>")
+            result = parse_python_source(fuzz, "<fuzz>")
             self.assertIsNotNone(result)
             # Status should reflect the failure, not propagate an exception.
-            self.assertIn(result.status, list(pysource.ParseStatus))
+            self.assertIn(result.status, list(ParseStatus))
 
     def test_handles_adversarial_binary_corpus(self):
         corpus = (
@@ -88,30 +95,30 @@ class ParserSafetyTests(unittest.TestCase):
             "parse",
             side_effect=SystemError("parser had SyntaxError set"),
         ):
-            result = pysource.parse_python_source(
+            result = parse_python_source(
                 b"# safe comment\nx = 1\n", "<ast-systemerror>"
             )
 
-        self.assertEqual(result.status, pysource.ParseStatus.SYNTAX_ERROR)
+        self.assertEqual(result.status, ParseStatus.SYNTAX_ERROR)
         self.assertIn("malformed source", result.diagnostic)
         self.assertEqual(len(result.comments), 1)
 
     def test_handles_null_bytes(self):
         # ast.parse raises ValueError on null bytes; we should catch it.
-        result = pysource.parse_python_source(b"x = 1\nimport \x00os\n", "<test>")
-        self.assertEqual(result.status, pysource.ParseStatus.SYNTAX_ERROR)
+        result = parse_python_source(b"x = 1\nimport \x00os\n", "<test>")
+        self.assertEqual(result.status, ParseStatus.SYNTAX_ERROR)
 
     def test_handles_empty_source(self):
-        result = pysource.parse_python_source(b"", "<test>")
-        self.assertEqual(result.status, pysource.ParseStatus.OK)
+        result = parse_python_source(b"", "<test>")
+        self.assertEqual(result.status, ParseStatus.OK)
         self.assertEqual(result.line_count, 0)
         self.assertEqual(result.comments, ())
 
 
 class ParseStatusTests(unittest.TestCase):
     def test_valid_source_is_ok(self):
-        result = pysource.parse_python_source(b"x = 1\n", "<test>")
-        self.assertEqual(result.status, pysource.ParseStatus.OK)
+        result = parse_python_source(b"x = 1\n", "<test>")
+        self.assertEqual(result.status, ParseStatus.OK)
         self.assertIsNotNone(result.ast_tree)
 
     def test_syntax_error_is_reported(self):
@@ -123,15 +130,15 @@ class ParseStatusTests(unittest.TestCase):
     def test_syntax_error_still_returns_partial_comments(self):
         # Even though parsing fails, the tokenizer may have seen comments.
         source = b"# header comment\ndef (\n"
-        result = pysource.parse_python_source(source, "<test>")
-        self.assertEqual(result.status, pysource.ParseStatus.SYNTAX_ERROR)
+        result = parse_python_source(source, "<test>")
+        self.assertEqual(result.status, ParseStatus.SYNTAX_ERROR)
         self.assertEqual(len(result.comments), 1)
         self.assertIn("header comment", result.comments[0].text)
 
 
 class CommentExtractionTests(unittest.TestCase):
     def test_simple_comment(self):
-        result = pysource.parse_python_source(b"# hello\n", "<test>")
+        result = parse_python_source(b"# hello\n", "<test>")
         self.assertEqual(len(result.comments), 1)
         self.assertEqual(result.comments[0].text, "# hello")
         self.assertEqual(result.comments[0].location.line, 1)
@@ -153,7 +160,7 @@ class CommentExtractionTests(unittest.TestCase):
 
     def test_no_comments_in_clean_code(self):
         source = b"def f():\n    return 1\n"
-        result = pysource.parse_python_source(source, "<test>")
+        result = parse_python_source(source, "<test>")
         self.assertEqual(result.comments, ())
 
 
