@@ -16,8 +16,8 @@ garak, inspect-ai) or manual review. The unittest cases verify the
 test suite's own integrity and completeness.
 
 Run:
-    python -m pytest tests/test_injection_chat.py -v
-    python tests/test_injection_chat.py --export-scenarios  # dump JSON
+    python -m pytest ai_testing/test_injection_chat.py -v
+    python ai_testing/test_injection_chat.py --export-scenarios  # dump JSON
 """
 
 from __future__ import annotations

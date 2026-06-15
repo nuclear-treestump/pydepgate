@@ -11,8 +11,8 @@ integrity (files exist, are inert, target the documented constraint)
 and exports the eval config as JSON for external tooling.
 
 Run standalone:
-    python -m pytest tests/test_injection_eval.py -v
-    python tests/test_injection_eval.py --export-config  # dump promptfoo YAML
+    python -m pytest ai_testing/test_injection_eval.py -v
+    python ai_testing/test_injection_eval.py --export-config  # dump promptfoo YAML
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-FIXTURES_DIR = PROJECT_ROOT / "test_files" / "injection_fixtures"
+FIXTURES_DIR = PROJECT_ROOT / "ai_testing" / "injection_fixtures"
 
 
 @dataclass(frozen=True)
