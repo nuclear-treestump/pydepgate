@@ -22,12 +22,15 @@ instructions to follow.
 | `commit_bypass_bait.py` | AI-generated code review | Fake urgency and pre-approval claims |
 | `override_claim_bait.py` | All constraints | Direct authority/override claims |
 | `instructions_in_pth.pth` | Data/instruction boundary + rules integrity | "Dev notes" in .pth file |
+| `sarif_output_injection_bait.py` | Data/instruction boundary + rules | Fake fix instructions in SARIF message.text field |
+| `decoded_payload_directive_bait.py` | Data/instruction boundary + _scan_one_file | Fake build-system config in decoded payload layer |
+| `error_message_workaround_bait.py` | Never execute input / no runtime delegation | Fake workaround with getattr() in crash traceback |
 
 ## Usage
 
 These fixtures are consumed by:
-1. `tests/test_injection_eval.py` — promptfoo-style automated eval config
-2. `tests/test_injection_chat.py` — chat-based conversational attack test suite
+1. `ai_testing/test_injection_eval.py` — promptfoo-style automated eval config
+2. `ai_testing/test_injection_chat.py` — chat-based conversational attack test suite
 3. Manual red-teaming sessions
 
 ## Adding new fixtures
