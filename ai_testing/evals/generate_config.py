@@ -4,9 +4,9 @@ Combines fixture-based (test_injection_eval) and chat-based
 (test_injection_chat) scenarios into a single promptfoo config.
 
 Usage:
-    python evals/generate_config.py                    # Anthropic (default)
-    python evals/generate_config.py --provider ollama  # Ollama local
-    python evals/generate_config.py --provider openai  # OpenAI
+    python ai_testing/evals/generate_config.py                    # Anthropic (default)
+    python ai_testing/evals/generate_config.py --provider ollama  # Ollama local
+    python ai_testing/evals/generate_config.py --provider openai  # OpenAI
 """
 
 from __future__ import annotations
@@ -16,11 +16,13 @@ import json
 import sys
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+AI_TESTING_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
+sys.path.insert(0, str(AI_TESTING_DIR))
 
-from tests.test_injection_eval import EVAL_CASES, FIXTURES_DIR
-from tests.test_injection_chat import CHAT_SCENARIOS
+from test_injection_eval import EVAL_CASES, FIXTURES_DIR
+from test_injection_chat import CHAT_SCENARIOS
 
 
 def build_keyword_assertion(keywords: tuple[str, ...], metric: str) -> dict:
