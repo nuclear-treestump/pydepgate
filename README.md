@@ -1,10 +1,12 @@
 # pydepgate
 
-pydepgate statically scans Python package artifacts for suspicious install-time and startup behavior.
+pydepgate statically scans Python package artifacts for suspicious install-time and startup behavior, and includes a built-in CVE scanner for known vulnerable package versions.
 
 It supports wheels, source distributions, installed packages, package-like directories, and loose Python files. It does not import, install, execute, compile, or deserialize package code.
 
-The scanner looks for risky packaging patterns such as `.pth` startup hooks, suspicious `setup.py` behavior, encoded payloads, decode-then-execute chains, obfuscated execution primitives, suspicious standard-library usage, and rule-defined indicators.
+The scanner looks for risky packaging patterns such as .pth startup hooks, suspicious setup.py behavior, encoded payloads, decode-then-execute chains, obfuscated execution primitives, suspicious standard-library usage, and rule-defined indicators.
+
+pydepgate is designed to work in restricted environments. CVE database updates are separate from cvescan execution, so teams can update the database through an approved path and run scans later in high-side or air-gapped environments.
 
 [PyPI package](https://pypi.org/project/pydepgate/) · [Documentation](https://nuclear-treestump.github.io/pydepgate/) · [Funding](FUNDING.md)
 
