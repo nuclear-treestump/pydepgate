@@ -183,7 +183,7 @@ def execute_static_scan(request: StaticScanRequest) -> StaticScanOutcome:
         _emit_event(
             request,
             "internal.scanner.scan_failed",
-            _exception_event_payload(exc),
+            _exception_event_payload(exc, request=request),
             parent_event_id=(
                 scan_started_event.event_id if scan_started_event else None
             ),
@@ -194,7 +194,7 @@ def execute_static_scan(request: StaticScanRequest) -> StaticScanOutcome:
     scan_completed_event = _emit_event(
         request,
         "internal.scanner.scan_completed",
-        _scan_result_event_payload(result),
+        _scan_result_event_payload(result, request=request),
         parent_event_id=(scan_started_event.event_id if scan_started_event else None),
     )
 
@@ -206,6 +206,8 @@ def execute_static_scan(request: StaticScanRequest) -> StaticScanOutcome:
             request,
             "internal.scanner.decode_started",
             {
+                **_scan_context_event_payload(request),
+                "result_kind": "decoded_payloads",
                 "decode_payload_depth": budget.get("decode_payload_depth"),
                 "decode_iocs": budget.get("decode_iocs"),
             },
@@ -218,6 +220,8 @@ def execute_static_scan(request: StaticScanRequest) -> StaticScanOutcome:
             request,
             "internal.scanner.decode_completed",
             {
+                **_scan_context_event_payload(request),
+                "result_kind": "decoded_payloads",
                 "tree_available": decoded_tree is not None,
                 "node_count": (
                     len(decoded_tree.nodes) if decoded_tree is not None else 0
@@ -505,9 +509,24 @@ def _warn(request: StaticScanRequest, message: str) -> None:
         request.event_warning(message)
 
 
-def _scan_result_event_payload(result: ScanResult) -> dict:
+def _scan_context_event_payload(request: StaticScanRequest) -> dict[str, Any]:
+    return {
+        "scan_mode": request.ticket.scan_mode,
+        "target_kind": request.ticket.target_kind,
+        "target_identity": request.ticket.target_identity,
+        "target_ref": request.target_ref.to_dict(),
+    }
+
+
+def _scan_result_event_payload(
+    result: ScanResult,
+    *,
+    request: StaticScanRequest,
+) -> dict[str, Any]:
     stats = result.statistics
     return {
+        **_scan_context_event_payload(request),
+        "result_kind": "static_analysis",
         "artifact_identity": result.artifact_identity,
         "artifact_kind": result.artifact_kind.value,
         "artifact_sha256": result.artifact_sha256,
@@ -530,8 +549,14 @@ def _scan_result_event_payload(result: ScanResult) -> dict:
     }
 
 
-def _exception_event_payload(exc: BaseException) -> dict:
+def _exception_event_payload(
+    exc: BaseException,
+    *,
+    request: StaticScanRequest,
+) -> dict[str, Any]:
     return {
+        **_scan_context_event_payload(request),
+        "result_kind": "static_analysis",
         "exception_type": type(exc).__name__,
         "message": str(exc),
     }

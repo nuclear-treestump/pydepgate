@@ -8,6 +8,7 @@ import json
 import sys
 import tempfile
 import unittest
+from types import SimpleNamespace
 import zipfile
 from pathlib import Path
 from unittest import mock
@@ -17,6 +18,7 @@ from pydepgate.cli import main as cli_main
 from pydepgate.cli.subcommands import cvescan
 from pydepgate.dbs.cvedb import constants
 from pydepgate.dbs.cvedb import schema
+from pydepgate.package_tools.cvescanner import scanner
 
 
 class CveScanCliTests(unittest.TestCase):
@@ -171,6 +173,103 @@ class CveScanCliTests(unittest.TestCase):
         self.assertEqual(rc, exit_codes.TOOL_ERROR)
         self.assertIn("does not support SARIF", stderr.getvalue())
 
+    def test_run_invokes_internal_cve_runner_request(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            wheel_path = _make_wheel(root, "demo_pkg", "1.2.3")
+            db_path = root / "pypi_osv.db"
+            args = _make_args(wheel_path, db_path, output_format="human")
+            fake_result = scanner.CveScanResult(
+                package_name="demo-pkg",
+                normalized_package_name="demo-pkg",
+                package_version="1.2.3",
+                package_metadata=None,
+                findings=(),
+                unevaluated_ranges=(),
+                warnings=(),
+                attribution="test attribution",
+                database_path=db_path,
+                applied_policy_result=None,
+            )
+            fake_outcome = SimpleNamespace(
+                result=fake_result,
+                scan_completed_event_id="cve-completed-test",
+            )
+
+            stdout = io.StringIO()
+            with (
+                mock.patch.object(sys, "stdout", stdout),
+                mock.patch.object(
+                    cvescan, "execute_cve_scan", return_value=fake_outcome
+                ) as execute_cve_scan,
+            ):
+                rc = cvescan.run(args)
+
+            self.assertEqual(rc, exit_codes.CLEAN)
+            execute_cve_scan.assert_called_once()
+            request = execute_cve_scan.call_args.args[0]
+            self.assertIsInstance(request, cvescan.CveScanRequest)
+            self.assertEqual(request.ticket.scan_mode, "cve.artifact")
+            self.assertEqual(request.ticket.allowed_actions, ("cve.scan",))
+            self.assertEqual(request.ticket.target_kind, "wheel")
+            self.assertEqual(request.ticket.target_identity, str(wheel_path))
+            self.assertEqual(request.target_ref.kind, "wheel")
+            self.assertEqual(request.target_ref.identity, str(wheel_path))
+            self.assertEqual(request.target_ref.metadata["command"], "cvescan")
+            self.assertTrue(request.require_database)
+            self.assertEqual(request.db_path, str(db_path))
+
+    def test_event_log_records_grant_cve_scan_and_completion_events(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            wheel_path = _make_wheel(root, "demo_pkg", "1.2.3")
+            db_path = _make_db(root, severity="LOW")
+            event_log = root / "events.jsonl"
+            args = _make_args(
+                wheel_path,
+                db_path,
+                output_format="json",
+                event_log=event_log,
+            )
+
+            stdout = io.StringIO()
+            with mock.patch.object(sys, "stdout", stdout):
+                rc = cvescan.run(args)
+
+            self.assertEqual(rc, exit_codes.FINDINGS_BELOW_BLOCKING)
+            events = [
+                json.loads(line)
+                for line in event_log.read_text(encoding="utf-8").splitlines()
+            ]
+            event_types = [event["event_type"] for event in events]
+            self.assertEqual(
+                event_types,
+                [
+                    "internal.scanner.scan_grant_issued",
+                    "internal.scanner.cve_scan_started",
+                    "internal.scanner.cve_scan_completed",
+                    "internal.scanner.run_completed",
+                ],
+            )
+            ticket_id = events[0]["ticket_id"]
+            self.assertIsNotNone(ticket_id)
+            self.assertTrue(all(event["ticket_id"] == ticket_id for event in events))
+            self.assertEqual(events[0]["payload"]["scan_mode"], "cve.artifact")
+            self.assertNotIn("ticket_nonce", events[0]["payload"])
+            self.assertEqual(events[2]["payload"]["scan_mode"], "cve.artifact")
+            self.assertEqual(events[2]["payload"]["target_kind"], "wheel")
+            self.assertEqual(events[2]["payload"]["target_identity"], str(wheel_path))
+            self.assertEqual(events[2]["payload"]["target_ref"]["kind"], "wheel")
+            self.assertEqual(events[2]["payload"]["result_kind"], "cve")
+            self.assertEqual(events[2]["payload"]["package_name"], "demo-pkg")
+            self.assertEqual(events[2]["payload"]["finding_count"], 1)
+            self.assertEqual(events[3]["payload"]["scan_mode"], "cve.artifact")
+            self.assertEqual(events[3]["payload"]["target_kind"], "wheel")
+            self.assertEqual(events[3]["payload"]["target_identity"], str(wheel_path))
+            self.assertEqual(events[3]["payload"]["target_ref"]["kind"], "wheel")
+            self.assertEqual(events[3]["payload"]["result_kind"], "cve")
+            self.assertEqual(events[3]["payload"]["exit_code"], rc)
+
 
 def _make_args(
     wheel_path: Path,
@@ -180,11 +279,15 @@ def _make_args(
     min_severity: str | None = None,
     strict_exit: bool = False,
     ignore_missing_db: bool = False,
+    save_to_db: bool = False,
+    event_log: Path | None = None,
 ) -> argparse.Namespace:
     return argparse.Namespace(
         target=str(wheel_path),
         db_path=str(db_path),
         ignore_missing_db=ignore_missing_db,
+        save_to_db=save_to_db,
+        event_log=str(event_log) if event_log is not None else None,
         format=output_format,
         min_severity=min_severity,
         strict_exit=strict_exit,
