@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -42,6 +43,13 @@ from pydepgate.cli import exit_codes
 from pydepgate.dbs.cvedb import lookup
 from pydepgate.dbs.cvedb import schema
 from pydepgate.package_tools.cvescanner import scanner
+from pydepgate.events import (
+    EventEmitter,
+    EventSinkError,
+    JsonlEventSink,
+    mintsgt,
+)
+from pydepgate.scanning import CveScanRequest, ScanTargetRef, execute_cve_scan
 
 _SEVERITY_ORDER = {
     "UNKNOWN": 0,
@@ -112,7 +120,132 @@ def register(subparsers) -> None:
             "scan exit code."
         ),
     )
+    parser.add_argument(
+        "--event-log",
+        metavar="PATH",
+        default=os.environ.get("PYDEPGATE_EVENT_LOG"),
+        help=(
+            "Write CVE scan lifecycle events to a JSONL file. "
+            "Env: PYDEPGATE_EVENT_LOG"
+        ),
+    )
     parser.set_defaults(func=run)
+
+
+def _build_cve_event_emitter(
+    args: argparse.Namespace,
+    *,
+    run_id: str,
+    correlation_id: str,
+) -> EventEmitter:
+    """Build the event emitter used by cvescan.run."""
+    injected = getattr(args, "_event_emitter", None)
+    if injected is not None:
+        return injected
+
+    sinks = list(getattr(args, "_event_sinks", ()) or ())
+    event_log = getattr(args, "event_log", None)
+    if event_log:
+        sinks.append(JsonlEventSink(event_log))
+
+    return EventEmitter(
+        producer="pydepgate.cli.cvescan",
+        sinks=tuple(sinks),
+        run_id=run_id,
+        correlation_id=correlation_id,
+    )
+
+
+def _emit_cve_event(
+    emitter: EventEmitter,
+    event_type: str,
+    payload: dict | None = None,
+    *,
+    ticket_id: str | None = None,
+    parent_event_id: str | None = None,
+    severity: str = "info",
+):
+    """Emit a CVE scan event without letting sink failures hide results."""
+    try:
+        return emitter.emit(
+            event_type,
+            payload or {},
+            ticket_id=ticket_id,
+            parent_event_id=parent_event_id,
+            severity=severity,
+        )
+    except EventSinkError as exc:
+        sys.stderr.write(
+            f"warning: could not emit {event_type}: " f"{type(exc).__name__}: {exc}\n"
+        )
+        return None
+
+
+def _ticket_event_payload(ticket) -> dict:
+    """Return ticket fields safe for event logs."""
+    payload = ticket.to_dict()
+    payload.pop("ticket_nonce", None)
+    return payload
+
+
+def _requested_target_identity(args: argparse.Namespace) -> str:
+    """Return the target value requested by the user."""
+    return str(args.target)
+
+
+def _requested_target_kind(args: argparse.Namespace) -> str:
+    """Return the requested CVE scan target kind."""
+    target = str(getattr(args, "target", "") or "")
+    if target.lower().endswith(".whl"):
+        return "wheel"
+    return "package_artifact"
+
+
+def _target_ref_for_args(args: argparse.Namespace) -> ScanTargetRef:
+    """Return an internal target reference for a CLI CVE scan request."""
+    target = str(args.target)
+    return ScanTargetRef(
+        kind=_requested_target_kind(args),
+        identity=target,
+        location=target,
+        metadata={"source": "cli", "command": "cvescan"},
+    )
+
+
+def _allowed_actions_for_args(args: argparse.Namespace) -> tuple[str, ...]:
+    """Return actions needed to satisfy the requested CVE scan."""
+    actions = ["cve.scan"]
+    if getattr(args, "save_to_db", False):
+        actions.append("evidence.write")
+    return tuple(actions)
+
+
+def _cve_scan_budget_for_args(args: argparse.Namespace) -> dict:
+    """Return local resource expectations for the CVE scan grant."""
+    return {
+        "db_path": (
+            str(getattr(args, "db_path", None))
+            if getattr(args, "db_path", None) is not None
+            else None
+        ),
+        "require_database": not bool(getattr(args, "ignore_missing_db", False)),
+        "ignore_missing_db": bool(getattr(args, "ignore_missing_db", False)),
+    }
+
+
+def _cve_result_event_payload(result: scanner.CveScanResult) -> dict[str, Any]:
+    """Return a JSON-safe summary of a CVE scan result."""
+    return {
+        "package_name": result.package_name,
+        "normalized_package_name": result.normalized_package_name,
+        "package_version": result.package_version,
+        "finding_count": len(result.findings),
+        "warning_count": len(result.warnings),
+        "unevaluated_range_count": len(result.unevaluated_ranges),
+        "database_path": (
+            str(result.database_path) if result.database_path is not None else None
+        ),
+    }
 
 
 def run(args: argparse.Namespace) -> int:
@@ -124,13 +257,53 @@ def run(args: argparse.Namespace) -> int:
         )
         return exit_codes.TOOL_ERROR
 
+    ticket = mintsgt(
+        target_kind=_requested_target_kind(args),
+        target_identity=_requested_target_identity(args),
+        scan_mode="cve.artifact",
+        allowed_actions=_allowed_actions_for_args(args),
+        budget=_cve_scan_budget_for_args(args),
+        metadata={
+            "command": "cvescan",
+            "format": getattr(args, "format", None),
+        },
+        require_cli_stack=True,
+    )
+    if not ticket.allows_action("cve.scan") or ticket.is_expired():
+        sys.stderr.write("error: scanner could not obtain a valid CVE scan grant.\n")
+        return exit_codes.TOOL_ERROR
+
+    emitter = _build_cve_event_emitter(
+        args,
+        run_id=ticket.run_id,
+        correlation_id=ticket.correlation_id,
+    )
+    grant_event = _emit_cve_event(
+        emitter,
+        "internal.scanner.scan_grant_issued",
+        _ticket_event_payload(ticket),
+        ticket_id=ticket.ticket_id,
+    )
+
+    if getattr(args, "save_to_db", False) and not ticket.allows_action(
+        "evidence.write"
+    ):
+        sys.stderr.write("error: CVE scan grant does not authorize evidence write.\n")
+        return exit_codes.TOOL_ERROR
+
     try:
-        result = scanner.scan_artifact(
-            args.target,
+        request = CveScanRequest(
+            ticket=ticket,
+            target_ref=_target_ref_for_args(args),
+            emitter=emitter,
             db_path=getattr(args, "db_path", None),
             applied_policy_result=None,
             require_database=not getattr(args, "ignore_missing_db", False),
+            grant_event_id=(grant_event.event_id if grant_event else None),
+            strict_event_sinks=False,
+            event_warning=sys.stderr.write,
         )
+        outcome = execute_cve_scan(request)
     except lookup.CveDatabaseNotFound as exc:
         sys.stderr.write(
             f"CVE database not found at {exc.path}\n"
@@ -150,6 +323,7 @@ def run(args: argparse.Namespace) -> int:
         sys.stderr.write(f"error: cvescan failed: {type(exc).__name__}: {exc}\n")
         return exit_codes.TOOL_ERROR
 
+    result = outcome.result
     display_findings = _filter_findings(result.findings, args.min_severity)
     display_result = _filtered_result(result, display_findings)
 
@@ -159,9 +333,48 @@ def run(args: argparse.Namespace) -> int:
         _render_human(display_result, result, sys.stdout)
 
     findings_for_exit = result.findings if args.strict_exit else display_findings
+    exit_code = _compute_exit_code(findings_for_exit)
+
+    evidence_completed_event = None
     if getattr(args, "save_to_db", False):
+        evidence_event = _emit_cve_event(
+            emitter,
+            "internal.evidence.write_requested",
+            _cve_result_event_payload(result),
+            ticket_id=ticket.ticket_id,
+            parent_event_id=outcome.scan_completed_event_id,
+        )
         _save_to_db(result)
-    return _compute_exit_code(findings_for_exit)
+        evidence_completed_event = _emit_cve_event(
+            emitter,
+            "internal.evidence.write_completed",
+            _cve_result_event_payload(result),
+            ticket_id=ticket.ticket_id,
+            parent_event_id=(evidence_event.event_id if evidence_event else None),
+        )
+
+    _emit_cve_event(
+        emitter,
+        "internal.scanner.run_completed",
+        {
+            "command": "cvescan",
+            "exit_code": exit_code,
+            "package_name": result.package_name,
+            "normalized_package_name": result.normalized_package_name,
+            "package_version": result.package_version,
+            "finding_count": len(result.findings),
+            "displayed_finding_count": len(display_findings),
+            "warning_count": len(result.warnings),
+            "unevaluated_range_count": len(result.unevaluated_ranges),
+        },
+        ticket_id=ticket.ticket_id,
+        parent_event_id=(
+            evidence_completed_event.event_id
+            if evidence_completed_event
+            else outcome.scan_completed_event_id
+        ),
+    )
+    return exit_code
 
 
 def _save_to_db(result) -> None:
