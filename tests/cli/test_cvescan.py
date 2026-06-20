@@ -256,8 +256,18 @@ class CveScanCliTests(unittest.TestCase):
             self.assertTrue(all(event["ticket_id"] == ticket_id for event in events))
             self.assertEqual(events[0]["payload"]["scan_mode"], "cve.artifact")
             self.assertNotIn("ticket_nonce", events[0]["payload"])
+            self.assertEqual(events[2]["payload"]["scan_mode"], "cve.artifact")
+            self.assertEqual(events[2]["payload"]["target_kind"], "wheel")
+            self.assertEqual(events[2]["payload"]["target_identity"], str(wheel_path))
+            self.assertEqual(events[2]["payload"]["target_ref"]["kind"], "wheel")
+            self.assertEqual(events[2]["payload"]["result_kind"], "cve")
             self.assertEqual(events[2]["payload"]["package_name"], "demo-pkg")
             self.assertEqual(events[2]["payload"]["finding_count"], 1)
+            self.assertEqual(events[3]["payload"]["scan_mode"], "cve.artifact")
+            self.assertEqual(events[3]["payload"]["target_kind"], "wheel")
+            self.assertEqual(events[3]["payload"]["target_identity"], str(wheel_path))
+            self.assertEqual(events[3]["payload"]["target_ref"]["kind"], "wheel")
+            self.assertEqual(events[3]["payload"]["result_kind"], "cve")
             self.assertEqual(events[3]["payload"]["exit_code"], rc)
 
 

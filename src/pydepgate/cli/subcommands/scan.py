@@ -402,10 +402,27 @@ def _ruleset_fingerprint(rules) -> str:
     return digest.hexdigest()
 
 
-def _scan_result_event_payload(result: ScanResult) -> dict:
+def _scan_context_event_payload(args: argparse.Namespace) -> dict[str, object]:
+    """Return target context fields shared by static scan lifecycle events."""
+    target_ref = _target_ref_for_args(args)
+    return {
+        "scan_mode": _requested_scan_mode(args),
+        "target_kind": _requested_target_kind(args),
+        "target_identity": _requested_target_identity(args),
+        "target_ref": target_ref.to_dict(),
+    }
+
+
+def _scan_result_event_payload(
+    result: ScanResult,
+    *,
+    args: argparse.Namespace,
+) -> dict[str, object]:
     """Return a JSON-safe summary of a ScanResult."""
     stats = result.statistics
     return {
+        **_scan_context_event_payload(args),
+        "result_kind": "static_analysis",
         "artifact_identity": result.artifact_identity,
         "artifact_kind": result.artifact_kind.value,
         "artifact_sha256": result.artifact_sha256,
@@ -598,8 +615,7 @@ def run(args: argparse.Namespace) -> int:
             emitter,
             "internal.evidence.write_requested",
             {
-                "artifact_identity": result.artifact_identity,
-                "artifact_kind": result.artifact_kind.value,
+                **_scan_result_event_payload(result, args=args),
                 "decoded_tree_available": decoded_tree is not None,
             },
             ticket_id=ticket.ticket_id,
@@ -610,7 +626,7 @@ def run(args: argparse.Namespace) -> int:
             emitter,
             "internal.evidence.write_completed",
             {
-                "artifact_identity": result.artifact_identity,
+                **_scan_result_event_payload(result, args=args),
                 "decoded_tree_available": decoded_tree is not None,
             },
             ticket_id=ticket.ticket_id,
@@ -621,6 +637,8 @@ def run(args: argparse.Namespace) -> int:
         emitter,
         "internal.scanner.run_completed",
         {
+            **_scan_context_event_payload(args),
+            "result_kind": "static_analysis",
             "exit_code": exit_code,
             "artifact_identity": result.artifact_identity,
             "artifact_kind": result.artifact_kind.value,

@@ -233,9 +233,26 @@ def _cve_scan_budget_for_args(args: argparse.Namespace) -> dict:
     }
 
 
-def _cve_result_event_payload(result: scanner.CveScanResult) -> dict[str, Any]:
+def _cve_scan_context_event_payload(args: argparse.Namespace) -> dict[str, Any]:
+    """Return target context fields shared by CVE scan lifecycle events."""
+    target_ref = _target_ref_for_args(args)
+    return {
+        "scan_mode": "cve.artifact",
+        "target_kind": _requested_target_kind(args),
+        "target_identity": _requested_target_identity(args),
+        "target_ref": target_ref.to_dict(),
+    }
+
+
+def _cve_result_event_payload(
+    result: scanner.CveScanResult,
+    *,
+    args: argparse.Namespace,
+) -> dict[str, Any]:
     """Return a JSON-safe summary of a CVE scan result."""
     return {
+        **_cve_scan_context_event_payload(args),
+        "result_kind": "cve",
         "package_name": result.package_name,
         "normalized_package_name": result.normalized_package_name,
         "package_version": result.package_version,
@@ -340,7 +357,7 @@ def run(args: argparse.Namespace) -> int:
         evidence_event = _emit_cve_event(
             emitter,
             "internal.evidence.write_requested",
-            _cve_result_event_payload(result),
+            _cve_result_event_payload(result, args=args),
             ticket_id=ticket.ticket_id,
             parent_event_id=outcome.scan_completed_event_id,
         )
@@ -348,7 +365,7 @@ def run(args: argparse.Namespace) -> int:
         evidence_completed_event = _emit_cve_event(
             emitter,
             "internal.evidence.write_completed",
-            _cve_result_event_payload(result),
+            _cve_result_event_payload(result, args=args),
             ticket_id=ticket.ticket_id,
             parent_event_id=(evidence_event.event_id if evidence_event else None),
         )
@@ -357,6 +374,8 @@ def run(args: argparse.Namespace) -> int:
         emitter,
         "internal.scanner.run_completed",
         {
+            **_cve_scan_context_event_payload(args),
+            "result_kind": "cve",
             "command": "cvescan",
             "exit_code": exit_code,
             "package_name": result.package_name,

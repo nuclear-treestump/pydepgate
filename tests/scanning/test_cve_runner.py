@@ -157,6 +157,11 @@ class CveRunnerTests(unittest.TestCase):
         self.assertEqual(completed.ticket_id, request.ticket.ticket_id)
         self.assertEqual(started.payload["scan_mode"], "cve.artifact")
         self.assertEqual(started.payload["target_ref"]["kind"], "wheel")
+        self.assertEqual(completed.payload["scan_mode"], "cve.artifact")
+        self.assertEqual(completed.payload["target_kind"], "wheel")
+        self.assertEqual(completed.payload["target_identity"], str(WHEEL_TARGET))
+        self.assertEqual(completed.payload["target_ref"]["kind"], "wheel")
+        self.assertEqual(completed.payload["result_kind"], "cve")
         self.assertEqual(completed.payload["package_name"], "demo-pkg")
         self.assertEqual(completed.payload["finding_count"], 0)
 
@@ -182,6 +187,9 @@ class CveRunnerTests(unittest.TestCase):
         failed = sink.events[1]
         self.assertEqual(failed.parent_event_id, sink.events[0].event_id)
         self.assertEqual(failed.severity, "error")
+        self.assertEqual(failed.payload["scan_mode"], "cve.artifact")
+        self.assertEqual(failed.payload["target_ref"]["kind"], "wheel")
+        self.assertEqual(failed.payload["result_kind"], "cve")
         self.assertEqual(failed.payload["exception_type"], "RuntimeError")
         self.assertEqual(failed.payload["message"], "lookup exploded")
 

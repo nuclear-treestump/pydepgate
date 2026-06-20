@@ -115,7 +115,7 @@ def execute_cve_scan(request: CveScanRequest) -> CveScanOutcome:
         _emit_event(
             request,
             "internal.scanner.cve_scan_failed",
-            _exception_event_payload(exc),
+            _exception_event_payload(exc, request=request),
             parent_event_id=(
                 scan_started_event.event_id if scan_started_event else None
             ),
@@ -126,7 +126,7 @@ def execute_cve_scan(request: CveScanRequest) -> CveScanOutcome:
     scan_completed_event = _emit_event(
         request,
         "internal.scanner.cve_scan_completed",
-        _cve_scan_result_event_payload(result),
+        _cve_scan_result_event_payload(result, request=request),
         parent_event_id=(scan_started_event.event_id if scan_started_event else None),
     )
 
@@ -219,9 +219,24 @@ def _warn(request: CveScanRequest, message: str) -> None:
         request.event_warning(message)
 
 
-def _cve_scan_result_event_payload(result: scanner.CveScanResult) -> dict[str, Any]:
+def _scan_context_event_payload(request: CveScanRequest) -> dict[str, Any]:
+    return {
+        "scan_mode": request.ticket.scan_mode,
+        "target_kind": request.ticket.target_kind,
+        "target_identity": request.ticket.target_identity,
+        "target_ref": request.target_ref.to_dict(),
+    }
+
+
+def _cve_scan_result_event_payload(
+    result: scanner.CveScanResult,
+    *,
+    request: CveScanRequest,
+) -> dict[str, Any]:
     metadata = result.package_metadata
     return {
+        **_scan_context_event_payload(request),
+        "result_kind": "cve",
         "package_name": result.package_name,
         "normalized_package_name": result.normalized_package_name,
         "package_version": result.package_version,
@@ -236,8 +251,14 @@ def _cve_scan_result_event_payload(result: scanner.CveScanResult) -> dict[str, A
     }
 
 
-def _exception_event_payload(exc: BaseException) -> dict[str, str]:
+def _exception_event_payload(
+    exc: BaseException,
+    *,
+    request: CveScanRequest,
+) -> dict[str, Any]:
     return {
+        **_scan_context_event_payload(request),
+        "result_kind": "cve",
         "exception_type": type(exc).__name__,
         "message": str(exc),
     }
