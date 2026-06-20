@@ -14,6 +14,17 @@ become binding stability promises with formal deprecation cycles.
 
 (no changes yet)
 
+## [0.6.1] - 2026-06-20
+
+### Added
+
+- Wired CVE scanning to use SGTs
+- Added event log support to CVE scanning
+
+### Changed
+
+- Added `scan_mode`, `target_kind`, `target_identity`, `target_ref`, and
+  `result_kind` metadata to relevant internal scanner events to support
 
 ## [0.6.0] - 2026-06-14
 

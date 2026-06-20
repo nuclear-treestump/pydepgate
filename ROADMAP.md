@@ -9,7 +9,7 @@ demonstrated pattern of shipping work earlier than planned. Treat this
 roadmap as the general shape of where the project is going, not as a
 schedule.
 
-## Current Version: 0.6.0
+## Current Version: 0.6.1
 
 ## About this rewrite
 
